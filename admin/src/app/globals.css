@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: #f2f6fb;
+  --color-surface: #ffffff;
+  --color-line: #e8edf4;
+
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-ink-subtle: #94a3b8;
+
+  /* Sidebar-specific palette. */
+  --color-sidebar-fg: #606876;
+  --color-sidebar-highlight: #969cad33;
+  --color-sidebar-active: #010e23;
+
+  --color-brand: #2563eb;
+  --color-brand-soft: #eff4ff;
+
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+  --color-warn: #ea580c;
+  --color-accent: #7c5cf5;
+
+  /* One elevation for every card/box on the dashboard. */
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Recharts injects focus outlines on chart surfaces; suppress them. */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
