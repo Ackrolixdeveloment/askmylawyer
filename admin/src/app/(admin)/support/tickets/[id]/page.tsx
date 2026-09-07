@@ -41,11 +41,15 @@ export default async function TicketDetailPage({
         <BackButton label="Support Ticket" fallbackHref="/support/new" />
 
         <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <TicketDetailsCard ticket={ticket} />
             <ConsultationSummaryCard ticket={ticket} />
             <IssueDescriptionCard ticket={ticket} />
-            <ConversationCard messages={ticket.conversation} editable={editable} />
+            <ConversationCard
+              messages={ticket.conversation}
+              editable={editable}
+              className="flex-1"
+            />
           </div>
 
           <div className="space-y-4">

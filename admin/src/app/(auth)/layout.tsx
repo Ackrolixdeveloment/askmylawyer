@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="grid min-h-dvh place-items-center bg-canvas px-4 py-10">
+    <div className="grid h-full place-items-center overflow-y-auto bg-canvas px-4 py-10">
       <div className="w-full max-w-[420px]">
         <div className="mb-7 flex items-center justify-center gap-3">
           <Image

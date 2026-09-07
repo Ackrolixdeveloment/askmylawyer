@@ -2,22 +2,29 @@
 
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import type { ConversationMessage } from "@/types/ticket-detail";
 
 interface ConversationCardProps {
   messages: ConversationMessage[];
   /** Read-only view hides the reply box. */
   editable: boolean;
+  className?: string;
 }
 
-export function ConversationCard({ messages, editable }: ConversationCardProps) {
+export function ConversationCard({
+  messages,
+  editable,
+  className,
+}: ConversationCardProps) {
   const [reply, setReply] = useState("");
 
   return (
-    <Card className="p-5">
+    <Card className={cn("flex flex-col p-5", className)}>
       <h2 className="text-base font-semibold text-ink">Conversation</h2>
 
-      <ul className="mt-4 space-y-4">
+      {/* Grows so the column matches the taller actions panel beside it. */}
+      <ul className="mt-4 flex-1 space-y-4">
         {messages.map((message) => (
           <li key={message.id} className="flex flex-wrap items-start gap-3">
             <span
