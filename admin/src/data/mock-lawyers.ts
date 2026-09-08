@@ -26,3 +26,76 @@ export const verifiedLawyers: Lawyer[] = Array.from({ length: 25 }, (_, index) =
   experience: bands[index % bands.length],
   status: "active",
 }));
+/** Read-only registration snapshot for a verified lawyer. */
+export function getVerifiedLawyerDetail(id: string) {
+  const lawyer =
+    verifiedLawyers.find((item) => item.id === id) ?? verifiedLawyers[0];
+
+  return {
+    id: lawyer.id,
+    name: lawyer.name,
+    status: lawyer.status,
+    practiceType: "Individual",
+    email: lawyer.email,
+    mobile: lawyer.phone,
+    tabs: [
+      {
+        id: "personal",
+        label: "Personal Information",
+        sections: [
+          {
+            title: "Personal Information",
+            fields: [
+              { label: "Full Name", value: lawyer.name },
+              { label: "Email", value: lawyer.email },
+              { label: "Phone", value: lawyer.phone },
+              { label: "Languages", value: "English, Hindi" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "identity",
+        label: "Identity Verification",
+        sections: [
+          {
+            title: "Identity Documents",
+            fields: [
+              { label: "Aadhar Card", value: "Verified via DigiLocker" },
+              { label: "PAN Card", value: "ABCDE1234F" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "barCouncil",
+        label: "Bar Council Verification",
+        sections: [
+          {
+            title: "Bar Council",
+            fields: [
+              { label: "Bar Council Number", value: lawyer.barId },
+              { label: "State Bar Council", value: "Delhi Bar Council" },
+              { label: "Certificate", value: "bar-council-certificate.pdf" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "professional",
+        label: "Professional Profile",
+        sections: [
+          {
+            title: "Professional Profile",
+            fields: [
+              { label: "Experience", value: lawyer.experience },
+              { label: "Consultation type", value: "Voice, Video" },
+              { label: "Practice Areas", value: "Criminal, Family, Consumer" },
+              { label: "Bio", value: "Practising advocate handling matters at the district and high court level." },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}

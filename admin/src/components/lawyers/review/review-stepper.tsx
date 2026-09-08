@@ -9,20 +9,6 @@ export interface ReviewStep {
   label: string;
 }
 
-const statusLabel: Record<StepStatus, string> = {
-  approved: "Approved",
-  reviewing: "Reviewing",
-  pending: "Pending",
-  rejected: "Rejected",
-};
-
-const statusText: Record<StepStatus, string> = {
-  approved: "text-positive",
-  reviewing: "text-brand",
-  pending: "text-ink-subtle",
-  rejected: "text-negative",
-};
-
 interface ReviewStepperProps {
   steps: ReviewStep[];
   statuses: Record<ReviewStepId, StepStatus>;
@@ -51,7 +37,11 @@ export function ReviewStepper({
               className={cn(
                 "flex w-full items-center gap-2.5 border-b-2 px-2 py-3 text-left transition-colors",
                 "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
-                active ? "border-brand" : "border-transparent hover:border-line",
+                status === "rejected"
+                  ? "border-negative"
+                  : active
+                    ? "border-brand"
+                    : "border-transparent hover:border-line",
               )}
             >
               <span
@@ -70,18 +60,17 @@ export function ReviewStepper({
                 {status === "approved" ? <Check className="size-3.5" /> : index + 1}
               </span>
 
-              <span className="min-w-0">
-                <span
-                  className={cn(
-                    "block truncate text-sm font-medium",
-                    active ? "text-brand" : "text-ink",
-                  )}
-                >
-                  {step.label}
-                </span>
-                <span className={cn("block text-xs", statusText[status])}>
-                  {statusLabel[status]}
-                </span>
+              <span
+                className={cn(
+                  "min-w-0 truncate text-sm font-medium",
+                  status === "rejected"
+                    ? "text-negative"
+                    : active
+                      ? "text-brand"
+                      : "text-ink",
+                )}
+              >
+                {step.label}
               </span>
             </button>
           </li>

@@ -77,6 +77,7 @@ export function TicketActionsPanel({
         <Field label="Status">
           {editable ? (
             <FilterSelect
+              size="sm"
               aria-label="Ticket status"
               options={statusOptions}
               value={status}
@@ -90,6 +91,7 @@ export function TicketActionsPanel({
         <Field label="Priority">
           {editable ? (
             <FilterSelect
+              size="sm"
               aria-label="Ticket priority"
               options={priorityOptions}
               value={priority}
@@ -103,6 +105,7 @@ export function TicketActionsPanel({
         <Field label="Assign To">
           {editable ? (
             <FilterSelect
+              size="sm"
               aria-label="Assign to"
               options={assigneeOptions}
               value={assignee}
@@ -116,6 +119,7 @@ export function TicketActionsPanel({
         <Field label="Department">
           {editable ? (
             <FilterSelect
+              size="sm"
               aria-label="Department"
               options={departmentOptions}
               value={department}
@@ -129,6 +133,7 @@ export function TicketActionsPanel({
         <Field label="Refund Action">
           {editable ? (
             <FilterSelect
+              size="sm"
               aria-label="Refund action"
               options={refundActionOptions}
               value={refundAction}

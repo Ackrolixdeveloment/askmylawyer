@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ApplicationHeader, overallStatus } from "./application-header";
+import { ReviewProvider, useReview } from "./review-context";
 import { ReviewStepper, type ReviewStep } from "./review-stepper";
 import {
   BarCouncilVerificationStep,
@@ -11,7 +12,7 @@ import {
   PersonalInformationStep,
   ProfessionalProfileStep,
 } from "./review-steps";
-import { Badge, Button, Card } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import type {
   LawyerApplication,
   ReviewStepId,
@@ -25,6 +26,14 @@ const steps: ReviewStep[] = [
   { id: "professional", label: "Professional Profile" },
 ];
 
+/** Reviewable blocks inside each step — all must be decided to continue. */
+const stepBlocks: Record<ReviewStepId, string[]> = {
+  personal: ["Personal Information"],
+  identity: ["Aadhar Card", "PAN Card"],
+  barCouncil: ["Certificate"],
+  professional: ["Professional Profile"],
+};
+
 const initialStatuses: Record<ReviewStepId, StepStatus> = {
   personal: "reviewing",
   identity: "pending",
@@ -32,58 +41,92 @@ const initialStatuses: Record<ReviewStepId, StepStatus> = {
   professional: "pending",
 };
 
-const stepStatusTone = {
-  approved: "success",
-  reviewing: "info",
-  pending: "refunded",
-  rejected: "danger",
-} as const;
-
-const stepStatusLabel = {
-  approved: "Approved",
-  reviewing: "Reviewing",
-  pending: "Pending",
-  rejected: "Rejected",
-} as const;
-
 export function LawyerReview({ application }: { application: LawyerApplication }) {
+  return (
+    <ReviewProvider
+      corrections={application.corrections}
+      resubmitted={application.resubmitted}
+    >
+      <ReviewBody application={application} />
+    </ReviewProvider>
+  );
+}
+
+function ReviewBody({ application }: { application: LawyerApplication }) {
   const router = useRouter();
+  const { decisions } = useReview();
   const [current, setCurrent] = useState<ReviewStepId>("personal");
   const [statuses, setStatuses] =
     useState<Record<ReviewStepId, StepStatus>>(initialStatuses);
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState("");
 
   const index = steps.findIndex((step) => step.id === current);
   const isLastStep = index === steps.length - 1;
   const activeStep = steps[index];
 
+  // The tick / cross on each block drives the footer: every block in this step
+  // has to be decided before the admin can move on.
+  const blocks = stepBlocks[current];
+  const allDecided = blocks.every(
+    (label) => decisions[label] && decisions[label] !== "pending",
+  );
+  const anyCorrection = blocks.some(
+    (label) => decisions[label] === "correction",
+  );
+
+  // Opened from the corrections queue: the blocks already carry feedback, so
+  // the admin is following up rather than reviewing from scratch — no gate.
+  const correctionFlow = Boolean(application.corrections);
+  // Resubmissions are follow-ups too: the lawyer has already fixed something,
+  // so the admin approves or rejects rather than reviewing from scratch.
+  const resubmissionFlow = Boolean(application.resubmitted);
+  const canContinue = correctionFlow || resubmissionFlow || allDecided;
+
+  // The final actions look at the whole application, not just this step.
+  const allBlocks = Object.values(stepBlocks).flat();
+  const everythingDecided = allBlocks.every(
+    (label) => decisions[label] && decisions[label] !== "pending",
+  );
+  const anyCorrectionOverall = allBlocks.some(
+    (label) => decisions[label] === "correction",
+  );
+  const canFinish = correctionFlow || resubmissionFlow || everythingDecided;
+
+  // A step showing any flagged block is marked rejected, so its tab reads red.
+  const stepperStatuses = useMemo(() => {
+    const next = { ...statuses };
+    for (const [stepId, labels] of Object.entries(stepBlocks)) {
+      if (labels.some((label) => decisions[label] === "correction")) {
+        next[stepId as ReviewStepId] = "rejected";
+      }
+    }
+    return next;
+  }, [statuses, decisions]);
+
+  function finish(outcome: "approved" | "correction" | "rejected") {
+    // TODO: submit every decision, its correction note, and the outcome.
+    void outcome;
+    router.push("/lawyers/onboarding/new");
+  }
+
   function goToStep(id: ReviewStepId) {
     setCurrent(id);
-    setRejecting(false);
-    setReason("");
-    // The step being viewed is the one under review, unless already decided.
     setStatuses((prev) =>
       prev[id] === "pending" ? { ...prev, [id]: "reviewing" } : prev,
     );
   }
 
-  function handleApprove() {
-    setStatuses((prev) => ({ ...prev, [current]: "approved" }));
+  function handleSaveAndContinue() {
+    setStatuses((prev) => ({
+      ...prev,
+      [current]: anyCorrection ? "rejected" : "approved",
+    }));
 
     if (isLastStep) {
-      // TODO: submit the approval, then return to the queue.
+      // TODO: submit every decision and its correction note.
       router.push("/lawyers/onboarding/new");
       return;
     }
     goToStep(steps[index + 1].id);
-  }
-
-  function handleRejectSubmit() {
-    if (!reason.trim()) return;
-    setStatuses((prev) => ({ ...prev, [current]: "rejected" }));
-    setRejecting(false);
-    // TODO: submit `reason` with the rejection.
   }
 
   function handleBack() {
@@ -99,13 +142,20 @@ export function LawyerReview({ application }: { application: LawyerApplication }
       <Card className="p-4 sm:p-5">
         <ApplicationHeader
           application={application}
-          overall={overallStatus(Object.values(statuses))}
+          // Follow-ups from the queue are labelled as corrections.
+          overall={
+            resubmissionFlow
+              ? "resubmission"
+              : correctionFlow
+                ? "correction"
+                : overallStatus(Object.values(statuses))
+          }
         />
 
         <div className="mt-2 overflow-x-auto">
           <ReviewStepper
             steps={steps}
-            statuses={statuses}
+            statuses={stepperStatuses}
             current={current}
             onSelect={goToStep}
           />
@@ -113,12 +163,7 @@ export function LawyerReview({ application }: { application: LawyerApplication }
       </Card>
 
       <Card className="p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-base font-semibold text-ink">{activeStep.label}</h2>
-          <Badge tone={stepStatusTone[statuses[current]]}>
-            {stepStatusLabel[statuses[current]]}
-          </Badge>
-        </div>
+        <h2 className="text-base font-semibold text-ink">{activeStep.label}</h2>
 
         <div className="mt-5">
           {current === "personal" ? (
@@ -134,27 +179,6 @@ export function LawyerReview({ application }: { application: LawyerApplication }
             <ProfessionalProfileStep application={application} />
           ) : null}
         </div>
-
-        {rejecting ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50/50 p-4">
-            <label
-              htmlFor="rejection-reason"
-              className="flex items-center gap-2 text-sm font-medium text-negative"
-            >
-              <TriangleAlert className="size-4" aria-hidden />
-              Reason for rejection
-            </label>
-            <textarea
-              id="rejection-reason"
-              rows={3}
-              autoFocus
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Add a note to this lawyer about this rejection..."
-              className="mt-3 w-full resize-y rounded-lg border border-red-200 bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:border-negative focus:ring-2 focus:ring-red-100 focus:outline-none"
-            />
-          </div>
-        ) : null}
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -167,35 +191,56 @@ export function LawyerReview({ application }: { application: LawyerApplication }
           Back
         </button>
 
-        <div className="flex flex-wrap gap-3">
-          {rejecting ? (
+        <div className="flex flex-wrap items-center gap-3">
+          {resubmissionFlow ? (
             <>
               <Button
                 variant="outline"
-                onClick={() => {
-                  setRejecting(false);
-                  setReason("");
-                }}
+                onClick={() => finish("rejected")}
+                className="border-line text-ink-muted hover:bg-slate-50"
               >
-                Cancel
+                Reject
               </Button>
+              <Button onClick={() => finish("approved")}>
+                Approve
+                <ArrowRight className="size-4" aria-hidden />
+              </Button>
+            </>
+          ) : isLastStep ? (
+            <>
               <Button
-                onClick={handleRejectSubmit}
-                disabled={!reason.trim()}
-                className="bg-negative hover:bg-negative/90"
+                variant="outline"
+                onClick={() => finish("rejected")}
+                className="border-red-300 text-negative hover:bg-red-50"
               >
-                Submit Rejection
+                <Ban className="size-4" aria-hidden />
+                Reject Lawyer
+              </Button>
+
+              {/* Only offered when something is actually flagged. */}
+              <Button
+                variant="outline"
+                onClick={() => finish("correction")}
+                disabled={!canFinish || !anyCorrectionOverall}
+                className="border-orange-300 text-warn hover:bg-orange-50"
+              >
+                <X className="size-4" aria-hidden />
+                Send for Correction
+              </Button>
+
+              <Button
+                onClick={() => finish("approved")}
+                disabled={!canFinish || anyCorrectionOverall}
+                className="bg-brand hover:bg-brand/90"
+              >
+                <Check className="size-4" aria-hidden />
+                Approve &amp; Activate Lawyer
               </Button>
             </>
           ) : (
-            <>
-              <Button variant="outline" onClick={() => setRejecting(true)}>
-                Reject
-              </Button>
-              <Button onClick={handleApprove}>
-                {isLastStep ? "Approve Lawyer" : "Approve"}
-              </Button>
-            </>
+            <Button onClick={handleSaveAndContinue} disabled={!canContinue}>
+              Save &amp; Continue
+            </Button>
           )}
         </div>
       </div>

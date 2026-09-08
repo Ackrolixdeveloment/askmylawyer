@@ -6,6 +6,11 @@ import { useState } from "react";
 import { isNavGroup, type NavGroup, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
+/** A list stays highlighted while one of its detail pages is open. */
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 interface SidebarNavItemProps {
   item: NavItem;
   /** Current pathname, used to highlight the active branch. */
@@ -81,7 +86,8 @@ function ItemChildren({
   const activeGroup =
     item.children?.find(
       (child) =>
-        isNavGroup(child) && child.children.some((leaf) => pathname === leaf.href),
+        isNavGroup(child) &&
+        child.children.some((leaf) => isActive(pathname, leaf.href)),
     )?.label ?? null;
 
   // `undefined` means "follow the route"; clicking pins a specific group.
@@ -109,7 +115,7 @@ function ItemChildren({
             <SubLink
               href={child.href}
               label={child.label}
-              active={pathname === child.href}
+              active={isActive(pathname, child.href)}
               onNavigate={onNavigate}
             />
           </li>
@@ -133,7 +139,7 @@ function NavSubGroup({
   onToggle: () => void;
   onNavigate?: () => void;
 }) {
-  const groupActive = group.children.some((leaf) => pathname === leaf.href);
+  const groupActive = group.children.some((leaf) => isActive(pathname, leaf.href));
 
   return (
     <div>
@@ -163,7 +169,7 @@ function NavSubGroup({
               <SubLink
                 href={leaf.href}
                 label={leaf.label}
-                active={pathname === leaf.href}
+                active={isActive(pathname, leaf.href)}
                 onNavigate={onNavigate}
               />
             </li>

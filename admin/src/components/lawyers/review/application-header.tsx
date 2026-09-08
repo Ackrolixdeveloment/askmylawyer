@@ -5,12 +5,16 @@ import type { LawyerApplication, StepStatus } from "@/types/lawyer";
 const overallTone = {
   approved: "success",
   rejected: "danger",
+  correction: "danger",
+  resubmission: "neutral",
   pending: "refunded",
 } as const;
 
 const overallLabel = {
   approved: "Approved",
   rejected: "Rejected",
+  correction: "Correction",
+  resubmission: "Resubmission",
   pending: "Pending",
 } as const;
 

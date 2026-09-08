@@ -1,12 +1,14 @@
 "use client";
 
 import { Ban, Eye, SquarePen, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   Badge,
   DataTable,
   DropdownMenu,
   SearchInput,
+  TableLink,
   type BadgeTone,
   type Column,
 } from "@/components/ui";
@@ -34,12 +36,18 @@ const statusTone: Record<LawyerStatus, BadgeTone> = {
   inactive: "neutral",
 };
 
-const columns: Column<Lawyer>[] = [
+/** Built per-render so the row menu can navigate. */
+function buildColumns(onView: (row: Lawyer) => void): Column<Lawyer>[] {
+  return [
   {
     key: "name",
     header: "Name",
     sortValue: (row) => row.name,
-    cell: (row) => <span className="text-ink">{row.name}</span>,
+    cell: (row) => (
+      <TableLink href={`/lawyers/verified/${row.id}`} className="text-ink hover:text-brand">
+        {row.name}
+      </TableLink>
+    ),
   },
   {
     key: "phone",
@@ -95,18 +103,25 @@ const columns: Column<Lawyer>[] = [
       <DropdownMenu
         label={`Actions for ${row.name}`}
         actions={[
-          { label: "View", icon: Eye, onSelect: () => {} },
+          { label: "View", icon: Eye, onSelect: () => onView(row) },
           { label: "Edit", icon: SquarePen, onSelect: () => {} },
           { label: "Suspend", icon: Ban, onSelect: () => {} },
           { label: "Delete", icon: Trash2, onSelect: () => {}, destructive: true },
         ]}
       />
     ),
-  },
-];
+    },
+  ];
+}
 
 export function VerifiedLawyersTable({ lawyers }: { lawyers: Lawyer[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
+
+  const columns = useMemo(
+    () => buildColumns((row) => router.push(`/lawyers/verified/${row.id}`)),
+    [router],
+  );
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();

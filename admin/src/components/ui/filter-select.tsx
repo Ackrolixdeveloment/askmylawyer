@@ -16,6 +16,8 @@ interface FilterSelectProps {
   onChange: (value: string) => void;
   "aria-label": string;
   align?: "left" | "right";
+  /** "md" matches the search bar; "sm" matches form inputs. */
+  size?: "sm" | "md";
   className?: string;
 }
 
@@ -30,6 +32,7 @@ export function FilterSelect({
   value,
   onChange,
   align = "left",
+  size = "md",
   className,
   ...rest
 }: FilterSelectProps) {
@@ -49,8 +52,11 @@ export function FilterSelect({
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 text-sm text-ink transition-colors hover:bg-slate-50",
+          "flex w-full items-center justify-between gap-3 border border-line bg-surface text-sm text-ink transition-colors hover:bg-slate-50",
           "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
+          size === "md"
+            ? "rounded-xl px-4 py-3.5"
+            : "rounded-lg px-3.5 py-2.5",
         )}
       >
         <span className="truncate">{selected?.label}</span>

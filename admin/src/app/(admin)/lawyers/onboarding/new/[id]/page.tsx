@@ -7,9 +7,15 @@ export const metadata: Metadata = {
   title: "Review Application",
 };
 
-export default async function LawyerReviewPage({ params }: PageProps<"/lawyers/onboarding/new/[id]">) {
+export default async function LawyerReviewPage({
+  params,
+  searchParams,
+}: PageProps<"/lawyers/onboarding/new/[id]">) {
   const { id } = await params;
-  const application = getLawyerApplication(id);
+  const { corrections } = await searchParams;
+
+  // Opened from the corrections queue: pre-fill the flagged blocks.
+  const application = getLawyerApplication(id, corrections === "1");
 
   return (
     <>

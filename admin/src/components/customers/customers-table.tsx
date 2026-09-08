@@ -7,6 +7,7 @@ import {
   DataTable,
   DropdownMenu,
   SearchInput,
+  TableLink,
   type Column,
 } from "@/components/ui";
 import { formatDayMonthYear, formatRelativeDay } from "@/lib/format";
@@ -21,7 +22,11 @@ function buildColumns(
     key: "name",
     header: "Name",
     sortValue: (row) => row.name,
-    cell: (row) => <span className="text-ink">{row.name}</span>,
+    cell: (row) => (
+      <TableLink href={`/customers/${row.id}`} className="text-ink hover:text-brand">
+        {row.name}
+      </TableLink>
+    ),
   },
   {
     key: "contact",

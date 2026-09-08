@@ -4,6 +4,7 @@ const tones = {
   success: "bg-emerald-50 text-emerald-700",
   refunded: "bg-amber-50 text-amber-700",
   info: "bg-blue-50 text-blue-700",
+  accent: "bg-violet-50 text-violet-700",
   danger: "bg-red-50 text-red-700",
   neutral: "bg-slate-100 text-slate-600",
 } as const;

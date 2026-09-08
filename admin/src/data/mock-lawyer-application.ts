@@ -2,11 +2,18 @@
  * Placeholder application data for the onboarding review screen.
  * Replace with a fetch keyed on the request id.
  */
+import { correctionsByLawyer, resubmittedByLawyer } from "./mock-corrections";
 import type { LawyerApplication } from "@/types/lawyer";
 
-export function getLawyerApplication(id: string): LawyerApplication {
+export function getLawyerApplication(
+  id: string,
+  withCorrections = false,
+  withResubmission = false,
+): LawyerApplication {
   return {
     id,
+    corrections: withCorrections ? correctionsByLawyer[id] : undefined,
+    resubmitted: withResubmission ? resubmittedByLawyer[id] : undefined,
     name: "Rani Kumari",
     title: "Corporate Lawyer",
     experienceYears: 12,

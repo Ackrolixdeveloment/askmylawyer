@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   FilterSelect,
   SearchInput,
+  TableLink,
   type Column,
   type SelectOption,
 } from "@/components/ui";
@@ -17,13 +18,22 @@ import type { LawyerRequest } from "@/types/lawyer";
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
   onView: (row: LawyerRequest) => void,
+  dateHeader: string,
+  viewBasePath: string,
 ): Column<LawyerRequest>[] {
   return [
   {
     key: "name",
     header: "Name",
     sortValue: (row) => row.name,
-    cell: (row) => <span className="text-ink">{row.name}</span>,
+    cell: (row) => (
+      <TableLink
+        href={`${viewBasePath}/${row.id}`}
+        className="text-ink hover:text-brand"
+      >
+        {row.name}
+      </TableLink>
+    ),
   },
   {
     key: "phone",
@@ -56,7 +66,7 @@ function buildColumns(
   },
   {
     key: "submittedOn",
-    header: "Date",
+    header: dateHeader,
     sortValue: (row) => row.submittedOn,
     cell: (row) => (
       <span className="text-ink-muted">{formatDdMmYyyy(row.submittedOn)}</span>
@@ -83,12 +93,20 @@ interface NewRequestsTableProps {
   requests: LawyerRequest[];
   stateOptions: SelectOption[];
   experienceOptions: SelectOption[];
+  /** Label for the date column — submitted, rejected or resubmitted. */
+  dateHeader?: string;
+  /** Where the row links point. */
+  viewBasePath?: string;
+  emptyMessage?: string;
 }
 
 export function NewRequestsTable({
   requests,
   stateOptions,
   experienceOptions,
+  dateHeader = "Date",
+  viewBasePath = "/lawyers/onboarding/new",
+  emptyMessage = "No requests match the current filters.",
 }: NewRequestsTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -97,8 +115,12 @@ export function NewRequestsTable({
 
   const columns = useMemo(
     () =>
-      buildColumns((row) => router.push(`/lawyers/onboarding/new/${row.id}`)),
-    [router],
+      buildColumns(
+        (row) => router.push(`${viewBasePath}/${row.id}`),
+        dateHeader,
+        viewBasePath,
+      ),
+    [router, dateHeader, viewBasePath],
   );
 
   const rows = useMemo(() => {
@@ -154,7 +176,7 @@ export function NewRequestsTable({
         rows={rows}
         getRowId={(row) => row.id}
         defaultSort={{ key: "submittedOn", direction: "desc" }}
-        emptyMessage="No requests match the current filters."
+        emptyMessage={emptyMessage}
       />
     </div>
   );

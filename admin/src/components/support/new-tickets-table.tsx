@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   FilterSelect,
   SearchInput,
+  TableLink,
   type BadgeTone,
   type Column,
   type SelectOption,
@@ -46,7 +47,11 @@ function buildColumns(
     key: "ticketId",
     header: "Ticket ID",
     sortValue: (row) => row.ticketId,
-    cell: (row) => <span className="font-medium text-brand">{row.ticketId}</span>,
+    cell: (row) => (
+      <TableLink href={`/support/tickets/${row.id}?mode=view`}>
+        {row.ticketId}
+      </TableLink>
+    ),
   },
   {
     key: "createdBy",

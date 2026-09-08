@@ -66,6 +66,10 @@ export interface LawyerApplication {
     stateCouncil: string;
     certificateName: string;
   };
+  /** Feedback already raised, keyed by the reviewable block label. */
+  corrections?: Record<string, string>;
+  /** Blocks the lawyer has re-uploaded, keyed the same way. */
+  resubmitted?: Record<string, string>;
   professional: {
     experience: string;
     consultationTypes: string[];
@@ -92,3 +96,59 @@ export type LawyerSortKey =
   | "status";
 
 export type SortDirection = "asc" | "desc";
+/** A submission sent back to the lawyer for correction. */
+export interface CorrectionRequest {
+  id: string;
+  lawyerId: string;
+  name: string;
+  phone: string;
+  email: string;
+  /** Which review block needs fixing. */
+  section: string;
+  remarks: string;
+  /** ISO yyyy-mm-dd. */
+  sentOn: string;
+  state: string;
+  daysWaiting: number;
+}
+
+/** A registration the lawyer started but never submitted. */
+export interface DraftProfile {
+  id: string;
+  lawyerId: string;
+  name: string;
+  practiceType: "Individual" | "Firm";
+  email: string;
+  mobile: string;
+  /** ISO yyyy-mm-dd. */
+  lastUpdated: string;
+  referredByName: string | null;
+  referredByCode: string | null;
+}
+
+export interface DraftField {
+  label: string;
+  /** Null renders as "-" — the lawyer never filled it in. */
+  value: string | null;
+}
+
+export interface DraftSection {
+  title: string;
+  fields: DraftField[];
+}
+
+export interface DraftTab {
+  id: string;
+  label: string;
+  sections: DraftSection[];
+}
+
+/** Everything captured before the lawyer abandoned the registration. */
+export interface DraftDetail {
+  id: string;
+  name: string;
+  practiceType: "Individual" | "Firm";
+  email: string;
+  mobile: string;
+  tabs: DraftTab[];
+}

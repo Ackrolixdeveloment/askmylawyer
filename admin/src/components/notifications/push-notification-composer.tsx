@@ -16,19 +16,32 @@ interface ComposerProps {
   segments: AudienceSegment[];
   timingOptions: SelectOption[];
   recurrenceOptions: SelectOption[];
+  /** Seeded when the composer is opened from a template or a broadcast. */
+  initialTitle?: string;
+  initialBody?: string;
+  initialSegmentValue?: string;
+  initialTiming?: SendTiming;
+  initialScheduledAt?: string;
 }
 
 export function PushNotificationComposer({
   segments,
   timingOptions,
   recurrenceOptions,
+  initialTitle = "",
+  initialBody = "",
+  initialSegmentValue,
+  initialTiming = "immediate",
+  initialScheduledAt = "",
 }: ComposerProps) {
-  const [segment, setSegment] = useState<AudienceSegment | null>(null);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [segment, setSegment] = useState<AudienceSegment | null>(
+    () => segments.find((item) => item.value === initialSegmentValue) ?? null,
+  );
+  const [title, setTitle] = useState(initialTitle);
+  const [body, setBody] = useState(initialBody);
   const [cta, setCta] = useState("");
-  const [timing, setTiming] = useState<SendTiming>("immediate");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [timing, setTiming] = useState<SendTiming>(initialTiming);
+  const [scheduledAt, setScheduledAt] = useState(initialScheduledAt);
   const [recurrence, setRecurrence] = useState("weekly");
 
   const canSend = Boolean(segment && title.trim() && body.trim());
@@ -117,6 +130,7 @@ export function PushNotificationComposer({
               <div>
                 <p className="mb-1.5 text-sm font-medium text-ink">Send Timing</p>
                 <FilterSelect
+              size="sm"
                   aria-label="Send timing"
                   options={timingOptions}
                   value={timing}
@@ -148,6 +162,7 @@ export function PushNotificationComposer({
               <div className="sm:max-w-xs">
                 <p className="mb-1.5 text-sm font-medium text-ink">Repeats</p>
                 <FilterSelect
+              size="sm"
                   aria-label="Recurrence"
                   options={recurrenceOptions}
                   value={recurrence}

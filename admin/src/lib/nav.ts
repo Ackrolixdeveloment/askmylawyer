@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   Briefcase,
+  CreditCard,
   Gift,
   Headset,
   LayoutGrid,
@@ -68,11 +69,8 @@ export const navSections: NavSection[] = [
               { label: "Pending Requests", href: "/lawyers/edit-approvals/pending" },
               { label: "Approval Requests", href: "/lawyers/edit-approvals/approved" },
               { label: "Rejected Requests", href: "/lawyers/edit-approvals/rejected" },
-              { label: "Broker History", href: "/lawyers/edit-approvals/broker-history" },
-              {
-                label: "Deleted Brokers",
-                href: "/lawyers/edit-approvals/deleted-brokers",
-              },
+              { label: "Lawyer History", href: "/lawyers/edit-approvals/history" },
+              { label: "Deleted Lawyers", href: "/lawyers/edit-approvals/deleted" },
             ],
           },
         ],
@@ -91,8 +89,18 @@ export const navSections: NavSection[] = [
           { label: "In Progress", href: "/consultations/in-progress" },
         ],
       },
+      { label: "Billing Management", href: "/billing", icon: CreditCard },
       { label: "Referral", href: "/referral", icon: Gift },
-      { label: "Push Notifications", href: "/notifications", icon: Bell },
+      {
+        label: "Push Notifications",
+        href: "/notifications",
+        icon: Bell,
+        children: [
+          { label: "Send Notification", href: "/notifications/send" },
+          { label: "Templates", href: "/notifications/templates" },
+          { label: "Scheduled", href: "/notifications/scheduled" },
+        ],
+      },
       {
         label: "Support",
         href: "/support",

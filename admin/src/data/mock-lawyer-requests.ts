@@ -44,3 +44,32 @@ export const lawyerRequests: LawyerRequest[] = Array.from(
     submittedOn: "2026-07-24",
   }),
 );
+const rejectedCities = ["Delhi", "Noida", "Ghaziabad"];
+
+export const rejectedRequests: LawyerRequest[] = Array.from(
+  { length: 7 },
+  (_, index) => ({
+    id: `rejected-${index + 1}`,
+    name: "Sunil Verma",
+    phone: "91+ 987654321",
+    email: "sunil.verma@gmail.com",
+    barId: "DL/1180/2015",
+    city: rejectedCities[index % rejectedCities.length],
+    experience: bands[index % bands.length],
+    submittedOn: "2026-07-18",
+  }),
+);
+
+export const resubmissionRequests: LawyerRequest[] = Array.from(
+  { length: 5 },
+  (_, index) => ({
+    id: `resubmission-${index + 1}`,
+    name: "Anita Rao",
+    phone: "91+ 987654321",
+    email: "anita.rao@gmail.com",
+    barId: "DL/2044/2018",
+    city: rejectedCities[index % rejectedCities.length],
+    experience: bands[index % bands.length],
+    submittedOn: "2026-08-09",
+  }),
+);
