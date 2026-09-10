@@ -7,7 +7,17 @@ import { Button, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/user";
 
-export function RoleForm({ roles }: { roles: Role[] }) {
+export function RoleForm({
+  roles,
+  onDone,
+}: {
+  roles: Role[];
+  /**
+   * Supplied when the form is shown in a dialog: the surrounding Card is
+   * dropped and this runs instead of navigating away.
+   */
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const groupName = useId();
   const [name, setName] = useState("");
@@ -24,12 +34,15 @@ export function RoleForm({ roles }: { roles: Role[] }) {
     }
     setError("");
     // TODO: create the role through the admin API.
+    if (onDone) {
+      onDone();
+      return;
+    }
     router.push("/users");
   }
 
-  return (
-    <Card className="p-5 sm:p-6">
-      <form onSubmit={handleSubmit}>
+  const body = (
+    <form onSubmit={handleSubmit}>
         <div>
           <label htmlFor="role-name" className="mb-1.5 block text-sm font-medium text-ink">
             Role Name
@@ -96,13 +109,25 @@ export function RoleForm({ roles }: { roles: Role[] }) {
           <p className="text-sm text-ink-muted">
             {parent ? `Parent role: ${parent.name}` : "No parent role selected yet"}
           </p>
-          <Button type="submit" className="bg-brand hover:bg-brand/90">
-            Create Role
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            {onDone ? (
+              <Button type="button" variant="outline" onClick={onDone}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button
+              type="submit"
+              className="bg-sidebar-active hover:bg-sidebar-active/90"
+            >
+              Create Role
+            </Button>
+          </div>
         </div>
       </form>
-    </Card>
   );
+
+  // In a dialog the surrounding panel already provides the card chrome.
+  return onDone ? body : <Card className="p-5 sm:p-6">{body}</Card>;
 }
 
 function RoleOption({

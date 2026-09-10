@@ -13,9 +13,14 @@ import {
 interface UserFormProps {
   roleOptions: SelectOption[];
   statusOptions: SelectOption[];
+  /**
+   * Supplied when the form is shown in a dialog: the surrounding Card is
+   * dropped and this runs instead of navigating away.
+   */
+  onDone?: () => void;
 }
 
-export function UserForm({ roleOptions, statusOptions }: UserFormProps) {
+export function UserForm({ roleOptions, statusOptions, onDone }: UserFormProps) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,12 +49,15 @@ export function UserForm({ roleOptions, statusOptions }: UserFormProps) {
 
     setError("");
     // TODO: create the user through the admin API.
+    if (onDone) {
+      onDone();
+      return;
+    }
     router.push("/users");
   }
 
-  return (
-    <Card className="p-5 sm:p-6">
-      <form onSubmit={handleSubmit} className="space-y-5">
+  const body = (
+    <form onSubmit={handleSubmit} className="space-y-5">
         <TextField
           label="Full Name *"
           placeholder="Enter full name"
@@ -116,15 +124,20 @@ export function UserForm({ roleOptions, statusOptions }: UserFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/users")}
+            onClick={() => (onDone ? onDone() : router.push("/users"))}
           >
             Cancel
           </Button>
-          <Button type="submit" className="bg-brand hover:bg-brand/90">
+          <Button
+            type="submit"
+            className="bg-sidebar-active hover:bg-sidebar-active/90"
+          >
             Create User
           </Button>
         </div>
       </form>
-    </Card>
   );
+
+  // In a dialog the surrounding panel already provides the card chrome.
+  return onDone ? body : <Card className="p-5 sm:p-6">{body}</Card>;
 }

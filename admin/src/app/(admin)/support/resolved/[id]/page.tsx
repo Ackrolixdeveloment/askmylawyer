@@ -1,0 +1,74 @@
+import type { Metadata } from "next";
+import { Topbar } from "@/components/layout/topbar";
+import { BackButton } from "@/components/ui";
+import { ConversationCard } from "@/components/support/detail/conversation-card";
+import { PartyDetailsCard } from "@/components/support/detail/party-details-card";
+import { TicketActionsPanel } from "@/components/support/detail/ticket-actions-panel";
+import {
+  ConsultationSummaryCard,
+  IssueDescriptionCard,
+  TicketDetailsCard,
+} from "@/components/support/detail/ticket-info-cards";
+import {
+  assigneeOptions,
+  departmentOptions,
+  getTicketDetail,
+  priorityOptions,
+  refundActionOptions,
+  statusOptions,
+} from "@/data/mock-ticket-detail";
+
+export const metadata: Metadata = {
+  title: "Support Ticket",
+};
+
+/**
+ * Nested under the Resolved list so the sidebar keeps that entry highlighted
+ * while a ticket is open. The thread is locked and there is nothing left to
+ * action, but the fields stay readable.
+ */
+export default async function ResolvedTicketDetailPage({
+  params,
+}: PageProps<"/support/resolved/[id]">) {
+  const { id } = await params;
+  const ticket = getTicketDetail(id);
+
+  return (
+    <>
+      <Topbar title="Support" />
+
+      <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
+        <BackButton label="Support Ticket" fallbackHref="/support/resolved" />
+
+        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-4">
+            <TicketDetailsCard ticket={ticket} />
+            <ConsultationSummaryCard ticket={ticket} />
+            <IssueDescriptionCard ticket={ticket} />
+            <ConversationCard
+              messages={ticket.conversation}
+              editable={false}
+              closedNotice="Ticket is Closed/ resolved . Further replies are disabled."
+              className="flex-1"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <PartyDetailsCard title="Customer Details" party={ticket.customer} />
+            <PartyDetailsCard title="Lawyer Details" party={ticket.lawyer} />
+            <TicketActionsPanel
+              ticket={ticket}
+              editable
+              showActions={false}
+              statusOptions={statusOptions}
+              priorityOptions={priorityOptions}
+              assigneeOptions={assigneeOptions}
+              departmentOptions={departmentOptions}
+              refundActionOptions={refundActionOptions}
+            />
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}

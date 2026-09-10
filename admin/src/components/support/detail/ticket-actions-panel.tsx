@@ -8,6 +8,11 @@ interface TicketActionsPanelProps {
   ticket: TicketDetail;
   /** False on the read-only view: values render as plain text, no buttons. */
   editable: boolean;
+  /**
+   * Whether the action buttons show. Defaults to `editable`; a resolved
+   * ticket keeps its editable fields but has nothing left to action.
+   */
+  showActions?: boolean;
   statusOptions: SelectOption[];
   priorityOptions: SelectOption[];
   assigneeOptions: SelectOption[];
@@ -56,6 +61,7 @@ function ReadOnlyValue({ value }: { value: string }) {
 export function TicketActionsPanel({
   ticket,
   editable,
+  showActions,
   statusOptions,
   priorityOptions,
   assigneeOptions,
@@ -161,7 +167,7 @@ export function TicketActionsPanel({
         </Field>
       </div>
 
-      {editable ? (
+      {(showActions ?? editable) ? (
         <div className="mt-5 space-y-2.5">
           {/* TODO: wire each action to the API. */}
           <Button className="w-full">Resolve Ticket</Button>

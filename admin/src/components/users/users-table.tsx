@@ -1,85 +1,127 @@
 "use client";
 
-import { Eye, Filter, ShieldCheck, SquarePen, Trash2 } from "lucide-react";
+import { Eye, ShieldCheck, SquarePen, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  Badge,
   Card,
   DataTable,
+  FilterSelect,
   SearchInput,
-  Switch,
   type Column,
 } from "@/components/ui";
+import {
+  dateFilterOptions,
+  roleFilterOptions,
+  statusFilterOptions,
+} from "@/data/mock-users";
 import type { AdminUser } from "@/types/user";
+import { EditUserModal, ViewUserModal } from "./user-modals";
 
 interface UsersTableProps {
   users: AdminUser[];
 }
 
+/** "Last active" is a phrase, so the date filter matches on the phrase. */
+function matchesDate(lastActive: string, filter: string) {
+  const value = lastActive.toLowerCase();
+
+  switch (filter) {
+    case "today":
+      return value === "today";
+    case "yesterday":
+      return value === "yesterday";
+    case "week":
+      return value === "today" || value === "yesterday" || value.includes("day");
+    default:
+      return true;
+  }
+}
+
 export function UsersTable({ users }: UsersTableProps) {
   const [query, setQuery] = useState("");
-  // Status is toggled locally until the API lands.
-  const [statuses, setStatuses] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(users.map((user) => [user.id, user.status === "active"])),
-  );
+  const [role, setRole] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [date, setDate] = useState("all");
+  const [viewUser, setViewUser] = useState<AdminUser | null>(null);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
 
   const columns = useMemo<Column<AdminUser>[]>(
     () => [
       {
         key: "name",
-        header: "NAME",
+        header: "Name",
         align: "left",
         sortValue: (row) => row.name,
-        cell: (row) => <span className="text-ink">{row.name}</span>,
-      },
-      {
-        key: "role",
-        header: "ROLE",
-        align: "left",
-        sortValue: (row) => row.role,
-        cell: (row) => <span className="text-ink-muted">{row.role}</span>,
+        cell: (row) => (
+          <div className="leading-tight">
+            <div className="font-medium text-ink">{row.name}</div>
+            <div className="mt-0.5 text-xs text-ink-subtle">
+              {row.employeeCode}
+            </div>
+          </div>
+        ),
       },
       {
         key: "email",
-        header: "EMAIL",
+        header: "Email",
         align: "left",
         sortValue: (row) => row.email,
         cell: (row) => <span className="text-ink-muted">{row.email}</span>,
       },
       {
-        key: "phone",
-        header: "PHONE NO.",
+        key: "role",
+        header: "Role",
         align: "left",
-        sortValue: (row) => row.phone,
-        cell: (row) => <span className="text-ink-muted">{row.phone}</span>,
+        sortValue: (row) => row.role,
+        cell: (row) => <span className="text-ink-muted">{row.role}</span>,
+      },
+      {
+        key: "lastActive",
+        header: "Last Active",
+        align: "left",
+        sortValue: (row) => row.lastActive,
+        cell: (row) => <span className="text-ink-muted">{row.lastActive}</span>,
       },
       {
         key: "status",
-        header: "STATUS",
+        header: "Status",
         align: "left",
+        sortValue: (row) => row.status,
         cell: (row) => (
-          <Switch
-            checked={statuses[row.id] ?? false}
-            onChange={(next) =>
-              setStatuses((prev) => ({ ...prev, [row.id]: next }))
-            }
-            aria-label={`${statuses[row.id] ? "Deactivate" : "Activate"} ${row.name}`}
-          />
+          <Badge tone={row.status === "active" ? "success" : "neutral"}>
+            {row.status === "active" ? "Active" : "Inactive"}
+          </Badge>
         ),
       },
       {
-        key: "action",
-        header: "ACTION",
+        key: "actions",
+        header: "Actions",
         align: "left",
         cell: (row) => (
-          <div className="flex items-center gap-1">
-            <IconButton label={`Permissions for ${row.name}`} tone="accent">
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/users/${row.id}/permissions`}
+              aria-label={`Manage permissions for ${row.name}`}
+              title={`Manage permissions for ${row.name}`}
+              className={`rounded-lg border border-line p-2 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${tones.accent}`}
+            >
               <ShieldCheck className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton label={`Edit ${row.name}`} tone="brand">
-              <SquarePen className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton label={`View ${row.name}`} tone="muted">
+            </Link>
+            <IconButton
+              label={`View ${row.name}`}
+              tone="muted"
+              onClick={() => setViewUser(row)}
+            >
               <Eye className="size-4" aria-hidden />
+            </IconButton>
+            <IconButton
+              label={`Edit ${row.name}`}
+              tone="brand"
+              onClick={() => setEditUser(row)}
+            >
+              <SquarePen className="size-4" aria-hidden />
             </IconButton>
             <IconButton label={`Delete ${row.name}`} tone="danger">
               <Trash2 className="size-4" aria-hidden />
@@ -88,24 +130,32 @@ export function UsersTable({ users }: UsersTableProps) {
         ),
       },
     ],
-    [statuses],
+    [],
   );
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return users;
 
-    return users.filter((user) =>
-      [user.name, user.email, user.phone, user.role].some((field) =>
-        field.toLowerCase().includes(needle),
-      ),
-    );
-  }, [users, query]);
+    return users.filter((user) => {
+      const matchesQuery =
+        !needle ||
+        [user.name, user.email, user.phone, user.role, user.employeeCode].some(
+          (field) => field.toLowerCase().includes(needle),
+        );
+
+      return (
+        matchesQuery &&
+        (role === "all" || user.role === role) &&
+        (status === "all" || user.status === status) &&
+        matchesDate(user.lastActive, date)
+      );
+    });
+  }, [users, query, role, status, date]);
 
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 lg:flex-row">
           <div className="min-w-0 flex-1">
             <SearchInput
               placeholder="Search User by Name, Email or phone no."
@@ -114,13 +164,30 @@ export function UsersTable({ users }: UsersTableProps) {
               className="shadow-none"
             />
           </div>
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-line px-5 py-3.5 text-sm text-ink transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-          >
-            <Filter className="size-4" aria-hidden />
-            Filters
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <FilterSelect
+              options={roleFilterOptions}
+              value={role}
+              onChange={setRole}
+              aria-label="Filter by role"
+              className="sm:w-40"
+            />
+            <FilterSelect
+              options={statusFilterOptions}
+              value={status}
+              onChange={setStatus}
+              aria-label="Filter by status"
+              className="sm:w-32"
+            />
+            <FilterSelect
+              options={dateFilterOptions}
+              value={date}
+              onChange={setDate}
+              aria-label="Filter by last active date"
+              align="right"
+              className="sm:w-32"
+            />
+          </div>
         </div>
       </Card>
 
@@ -130,7 +197,16 @@ export function UsersTable({ users }: UsersTableProps) {
         getRowId={(row) => row.id}
         minWidth={980}
         defaultSort={{ key: "name" }}
+        paginated
         emptyMessage="No users match your search."
+      />
+
+      <ViewUserModal user={viewUser} onClose={() => setViewUser(null)} />
+      {/* Keyed so each row opens the form seeded with its own values. */}
+      <EditUserModal
+        key={editUser?.id}
+        user={editUser}
+        onClose={() => setEditUser(null)}
       />
     </div>
   );
@@ -146,10 +222,12 @@ const tones = {
 function IconButton({
   label,
   tone,
+  onClick,
   children,
 }: {
   label: string;
   tone: keyof typeof tones;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -157,7 +235,8 @@ function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      className={`rounded-lg p-2 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${tones[tone]}`}
+      onClick={onClick}
+      className={`rounded-lg border border-line p-2 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${tones[tone]}`}
     >
       {children}
     </button>

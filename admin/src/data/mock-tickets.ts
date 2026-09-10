@@ -37,6 +37,38 @@ const assignees: AdminRole[] = [
   "Super Admin",
 ];
 
+export const resolvedTickets: Ticket[] = Array.from(
+  { length: 14 },
+  (_, index) => ({
+    id: `resolved-ticket-${index + 1}`,
+    ticketId: "#ASKT-62372932",
+    createdByName: "Jignesh Kumar",
+    createdByEmail: "jignesh@kgmail.com",
+    category: categories[index % categories.length],
+    mobile: "+91 987654321 .",
+    mobileEmail: "nairmeena23@gmail.com",
+    subject: "Payout not received...",
+    assigned: assignees[index % assignees.length],
+    priority: priorities[index % priorities.length],
+  }),
+);
+
+export const inProgressTickets: Ticket[] = Array.from(
+  { length: 17 },
+  (_, index) => ({
+    id: `in-progress-ticket-${index + 1}`,
+    ticketId: "#ASKT-62372932",
+    createdByName: "Jignesh Kumar",
+    createdByEmail: "jignesh@kgmail.com",
+    category: categories[index % categories.length],
+    mobile: "+91 987654321 .",
+    mobileEmail: "nairmeena23@gmail.com",
+    subject: "Payout not received...",
+    assigned: assignees[index % assignees.length],
+    priority: priorities[index % priorities.length],
+  }),
+);
+
 export const newTickets: Ticket[] = Array.from({ length: 21 }, (_, index) => ({
   id: `ticket-${index + 1}`,
   ticketId: "#ASKT-62372932",
