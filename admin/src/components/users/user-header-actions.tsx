@@ -1,16 +1,14 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Modal, type SelectOption } from "@/components/ui";
-import type { Role } from "@/types/user";
-import { RoleForm } from "./role-form";
 import { UserForm } from "./user-form";
 
 interface UserHeaderActionsProps {
   roleOptions: SelectOption[];
   statusOptions: SelectOption[];
-  roles: Role[];
 }
 
 const actionClasses =
@@ -19,9 +17,8 @@ const actionClasses =
 export function UserHeaderActions({
   roleOptions,
   statusOptions,
-  roles,
 }: UserHeaderActionsProps) {
-  const [open, setOpen] = useState<"user" | "role" | null>(null);
+  const [open, setOpen] = useState<"user" | null>(null);
 
   return (
     <>
@@ -34,14 +31,11 @@ export function UserHeaderActions({
           <Plus className="size-[18px]" aria-hidden />
           Add User
         </button>
-        <button
-          type="button"
-          onClick={() => setOpen("role")}
-          className={actionClasses}
-        >
+        {/* Roles are managed on their own screen. */}
+        <Link href="/users/roles" className={actionClasses}>
           <Plus className="size-[18px]" aria-hidden />
           Add Role
-        </button>
+        </Link>
       </div>
 
       {/* Keyed so each opening starts from a blank form. */}
@@ -60,19 +54,6 @@ export function UserHeaderActions({
         />
       </Modal>
 
-      <Modal
-        open={open === "role"}
-        onClose={() => setOpen(null)}
-        title="Create Role"
-        description="Create a new role and pick its parent"
-        className="max-w-3xl"
-      >
-        <RoleForm
-          key={open === "role" ? "role-open" : "role-closed"}
-          roles={roles}
-          onDone={() => setOpen(null)}
-        />
-      </Modal>
     </>
   );
 }

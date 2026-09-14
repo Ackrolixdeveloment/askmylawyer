@@ -76,7 +76,17 @@ export const navSections: NavSection[] = [
         ],
       },
       { label: "Customer Management", href: "/customers", icon: User },
-      { label: "User Management", href: "/users", icon: Users },
+      {
+        label: "User Management",
+        href: "/users",
+        icon: Users,
+        children: [
+          { label: "Departments", href: "/users/departments" },
+          { label: "Category", href: "/users/category" },
+          { label: "Role", href: "/users/roles" },
+          { label: "Users", href: "/users" },
+        ],
+      },
       {
         label: "Consultation Management",
         href: "/consultations",
@@ -109,7 +119,6 @@ export const navSections: NavSection[] = [
           { label: "New Tickets", href: "/support/new" },
           { label: "In Progress", href: "/support/in-progress" },
           { label: "Resolved", href: "/support/resolved" },
-          { label: "Departments", href: "/support/departments" },
         ],
       },
     ],

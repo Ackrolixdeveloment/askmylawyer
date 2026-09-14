@@ -2,12 +2,7 @@ import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
 import { UserHeaderActions } from "@/components/users/user-header-actions";
 import { UsersTable } from "@/components/users/users-table";
-import {
-  adminUsers,
-  roleOptions,
-  roles,
-  statusOptions,
-} from "@/data/mock-users";
+import { adminUsers, roleOptions, statusOptions } from "@/data/mock-users";
 
 export const metadata: Metadata = {
   title: "User Management",
@@ -31,7 +26,6 @@ export default function UserManagementPage() {
           <UserHeaderActions
             roleOptions={roleOptions}
             statusOptions={statusOptions}
-            roles={roles}
           />
         </div>
 

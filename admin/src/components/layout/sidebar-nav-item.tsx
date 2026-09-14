@@ -3,12 +3,37 @@
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { isNavGroup, type NavGroup, type NavItem } from "@/lib/nav";
+import {
+  isNavGroup,
+  type NavChild,
+  type NavGroup,
+  type NavItem,
+} from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-/** A list stays highlighted while one of its detail pages is open. */
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+/**
+ * A list stays highlighted while one of its detail pages is open.
+ *
+ * `siblings` guards against a shorter href swallowing a longer one: "/users"
+ * would otherwise also match "/users/roles" and light up two entries at once.
+ */
+function isActive(pathname: string, href: string, siblings: string[] = []) {
+  if (pathname === href) return true;
+  if (!pathname.startsWith(`${href}/`)) return false;
+
+  return !siblings.some(
+    (other) =>
+      other !== href &&
+      other.startsWith(`${href}/`) &&
+      (pathname === other || pathname.startsWith(`${other}/`)),
+  );
+}
+
+/** Every leaf href directly under a nav item, for the guard above. */
+function leafHrefs(children: NavChild[] | undefined): string[] {
+  return (children ?? []).flatMap((child) =>
+    isNavGroup(child) ? child.children.map((leaf) => leaf.href) : [child.href],
+  );
 }
 
 interface SidebarNavItemProps {
@@ -83,11 +108,15 @@ function ItemChildren({
   pathname: string;
   onNavigate?: () => void;
 }) {
+  const siblings = leafHrefs(item.children);
+
   const activeGroup =
     item.children?.find(
       (child) =>
         isNavGroup(child) &&
-        child.children.some((leaf) => isActive(pathname, leaf.href)),
+        child.children.some((leaf) =>
+          isActive(pathname, leaf.href, siblings),
+        ),
     )?.label ?? null;
 
   // `undefined` means "follow the route"; clicking pins a specific group.
@@ -103,6 +132,7 @@ function ItemChildren({
             <NavSubGroup
               group={child}
               pathname={pathname}
+              siblings={siblings}
               expanded={effectiveOpen === child.label}
               onToggle={() =>
                 setOpenGroup(effectiveOpen === child.label ? null : child.label)
@@ -115,7 +145,7 @@ function ItemChildren({
             <SubLink
               href={child.href}
               label={child.label}
-              active={isActive(pathname, child.href)}
+              active={isActive(pathname, child.href, siblings)}
               onNavigate={onNavigate}
             />
           </li>
@@ -129,17 +159,21 @@ function ItemChildren({
 function NavSubGroup({
   group,
   pathname,
+  siblings,
   expanded,
   onToggle,
   onNavigate,
 }: {
   group: NavGroup;
   pathname: string;
+  siblings: string[];
   expanded: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
 }) {
-  const groupActive = group.children.some((leaf) => isActive(pathname, leaf.href));
+  const groupActive = group.children.some((leaf) =>
+    isActive(pathname, leaf.href, siblings),
+  );
 
   return (
     <div>
