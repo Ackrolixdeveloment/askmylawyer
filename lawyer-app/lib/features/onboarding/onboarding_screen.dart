@@ -76,11 +76,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // The sheet paints its own background to the bottom edge, so only the
+      // top inset is consumed here.
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            // Artwork sits in the upper half, copy in the sheet below.
+            // Artwork takes a fixed share of the height rather than every
+            // pixel the sheet leaves over — on a tall phone an `Expanded`
+            // here strands the image in the middle of a huge empty box.
             Expanded(
+              flex: 3,
               child: PageView.builder(
                 controller: _controller,
                 itemCount: _pages.length,
@@ -134,13 +140,17 @@ class _OnboardingSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Clear the home indicator on gesture-nav iPhones, which SafeArea no
+    // longer covers now that the sheet runs to the bottom edge.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.canvas,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, 20, 24, 24 + bottomInset),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
