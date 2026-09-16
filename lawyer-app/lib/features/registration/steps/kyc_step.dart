@@ -6,29 +6,38 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../registration_repository.dart';
 
 /// Step 2 — DigiLocker first, with a manual fallback when it fails.
 class KycStep extends StatefulWidget {
-  const KycStep({super.key, required this.onValidChanged});
+  const KycStep({super.key, required this.onChanged, this.initial});
 
-  /// Reports whether the step is complete, so the shared footer can enable
-  /// its Continue button. Stays false on the DigiLocker intro, which has
-  /// nothing to submit yet.
-  final ValueChanged<bool> onValidChanged;
+  /// Reports the step's data when complete, or null while something is
+  /// missing. Stays null on the DigiLocker intro, which has nothing to
+  /// submit yet.
+  final ValueChanged<KycInput?> onChanged;
+
+  /// What was saved before, to prefill the form.
+  final RegistrationSnapshot? initial;
 
   @override
   State<KycStep> createState() => _KycStepState();
 }
 
 class _KycStepState extends State<KycStep> {
-  bool _manual = false;
+  /// Details were entered by hand before, so reopen the manual form.
+  late bool _manual = widget.initial?.panNumber != null;
 
+  // The Aadhaar number is stored encrypted and never sent back, so it has to
+  // be typed again when this step is re-saved.
   final _aadhaar = TextEditingController();
-  final _pan = TextEditingController();
-  final _address = TextEditingController();
+  late final _pan = TextEditingController(text: widget.initial?.panNumber);
+  late final _address = TextEditingController(
+    text: widget.initial?.residentialAddress,
+  );
 
-  PickedDocument? _aadhaarFile;
-  PickedDocument? _panFile;
+  late PickedDocument? _aadhaarFile = widget.initial?.aadhaarFile?.toPicked();
+  late PickedDocument? _panFile = widget.initial?.panFile?.toPicked();
 
   @override
   void initState() {
@@ -36,13 +45,25 @@ class _KycStepState extends State<KycStep> {
     for (final controller in [_aadhaar, _pan, _address]) {
       controller.addListener(_report);
     }
+    _report();
   }
 
-  /// Pushes validity up after the frame, so the parent can rebuild safely.
+  /// Pushes the data up after the frame, so the parent can rebuild safely.
   void _report() {
-    setState(() {});
+    if (mounted) setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onValidChanged(_isValid);
+      if (!mounted) return;
+      widget.onChanged(
+        _manual && _isValid
+            ? KycInput(
+                aadhaarNumber: _aadhaar.text.replaceAll(' ', ''),
+                panNumber: _pan.text.trim().toUpperCase(),
+                residentialAddress: _address.text.trim(),
+                aadhaarFile: _aadhaarFile!,
+                panFile: _panFile!,
+              )
+            : null,
+      );
     });
   }
 
@@ -175,6 +196,7 @@ class _KycStepState extends State<KycStep> {
           placeholder: 'Upload Aadhar Card*',
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
+          initialFile: _aadhaarFile,
           onChanged: (file) {
             setState(() => _aadhaarFile = file);
             _report();
@@ -197,6 +219,7 @@ class _KycStepState extends State<KycStep> {
           placeholder: 'Upload Pan Card*',
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
+          initialFile: _panFile,
           onChanged: (file) {
             setState(() => _panFile = file);
             _report();

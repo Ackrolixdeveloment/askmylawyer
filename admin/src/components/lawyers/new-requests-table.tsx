@@ -15,6 +15,11 @@ import {
 import { formatDdMmYyyy } from "@/lib/format";
 import type { LawyerRequest } from "@/types/lawyer";
 
+/** Bar council state from the application; falls back to a city if one is set. */
+export function placeOf(row: LawyerRequest) {
+  return row.barCouncilState ?? row.city ?? "";
+}
+
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
   onView: (row: LawyerRequest) => void,
@@ -54,9 +59,11 @@ function buildColumns(
   },
   {
     key: "city",
-    header: "City",
-    sortValue: (row) => row.city,
-    cell: (row) => <span className="text-ink-muted">{row.city}</span>,
+    header: "State",
+    sortValue: (row) => placeOf(row),
+    cell: (row) => (
+      <span className="text-ink-muted">{placeOf(row) || "-"}</span>
+    ),
   },
   {
     key: "experience",
@@ -133,7 +140,8 @@ export function NewRequestsTable({
           field.toLowerCase().includes(needle),
         );
       const matchesState =
-        state === "all" || request.city.toLowerCase() === state.toLowerCase();
+        state === "all" ||
+        placeOf(request).toLowerCase() === state.toLowerCase();
       const matchesExperience =
         experience === "all" || request.experience === experience;
 

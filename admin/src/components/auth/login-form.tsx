@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, TextField } from "@/components/ui";
+import { ApiError } from "@/lib/api";
 import { signIn } from "@/lib/auth";
 
 export function LoginForm() {
@@ -13,7 +14,7 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
 
@@ -23,13 +24,21 @@ export function LoginForm() {
     }
 
     setSubmitting(true);
-    if (signIn(email, password)) {
-      router.push("/dashboard");
-      return;
+    try {
+      await signIn(email, password);
+      router.replace("/dashboard");
+    } catch (caught) {
+      setSubmitting(false);
+      if (caught instanceof ApiError) {
+        setError(
+          caught.code === "VALIDATION_ERROR"
+            ? "Enter a valid email address."
+            : caught.message,
+        );
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     }
-
-    setSubmitting(false);
-    setError("Incorrect email or password.");
   }
 
   return (

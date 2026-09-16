@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../home/home_screen.dart';
 
-/// Shown once the application is with the admin team for review.
+/// Shown once the application is with the admin team, and again if it is
+/// turned down — with the reason the admin gave.
 class ApplicationSubmittedScreen extends StatelessWidget {
-  const ApplicationSubmittedScreen({super.key});
+  const ApplicationSubmittedScreen({
+    super.key,
+    this.rejected = false,
+    this.reason,
+  });
+
+  final bool rejected;
+
+  /// The admin's reason, shown on a rejection.
+  final String? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +29,10 @@ class ApplicationSubmittedScreen extends StatelessWidget {
                 Container(
                   width: 96,
                   height: 96,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFDF3E3),
+                  decoration: BoxDecoration(
+                    color: rejected
+                        ? const Color(0xFFFDECEC)
+                        : const Color(0xFFFDF3E3),
                     shape: BoxShape.circle,
                   ),
                   padding: const EdgeInsets.all(20),
@@ -31,43 +42,43 @@ class ApplicationSubmittedScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 28),
-                const Text(
-                  'Application Submitted!',
-                  style: TextStyle(
+                Text(
+                  rejected
+                      ? 'Application Not Approved'
+                      : 'Application Submitted!',
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Your account is under review. Our team will verify your '
-                  'details and notify you within 48 hours.',
+                Text(
+                  rejected
+                      ? reason ??
+                            'Our team could not verify your details. Please '
+                                'contact support for the next steps.'
+                      : 'Your account is under review. Our team will verify '
+                            'your details and notify you within 48 hours.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.5,
                     color: AppColors.inkMuted,
                   ),
                 ),
                 const SizedBox(height: 28),
-                // Not an action to take — just reassurance, so it reads as
-                // text rather than a button.
-                InkWell(
-                  // TODO: enable push notifications here too, and switch to
-                  // the empty dashboard for a freshly approved lawyer.
-                  onTap: () => Navigator.of(context).pushReplacement(
-                    MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
-                  ),
-                  child: const Text(
-                    "We'll notify you",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.inkMuted,
-                      decoration: TextDecoration.underline,
-                      decorationColor: AppColors.inkMuted,
-                    ),
+                // Nothing to do here until an admin decides — the
+                // dashboard stays out of reach until the account is approved.
+                Text(
+                  rejected
+                      ? 'Please contact our support team if you need help.'
+                      : "We'll notify you",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.inkMuted,
                   ),
                 ),
               ],

@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { MetricCards } from "@/components/common/metric-cards";
-import { CorrectionsTable } from "@/components/lawyers/corrections-table";
-import {
-  correctionMetrics,
-  correctionRequests,
-  correctionStateOptions,
-  correctionTypeOptions,
-  daysWaitingOptions,
-} from "@/data/mock-corrections";
+import { CorrectionsView } from "@/components/lawyers/corrections-view";
 
 export const metadata: Metadata = {
   title: "Correction Requests",
@@ -24,13 +16,11 @@ export default function CorrectionRequestsPage() {
           Correction requests
         </h1>
 
-        <div className="mt-6 space-y-4">
-          <MetricCards metrics={correctionMetrics} />
-          <CorrectionsTable
-            requests={correctionRequests}
-            typeOptions={correctionTypeOptions}
-            stateOptions={correctionStateOptions}
-            daysOptions={daysWaitingOptions}
+        <div className="mt-6">
+          <CorrectionsView
+            bucket="correction"
+            basePath="/lawyers/onboarding/correction"
+            showMetrics
           />
         </div>
       </main>

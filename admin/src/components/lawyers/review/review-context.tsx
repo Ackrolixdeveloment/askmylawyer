@@ -22,21 +22,28 @@ const ReviewContext = createContext<ReviewContextValue | null>(null);
 export function ReviewProvider({
   corrections,
   resubmitted,
+  savedDecisions,
+  savedNotes,
   children,
 }: {
   /** Feedback already on the application — those blocks start flagged. */
   corrections?: Record<string, string>;
   resubmitted?: Record<string, string>;
+  /** Ticks and crosses from a review that was started earlier. */
+  savedDecisions?: Record<string, BlockDecision>;
+  savedNotes?: Record<string, string>;
   children: React.ReactNode;
 }) {
-  const [decisions, setDecisions] = useState<Record<string, BlockDecision>>(() =>
-    Object.fromEntries(
+  const [decisions, setDecisions] = useState<Record<string, BlockDecision>>(() => ({
+    ...Object.fromEntries(
       Object.keys(corrections ?? {}).map((label) => [label, "correction"]),
     ),
-  );
-  const [notes, setNotes] = useState<Record<string, string>>(
-    () => corrections ?? {},
-  );
+    ...savedDecisions,
+  }));
+  const [notes, setNotes] = useState<Record<string, string>>(() => ({
+    ...corrections,
+    ...savedNotes,
+  }));
 
   const setDecision = useCallback((label: string, decision: BlockDecision) => {
     setDecisions((prev) => ({ ...prev, [label]: decision }));

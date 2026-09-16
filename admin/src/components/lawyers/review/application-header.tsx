@@ -48,16 +48,18 @@ export function ApplicationHeader({ application, overall }: ApplicationHeaderPro
             <Badge tone={overallTone[overall]}>{overallLabel[overall]}</Badge>
           </div>
 
-          <p className="mt-0.5 text-sm text-ink-muted">{application.title}</p>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            {application.title || "No specialisation selected"}
+          </p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-4 text-xs text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
               <Briefcase className="size-3.5" aria-hidden />
-              {application.experienceYears} Years
+              {application.experience || "Experience not set"}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <MapPin className="size-3.5" aria-hidden />
-              {application.location}
+              {application.location || "Address not given"}
             </span>
           </div>
         </div>

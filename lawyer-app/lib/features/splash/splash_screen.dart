@@ -1,8 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
+import '../../core/app_prefs.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/token_storage.dart';
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_repository.dart';
+import '../auth/post_login_route.dart';
+import '../auth/get_started_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 
 /// Brand screen shown while the app boots, then hands over to onboarding.
@@ -14,25 +18,45 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _timer;
+  /// The brand mark stays up at least this long, however fast the check is.
+  static const _minimumWait = Duration(milliseconds: 1200);
 
   @override
   void initState() {
     super.initState();
-    // TODO: replace the delay with the real session / bootstrap check.
-    _timer = Timer(const Duration(seconds: 2), _goToOnboarding);
+    _bootstrap();
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  /// A signed-in lawyer resumes wherever their application stands. Everyone
+  /// else signs in, and only a brand new device sees the intro tour.
+  Future<void> _bootstrap() async {
+    final wait = Future<void>.delayed(_minimumWait);
+    LawyerAccount? lawyer;
 
-  void _goToOnboarding() {
+    if (await TokenStorage.instance.refreshToken != null) {
+      try {
+        lawyer = await AuthRepository.instance.me();
+      } on ApiException {
+        // Session gone or server unreachable — sign in again.
+        lawyer = null;
+      }
+    }
+
+    final seenTour = await AppPrefs.instance.hasSeenOnboarding;
+
+    await wait;
     if (!mounted) return;
+
+    if (lawyer != null) {
+      openPostLoginScreen(context, lawyer);
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const OnboardingScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            seenTour ? const GetStartedScreen() : const OnboardingScreen(),
+      ),
     );
   }
 

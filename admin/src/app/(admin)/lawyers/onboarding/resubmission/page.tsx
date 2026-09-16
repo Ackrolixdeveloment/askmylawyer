@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { CorrectionsTable } from "@/components/lawyers/corrections-table";
-import {
-  correctionStateOptions,
-  correctionTypeOptions,
-  daysWaitingOptions,
-  resubmissionRequests,
-} from "@/data/mock-corrections";
+import { CorrectionsView } from "@/components/lawyers/corrections-view";
 
 export const metadata: Metadata = {
   title: "Resubmission",
@@ -23,11 +17,8 @@ export default function ResubmissionPage() {
         </h1>
 
         <div className="mt-6">
-          <CorrectionsTable
-            requests={resubmissionRequests}
-            typeOptions={correctionTypeOptions}
-            stateOptions={correctionStateOptions}
-            daysOptions={daysWaitingOptions}
+          <CorrectionsView
+            bucket="resubmission"
             basePath="/lawyers/onboarding/resubmission"
           />
         </div>

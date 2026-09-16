@@ -30,7 +30,11 @@ class UploadField extends StatefulWidget {
     this.required = false,
     this.allowedExtensions = const ['png', 'jpg', 'jpeg'],
     this.onChanged,
+    this.initialFile,
   });
+
+  /// A file uploaded earlier, shown until the lawyer picks a new one.
+  final PickedDocument? initialFile;
 
   final String placeholder;
   final String helper;
@@ -45,7 +49,7 @@ class UploadField extends StatefulWidget {
 }
 
 class _UploadFieldState extends State<UploadField> {
-  PickedDocument? _file;
+  late PickedDocument? _file = widget.initialFile;
   String? _error;
 
   Future<void> _pick() async {

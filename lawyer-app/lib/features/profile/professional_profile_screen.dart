@@ -3,17 +3,22 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/multi_select_field.dart';
 import '../../core/widgets/upload_field.dart';
+import '../registration/registration_repository.dart';
 import 'application_submitted_screen.dart';
 
 /// Final onboarding screen: the profile customers actually see.
 class ProfessionalProfileScreen extends StatefulWidget {
-  const ProfessionalProfileScreen({super.key, this.displayName});
+  const ProfessionalProfileScreen({super.key, this.displayName, this.initial});
 
   /// Pulled from the verified KYC record, so it is read-only here.
   final String? displayName;
+
+  /// What was saved before, to prefill the form.
+  final RegistrationSnapshot? initial;
 
   @override
   State<ProfessionalProfileScreen> createState() =>
@@ -60,15 +65,18 @@ class _ProfessionalProfileScreenState extends State<ProfessionalProfileScreen> {
     'Intellectual Property',
   ];
 
-  final _about = TextEditingController();
+  late final _about = TextEditingController(text: widget.initial?.about);
   final _languageSearch = TextEditingController();
 
-  PickedDocument? _photo;
+  /// A photo uploaded earlier has no local path; only new picks are uploaded.
+  late PickedDocument? _photo = widget.initial?.photo?.toPicked();
 
   /// Kept alongside [_photo] so the chosen image can be shown back.
   File? _photoFile;
 
-  PickedDocument? _signature;
+  late PickedDocument? _signature = widget.initial?.signature?.toPicked();
+
+  bool _submitting = false;
 
   /// Offers the camera or the gallery, then stores whichever was chosen.
   Future<void> _pickPhoto() async {
@@ -148,10 +156,16 @@ class _ProfessionalProfileScreenState extends State<ProfessionalProfileScreen> {
       );
     });
   }
-  String? _experience;
-  Set<String> _selectedLanguages = {'Hindi', 'English'};
-  Set<String> _categories = {};
-  Set<String> _specialisation = {};
+  late String? _experience =
+      _experienceBands.contains(widget.initial?.experience)
+      ? widget.initial?.experience
+      : null;
+  late Set<String> _selectedLanguages =
+      widget.initial?.languages.isNotEmpty ?? false
+      ? widget.initial!.languages.toSet()
+      : {'Hindi', 'English'};
+  late Set<String> _categories = {...?widget.initial?.caseCategories};
+  late Set<String> _specialisation = {...?widget.initial?.specialisations};
 
   @override
   void initState() {
@@ -205,13 +219,40 @@ class _ProfessionalProfileScreenState extends State<ProfessionalProfileScreen> {
         .toList();
   }
 
-  void _submit() {
-    // TODO: save the profile, then submit the application for review.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => const ApplicationSubmittedScreen(),
-      ),
-    );
+  /// Saves the profile, then sends the whole application for review.
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    final repository = RegistrationRepository.instance;
+
+    try {
+      await repository.saveProfile(
+        ProfileInput(
+          about: _about.text.trim(),
+          experience: _experience!,
+          languages: _selectedLanguages,
+          caseCategories: _categories,
+          specialisations: _specialisation,
+          photo: _photo,
+          signature: _signature,
+        ),
+      );
+      await repository.submit();
+      if (!mounted) return;
+
+      // Registration is finished — nothing behind this screen to go back to.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const ApplicationSubmittedScreen(),
+        ),
+        (_) => false,
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   @override
@@ -370,6 +411,7 @@ class _ProfessionalProfileScreenState extends State<ProfessionalProfileScreen> {
                           placeholder: 'Upload',
                           helper: 'Choose a file · Maximum 5 MB file size',
                           maxSizeMb: 5,
+                          initialFile: _signature,
                           onChanged: (file) =>
                               setState(() => _signature = file),
                         ),
@@ -555,8 +597,13 @@ class _ProfessionalProfileScreenState extends State<ProfessionalProfileScreen> {
 
                   const SizedBox(height: 8),
                   FilledButton(
-                    onPressed: _canContinue ? _submit : null,
-                    child: const Text('Continue'),
+                    onPressed: _canContinue && !_submitting ? _submit : null,
+                    child: _submitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Continue'),
                   ),
                 ],
               ),

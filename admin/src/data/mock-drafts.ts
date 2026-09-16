@@ -80,7 +80,7 @@ export function getDraftDetail(id: string): DraftDetail {
   return {
     id: draft.id,
     name: draft.name,
-    practiceType: draft.practiceType,
+    practiceType: draft.practiceType ?? "Individual",
     email: draft.email,
     mobile: draft.mobile,
     tabs: [

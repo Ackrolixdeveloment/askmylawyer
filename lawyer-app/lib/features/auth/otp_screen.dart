@@ -2,13 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/otp_input.dart';
-import '../registration/registration_screen.dart';
+import 'auth_repository.dart';
+import 'post_login_route.dart';
 
 /// Verifies the code sent to the lawyer's mobile number.
 class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key, required this.mobile, this.name});
+  const OtpScreen({
+    super.key,
+    required this.mobile,
+    this.name,
+    this.resendAfterSeconds = defaultResendSeconds,
+  });
+
+  static const defaultResendSeconds = 24;
 
   /// Ten digit number, shown back with the country code.
   final String mobile;
@@ -16,21 +25,25 @@ class OtpScreen extends StatefulWidget {
   /// Greeting name, once we know it. Falls back to a neutral title.
   final String? name;
 
+  /// Wait before "Resend code" unlocks, as told by the backend.
+  final int resendAfterSeconds;
+
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  static const _resendSeconds = 24;
-
   Timer? _timer;
-  int _secondsLeft = _resendSeconds;
+  late int _secondsLeft = widget.resendAfterSeconds;
   String _code = '';
+  String? _error;
+  bool _verifying = false;
+  bool _resending = false;
 
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _startCountdown(widget.resendAfterSeconds);
   }
 
   @override
@@ -39,8 +52,8 @@ class _OtpScreenState extends State<OtpScreen> {
     super.dispose();
   }
 
-  void _startCountdown() {
-    setState(() => _secondsLeft = _resendSeconds);
+  void _startCountdown(int seconds) {
+    setState(() => _secondsLeft = seconds);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsLeft <= 1) {
@@ -52,20 +65,49 @@ class _OtpScreenState extends State<OtpScreen> {
     });
   }
 
-  bool get _canSubmit => _code.length == 6;
+  bool get _canSubmit => _code.length == 6 && !_verifying;
 
-  void _submit() {
-    // TODO: verify the code with the backend before moving on.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => RegistrationScreen(mobile: widget.mobile),
-      ),
-    );
+  Future<void> _submit() async {
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+
+    try {
+      final result = await AuthRepository.instance.verifyOtp(
+        widget.mobile,
+        _code,
+      );
+      if (!mounted) return;
+      openPostLoginScreen(context, result.lawyer, mobile: widget.mobile);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _verifying = false;
+        _error = error.message;
+      });
+    }
   }
 
-  void _resend() {
-    // TODO: request a fresh code.
-    _startCountdown();
+  Future<void> _resend() async {
+    setState(() {
+      _resending = true;
+      _error = null;
+    });
+
+    try {
+      final seconds = await AuthRepository.instance.sendOtp(widget.mobile);
+      if (!mounted) return;
+      _startCountdown(seconds);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('A new code has been sent')));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
   }
 
   @override
@@ -102,7 +144,22 @@ class _OtpScreenState extends State<OtpScreen> {
               ),
               const SizedBox(height: 24),
 
-              OtpInput(onChanged: (code) => setState(() => _code = code)),
+              OtpInput(
+                onChanged: (code) => setState(() {
+                  _code = code;
+                  _error = null;
+                }),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.negative,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               Align(
@@ -126,12 +183,12 @@ class _OtpScreenState extends State<OtpScreen> {
                         ),
                       )
                     : TextButton(
-                        onPressed: _resend,
+                        onPressed: _resending ? null : _resend,
                         style: TextButton.styleFrom(
                           padding: EdgeInsets.zero,
                           foregroundColor: AppColors.brand,
                         ),
-                        child: const Text('Resend code'),
+                        child: Text(_resending ? 'Sending…' : 'Resend code'),
                       ),
               ),
 
@@ -151,7 +208,12 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                   FilledButton(
                     onPressed: _canSubmit ? _submit : null,
-                    child: const Text('Next'),
+                    child: _verifying
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Next'),
                   ),
                 ],
               ),

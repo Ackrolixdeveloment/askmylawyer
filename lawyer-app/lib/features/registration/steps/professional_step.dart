@@ -3,14 +3,18 @@ import 'package:flutter/material.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../registration_repository.dart';
 
 /// Step 3 — qualification and Bar Council enrolment.
 class ProfessionalStep extends StatefulWidget {
-  const ProfessionalStep({super.key, required this.onValidChanged});
+  const ProfessionalStep({super.key, required this.onChanged, this.initial});
 
-  /// Reports whether the step is complete, so the shared footer can enable
-  /// its Continue button.
-  final ValueChanged<bool> onValidChanged;
+  /// Reports the step's data when complete, or null while something is
+  /// missing — the shared footer enables Continue from it.
+  final ValueChanged<ProfessionalInput?> onChanged;
+
+  /// What was saved before, to prefill the form.
+  final RegistrationSnapshot? initial;
 
   @override
   State<ProfessionalStep> createState() => _ProfessionalStepState();
@@ -25,22 +29,42 @@ class _ProfessionalStepState extends State<ProfessionalStep> {
     'Bar Council of Karnataka',
   ];
 
-  final _enrollment = TextEditingController();
-  String? _qualification;
-  String? _state;
-  PickedDocument? _certificate;
+  late final _enrollment = TextEditingController(
+    text: widget.initial?.enrollmentNumber,
+  );
+
+  // Saved values only prefill when they are still one of the options.
+  late String? _qualification =
+      _qualifications.contains(widget.initial?.qualification)
+      ? widget.initial?.qualification
+      : null;
+  late String? _state = _states.contains(widget.initial?.barCouncilState)
+      ? widget.initial?.barCouncilState
+      : null;
+  late PickedDocument? _certificate = widget.initial?.certificate?.toPicked();
 
   @override
   void initState() {
     super.initState();
     _enrollment.addListener(_report);
+    _report();
   }
 
-  /// Pushes validity up after the frame, so the parent can rebuild safely.
+  /// Pushes the data up after the frame, so the parent can rebuild safely.
   void _report() {
-    setState(() {});
+    if (mounted) setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onValidChanged(_isValid);
+      if (!mounted) return;
+      widget.onChanged(
+        _isValid
+            ? ProfessionalInput(
+                qualification: _qualification!,
+                barCouncilState: _state!,
+                enrollmentNumber: _enrollment.text.trim(),
+                certificate: _certificate!,
+              )
+            : null,
+      );
     });
   }
 
@@ -94,6 +118,7 @@ class _ProfessionalStepState extends State<ProfessionalStep> {
           helper: 'PDF   Max 5 MB',
           maxSizeMb: 5,
           allowedExtensions: const ['pdf'],
+          initialFile: _certificate,
           onChanged: (file) {
             setState(() => _certificate = file);
             _report();

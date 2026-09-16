@@ -1,48 +1,40 @@
+import { api } from "./api";
+
+/** The signed-in admin, as returned by the backend. */
+export interface AdminSession {
+  id: string;
+  employeeCode: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  status: "active" | "inactive";
+  lastLoginAt: string | null;
+  role: { id: string; name: string; isSystem: boolean };
+}
+
+export async function signIn(email: string, password: string) {
+  const { admin } = await api<{ admin: AdminSession }>("/admin/auth/login", {
+    method: "POST",
+    body: { email: email.trim(), password },
+  });
+  return admin;
+}
+
+export async function signOut() {
+  try {
+    await api("/admin/auth/logout", { method: "POST" });
+  } catch {
+    // The cookies are gone or the server is down — either way, leave.
+  }
+}
+
+export async function getCurrentAdmin() {
+  const { admin } = await api<{ admin: AdminSession }>("/admin/auth/me");
+  return admin;
+}
+
 /**
- * MOCK AUTH — no backend yet.
- *
- * Credentials are hard-coded and the session is a localStorage flag, so this
- * is a UI shell only and provides no real security. Swap every function here
- * for real API calls (and an httpOnly cookie session) before launch.
+ * MOCK — forgot password has no API yet; this code always works there.
+ * Remove once the reset endpoints exist.
  */
-
-export const MOCK_CREDENTIALS = {
-  email: "admin@askmylawyer.com",
-  password: "Admin@123",
-};
-
-/** Any email is accepted at the forgot-password step; this code always works. */
 export const MOCK_OTP = "123456";
-
-const SESSION_KEY = "aml.admin.session";
-
-export function signIn(email: string, password: string) {
-  const ok =
-    email.trim().toLowerCase() === MOCK_CREDENTIALS.email &&
-    password === MOCK_CREDENTIALS.password;
-
-  if (ok) {
-    try {
-      localStorage.setItem(SESSION_KEY, email.trim().toLowerCase());
-    } catch {
-      // Private mode or blocked storage — the redirect still works.
-    }
-  }
-  return ok;
-}
-
-export function signOut() {
-  try {
-    localStorage.removeItem(SESSION_KEY);
-  } catch {
-    // Nothing to clean up.
-  }
-}
-
-export function isAuthenticated() {
-  try {
-    return Boolean(localStorage.getItem(SESSION_KEY));
-  } catch {
-    return false;
-  }
-}

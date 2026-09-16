@@ -1,0 +1,21 @@
+# Local development only. On AWS the database is RDS — just point DATABASE_URL at it.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aml-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aml
+      POSTGRES_PASSWORD: aml
+      POSTGRES_DB: askmylawyer
+    ports:
+      - "5432:5432"
+    volumes:
+      - aml-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aml -d askmylawyer"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  aml-postgres:

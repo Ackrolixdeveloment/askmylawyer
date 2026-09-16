@@ -1,33 +1,44 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore } from "react";
-import { isAuthenticated } from "@/lib/auth";
+import { createContext, useContext, useEffect, useState } from "react";
+import { getCurrentAdmin, type AdminSession } from "@/lib/auth";
 
-/** localStorage is client-only, so the server snapshot is always "unknown". */
-const subscribe = () => () => {};
+const AdminContext = createContext<AdminSession | null>(null);
+
+/** The signed-in admin. Only usable inside the admin layout. */
+export function useAdmin() {
+  const admin = useContext(AdminContext);
+  if (!admin) throw new Error("useAdmin must be used inside <AuthGuard>.");
+  return admin;
+}
 
 /**
- * MOCK GUARD — client-side only, and trivially bypassed.
- *
- * It keeps the demo honest (signing out actually locks you out of the admin
- * screens) but real protection has to happen on the server once the API and
- * a session cookie exist.
+ * Loads the session from the backend before showing any admin screen, and
+ * sends the visitor to /login when there is none. The API enforces access on
+ * every request; this only keeps the UI from rendering for signed-out users.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const authed = useSyncExternalStore(
-    subscribe,
-    () => isAuthenticated(),
-    () => null,
-  );
+  const [admin, setAdmin] = useState<AdminSession | null>(null);
 
   useEffect(() => {
-    if (authed === false) router.replace("/login");
-  }, [authed, router]);
+    let cancelled = false;
 
-  // `null` is the server render / first paint, before storage can be read.
-  if (!authed) return null;
+    getCurrentAdmin()
+      .then((current) => {
+        if (!cancelled) setAdmin(current);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace("/login");
+      });
 
-  return <>{children}</>;
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (!admin) return null;
+
+  return <AdminContext value={admin}>{children}</AdminContext>;
 }

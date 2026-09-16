@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/validators.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'auth_repository.dart';
 import 'email_verification_screen.dart';
 import 'otp_screen.dart';
 
@@ -20,6 +22,7 @@ class GetStartedScreen extends StatefulWidget {
 
 class _GetStartedScreenState extends State<GetStartedScreen> {
   final _mobile = TextEditingController();
+  bool _sending = false;
 
   @override
   void initState() {
@@ -41,11 +44,34 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
   String? get _mobileError => Validators.mobile(_mobile.text);
   bool get _canContinue => _mobileError == null;
 
-  void _continue() {
-    // TODO: request the OTP from the backend before opening this screen.
+  Future<void> _continue() async {
+    final mobile = _mobile.text.trim();
+    setState(() => _sending = true);
+
+    int? resendAfter;
+    try {
+      resendAfter = await AuthRepository.instance.sendOtp(mobile);
+    } on ApiException catch (error) {
+      // A code was sent moments ago and is still valid — carry on with it.
+      if (error.code != 'OTP_COOLDOWN') {
+        if (mounted) {
+          setState(() => _sending = false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error.message)));
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _sending = false);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => OtpScreen(mobile: _mobile.text.trim()),
+        builder: (_) => OtpScreen(
+          mobile: mobile,
+          resendAfterSeconds: resendAfter ?? OtpScreen.defaultResendSeconds,
+        ),
       ),
     );
   }
@@ -114,8 +140,13 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
               const SizedBox(height: 16),
 
               FilledButton(
-                onPressed: _canContinue ? _continue : null,
-                child: const Text('Continue'),
+                onPressed: _canContinue && !_sending ? _continue : null,
+                child: _sending
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Continue'),
               ),
               const SizedBox(height: 24),
 
