@@ -79,8 +79,12 @@ function buildColumns(onView: (row: Lawyer) => void): Column<Lawyer>[] {
   {
     key: "city",
     header: "City",
-    sortValue: (row) => row.city,
-    cell: (row) => <span className="text-ink-muted">{row.city}</span>,
+    sortValue: (row) => row.barCouncilState ?? row.city ?? "",
+    cell: (row) => (
+      <span className="text-ink-muted">
+        {row.barCouncilState ?? row.city ?? "-"}
+      </span>
+    ),
   },
   {
     key: "experience",

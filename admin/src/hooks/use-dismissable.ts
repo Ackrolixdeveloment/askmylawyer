@@ -2,20 +2,29 @@
 
 import { useEffect, type RefObject } from "react";
 
+type ElementRef = RefObject<HTMLElement | null>;
+
 /**
  * Closes a floating element on outside click or Escape.
  * Shared by popovers, dropdowns and menus.
+ *
+ * Pass several refs when the floating part lives outside its trigger — a menu
+ * rendered in a portal, say — so clicking inside it doesn't count as outside.
  */
 export function useDismissable(
-  ref: RefObject<HTMLElement | null>,
+  ref: ElementRef | ElementRef[],
   active: boolean,
   onDismiss: () => void,
 ) {
   useEffect(() => {
     if (!active) return;
 
+    const refs = Array.isArray(ref) ? ref : [ref];
+
     function handlePointerDown(event: MouseEvent | TouchEvent) {
-      if (!ref.current?.contains(event.target as Node)) onDismiss();
+      const target = event.target as Node;
+      if (refs.some((item) => item.current?.contains(target))) return;
+      onDismiss();
     }
 
     function handleKeyDown(event: KeyboardEvent) {

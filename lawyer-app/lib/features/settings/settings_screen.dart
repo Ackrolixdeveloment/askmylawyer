@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_repository.dart';
+import '../auth/get_started_screen.dart';
 import '../referral/referral_screen.dart';
 import '../support/help_faq_screen.dart';
 import 'change_mobile_screen.dart';
@@ -153,8 +155,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.logout,
                   title: 'Logout',
                   subtitle: 'Log out of Ask My Lawyer',
-                  // TODO: clear the session once auth is wired up.
-                  onTap: () => LogoutDialog.show(context),
+                  onTap: () => _logout(context),
                 ),
                 _Row(
                   icon: Icons.delete_outline,
@@ -173,6 +174,19 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Ends the session on the server, clears the tokens and returns to sign-in.
+Future<void> _logout(BuildContext context) async {
+  if (!await LogoutDialog.show(context)) return;
+
+  await AuthRepository.instance.logout();
+  if (!context.mounted) return;
+
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute<void>(builder: (_) => const GetStartedScreen()),
+    (_) => false,
+  );
 }
 
 class _SectionLabel extends StatelessWidget {

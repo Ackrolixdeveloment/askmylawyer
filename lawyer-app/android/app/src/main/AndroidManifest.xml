@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed in release builds to reach the backend. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="lawyer_app"
         android:name="${applicationName}"

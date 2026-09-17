@@ -35,7 +35,9 @@ function buildColumns(
       cell: (row) => (
         <>
           <p className="font-semibold text-ink">{row.name}</p>
+          {row.practiceType ? (
           <p className="mt-0.5 text-xs text-ink-subtle">{row.practiceType}</p>
+        ) : null}
         </>
       ),
     },

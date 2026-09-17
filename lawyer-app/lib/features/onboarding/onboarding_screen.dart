@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_prefs.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/get_started_screen.dart';
 
@@ -66,8 +67,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  /// Skipping and finishing both land on the same sign-up screen.
-  void _goToGetStarted() {
+  /// Skipping and finishing both land on the same sign-up screen. The tour
+  /// is marked as seen, so it never appears again on this device.
+  Future<void> _goToGetStarted() async {
+    await AppPrefs.instance.markOnboardingSeen();
+    if (!mounted) return;
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const GetStartedScreen()),
     );

@@ -88,7 +88,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <UserMenu name="Super Admin" email="admin@lexplatform.in" initials="SA" />
+      <UserMenu />
     </aside>
   );
 }

@@ -10,7 +10,10 @@ export interface Lawyer {
   /** Bar Council enrolment number, e.g. "DL/2211/2017". */
   barId: string;
   verification: VerificationMethod;
-  city: string;
+  /** Null until registration collects a city. */
+  city: string | null;
+  /** State bar council from the lawyer's application. */
+  barCouncilState?: string | null;
   /** Bucketed experience band shown in the table. */
   experience: string;
   status: LawyerStatus;
@@ -23,7 +26,10 @@ export interface LawyerRequest {
   phone: string;
   email: string;
   barId: string;
-  city: string;
+  /** Null until registration collects a city. */
+  city: string | null;
+  /** State bar council from the lawyer's application. */
+  barCouncilState?: string | null;
   experience: string;
   /** ISO yyyy-mm-dd; rendered as dd-mm-yyyy in the table. */
   submittedOn: string;
@@ -38,20 +44,37 @@ export type ReviewStepId =
   | "barCouncil"
   | "professional";
 
-export interface IdentityDocument {
-  label: string;
+/** Per-block outcome while reviewing an application. */
+export type BlockDecision = "approved" | "correction";
+
+/** An uploaded file on the application. */
+export interface ApplicationDocument {
+  /** Matches the document types the API serves, e.g. "aadhaar". */
+  type: string;
   fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string | null;
+}
+
+export interface IdentityDocument extends ApplicationDocument {
+  label: string;
+  /** Masked Aadhaar, or the PAN in full. */
+  number: string;
 }
 
 /** Everything shown on the application review screen. */
 export interface LawyerApplication {
   id: string;
   name: string;
-  /** Practice headline, e.g. "Corporate Lawyer". */
+  /** Practice headline, built from the lawyer's specialisations. */
   title: string;
-  experienceYears: number;
+  /** Experience band, e.g. "3-5 years". */
+  experience: string;
   location: string;
   digilockerVerified: boolean;
+  onboardingStatus: string;
+  submittedAt: string | null;
   personal: {
     fullName: string;
     email: string;
@@ -59,13 +82,21 @@ export interface LawyerApplication {
     languages: string;
   };
   identity: {
+    address: string;
     documents: IdentityDocument[];
   };
   barCouncil: {
     number: string;
     stateCouncil: string;
-    certificateName: string;
+    qualification: string;
+    certificate: ApplicationDocument | null;
   };
+  /** The admin's unfinished review: where they got to and what they decided. */
+  reviewProgress?: {
+    step: string;
+    blocks: Record<string, { decision: BlockDecision; note: string | null }>;
+    updatedAt: string;
+  } | null;
   /** Feedback already raised, keyed by the reviewable block label. */
   corrections?: Record<string, string>;
   /** Blocks the lawyer has re-uploaded, keyed the same way. */
@@ -74,8 +105,19 @@ export interface LawyerApplication {
     experience: string;
     consultationTypes: string[];
     practiceAreas: string[];
+    caseCategories: string[];
     bio: string;
+    photo: ApplicationDocument | null;
+    signature: ApplicationDocument | null;
   };
+  bank: {
+    accountHolderName: string;
+    accountNumberMasked: string;
+    ifscCode: string;
+    bankName: string;
+    swiftCode: string | null;
+    proof: ApplicationDocument | null;
+  } | null;
 }
 
 export type RequestSortKey =
@@ -117,7 +159,8 @@ export interface DraftProfile {
   id: string;
   lawyerId: string;
   name: string;
-  practiceType: "Individual" | "Firm";
+  /** Null until registration asks whether they practise alone or in a firm. */
+  practiceType: "Individual" | "Firm" | null;
   email: string;
   mobile: string;
   /** ISO yyyy-mm-dd. */

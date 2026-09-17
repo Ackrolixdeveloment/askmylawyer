@@ -1,15 +1,8 @@
 import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
-import { MetricCards } from "@/components/common/metric-cards";
-import { NewRequestsTable } from "@/components/lawyers/new-requests-table";
+import { NewRequestsView } from "@/components/lawyers/new-requests-view";
 import { Button } from "@/components/ui";
-import {
-  experienceOptions,
-  lawyerRequests,
-  requestMetrics,
-  stateOptions,
-} from "@/data/mock-lawyer-requests";
 
 export const metadata: Metadata = {
   title: "New Requests",
@@ -31,13 +24,8 @@ export default function NewRequestsPage() {
           </Button>
         </div>
 
-        <div className="mt-6 space-y-4">
-          <MetricCards metrics={requestMetrics} />
-          <NewRequestsTable
-            requests={lawyerRequests}
-            stateOptions={stateOptions}
-            experienceOptions={experienceOptions}
-          />
+        <div className="mt-6">
+          <NewRequestsView />
         </div>
       </main>
     </>

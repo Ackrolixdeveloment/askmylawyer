@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/otp_input.dart';
-import '../registration/registration_screen.dart';
+import 'auth_repository.dart';
+import 'post_login_route.dart';
 
 /// Email sign-up: collect the address, then verify the code sent to it.
 class EmailVerificationScreen extends StatefulWidget {
@@ -21,6 +23,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   final _email = TextEditingController();
   bool _codeSent = false;
+  bool _sending = false;
+  bool _verifying = false;
+  String? _error;
   String _code = '';
   Timer? _timer;
   int _secondsLeft = _expirySeconds;
@@ -47,10 +52,37 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     return '$minutes:$seconds';
   }
 
-  void _sendCode() {
-    // TODO: request the verification email.
-    setState(() => _codeSent = true);
-    _startExpiry();
+  String get _address => _email.text.trim();
+
+  /// Sends (or resends) the code. A code sent moments ago is still valid, so
+  /// the cooldown error just keeps the lawyer on the code step.
+  Future<void> _sendCode() async {
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+
+    try {
+      await AuthRepository.instance.sendEmailOtp(_address);
+      if (!mounted) return;
+      if (_codeSent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A new code has been sent')),
+        );
+      }
+      setState(() => _codeSent = true);
+      _startExpiry();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.code == 'OTP_COOLDOWN' && !_codeSent) {
+        setState(() => _codeSent = true);
+        _startExpiry();
+      } else {
+        setState(() => _error = error.message);
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   void _startExpiry() {
@@ -66,11 +98,26 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     });
   }
 
-  void _verify() {
-    // TODO: verify the code with the backend before moving on.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const RegistrationScreen()),
-    );
+  Future<void> _verify() async {
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+
+    try {
+      final result = await AuthRepository.instance.verifyEmailOtp(
+        _address,
+        _code,
+      );
+      if (!mounted) return;
+      openPostLoginScreen(context, result.lawyer);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _verifying = false;
+        _error = error.message;
+      });
+    }
   }
 
   @override
@@ -129,8 +176,28 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       ),
                       const SizedBox(height: 20),
                       FilledButton(
-                        onPressed: _emailLooksValid ? _sendCode : null,
-                        child: const Text('Send Code  →'),
+                        onPressed: _emailLooksValid && !_sending
+                            ? _sendCode
+                            : null,
+                        child: _sending
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Send Code  →'),
+                      ),
+                    ],
+
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _error!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.negative,
+                        ),
                       ),
                     ],
 
@@ -147,7 +214,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       const SizedBox(height: 8),
                       OtpInput(
                         filled: true,
-                        onChanged: (code) => setState(() => _code = code),
+                        onChanged: (code) => setState(() {
+                          _code = code;
+                          _error = null;
+                        }),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -172,7 +242,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: _startExpiry,
+                            onPressed: _sending ? null : _sendCode,
                             style: TextButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: Size.zero,
@@ -207,8 +277,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     ),
                   ),
                   FilledButton(
-                    onPressed: _codeSent && _code.length == 6 ? _verify : null,
-                    child: const Text('Next'),
+                    onPressed: _codeSent && _code.length == 6 && !_verifying
+                        ? _verify
+                        : null,
+                    child: _verifying
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Next'),
                   ),
                 ],
               ),
@@ -266,6 +343,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             onPressed: () => setState(() {
               _codeSent = false;
               _code = '';
+              _error = null;
               _timer?.cancel();
             }),
             style: TextButton.styleFrom(

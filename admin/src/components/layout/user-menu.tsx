@@ -2,19 +2,25 @@
 
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { signOut } from "@/lib/auth";
+import { useAdmin } from "./auth-guard";
 
-interface UserMenuProps {
-  name: string;
-  email: string;
-  initials: string;
-}
-
-export function UserMenu({ name, email, initials }: UserMenuProps) {
+export function UserMenu() {
   const router = useRouter();
+  const admin = useAdmin();
+  const [signingOut, setSigningOut] = useState(false);
 
-  function handleSignOut() {
-    signOut();
+  const initials = admin.name
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await signOut();
     router.replace("/login");
   }
 
@@ -27,14 +33,15 @@ export function UserMenu({ name, email, initials }: UserMenuProps) {
         {initials}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-ink">{name}</p>
-        <p className="truncate text-xs text-ink-muted">{email}</p>
+        <p className="truncate text-sm font-semibold text-ink">{admin.name}</p>
+        <p className="truncate text-xs text-ink-muted">{admin.email}</p>
       </div>
       <button
         type="button"
         onClick={handleSignOut}
+        disabled={signingOut}
         aria-label="Sign out"
-        className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+        className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:opacity-50"
       >
         <LogOut className="size-[18px]" aria-hidden />
       </button>

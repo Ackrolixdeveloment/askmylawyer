@@ -6,14 +6,18 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../registration_repository.dart';
 
 /// Step 4 — the account earnings are paid into.
 class BankStep extends StatefulWidget {
-  const BankStep({super.key, required this.onValidChanged});
+  const BankStep({super.key, required this.onChanged, this.initial});
 
-  /// Reports whether the step is complete, so the shared footer can enable
-  /// its Continue button.
-  final ValueChanged<bool> onValidChanged;
+  /// Reports the step's data when complete, or null while something is
+  /// missing — the shared footer enables Continue from it.
+  final ValueChanged<BankInput?> onChanged;
+
+  /// What was saved before, to prefill the form.
+  final RegistrationSnapshot? initial;
 
   @override
   State<BankStep> createState() => _BankStepState();
@@ -33,14 +37,20 @@ class _BankStepState extends State<BankStep> {
     'IndusInd Bank',
   ];
 
-  final _holder = TextEditingController();
+  late final _holder = TextEditingController(
+    text: widget.initial?.accountHolderName,
+  );
+  // The account number is stored encrypted and never sent back, so it has to
+  // be typed again when this step is re-saved.
   final _account = TextEditingController();
   final _confirmAccount = TextEditingController();
-  final _ifsc = TextEditingController();
-  final _swift = TextEditingController();
+  late final _ifsc = TextEditingController(text: widget.initial?.ifscCode);
+  late final _swift = TextEditingController(text: widget.initial?.swiftCode);
 
-  String? _bank;
-  PickedDocument? _proof;
+  late String? _bank = _banks.contains(widget.initial?.bankName)
+      ? widget.initial?.bankName
+      : null;
+  late PickedDocument? _proof = widget.initial?.bankProof?.toPicked();
 
   @override
   void initState() {
@@ -54,6 +64,7 @@ class _BankStepState extends State<BankStep> {
     ]) {
       controller.addListener(_report);
     }
+    _report();
   }
 
   @override
@@ -66,11 +77,24 @@ class _BankStepState extends State<BankStep> {
     super.dispose();
   }
 
-  /// Pushes validity up after the frame, so the parent can rebuild safely.
+  /// Pushes the data up after the frame, so the parent can rebuild safely.
   void _report() {
-    setState(() {});
+    if (mounted) setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onValidChanged(_isValid);
+      if (!mounted) return;
+      widget.onChanged(
+        _isValid
+            ? BankInput(
+                accountHolderName: _holder.text.trim(),
+                accountNumber: _account.text.trim(),
+                confirmAccountNumber: _confirmAccount.text.trim(),
+                ifscCode: _ifsc.text.trim().toUpperCase(),
+                bankName: _bank!,
+                swiftCode: _swift.text.trim().toUpperCase(),
+                proof: _proof!,
+              )
+            : null,
+      );
     });
   }
 
@@ -172,6 +196,7 @@ class _BankStepState extends State<BankStep> {
           placeholder: 'Upload Cancelled Cheque',
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
+          initialFile: _proof,
           onChanged: (file) {
             setState(() => _proof = file);
             _report();
