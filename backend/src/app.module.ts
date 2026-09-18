@@ -9,9 +9,11 @@ import { StorageModule } from './infrastructure/storage/storage.module';
 import { LawyerRegistrationModule } from './modules/lawyer-registration/lawyer-registration.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
+import { AdminEditRequestsModule } from './modules/admin-edit-requests/admin-edit-requests.module';
 import { AdminLawyersModule } from './modules/admin-lawyers/admin-lawyers.module';
 import { LawyerAccountModule } from './modules/lawyer-account/lawyer-account.module';
 import { LawyerAuthModule } from './modules/lawyer-auth/lawyer-auth.module';
+import { LawyerProfileModule } from './modules/lawyer-profile/lawyer-profile.module';
 
 @Controller('health')
 class HealthController {
@@ -51,8 +53,10 @@ class HealthController {
     NotificationsModule,
     AdminAuthModule,
     AdminLawyersModule,
+    AdminEditRequestsModule,
     LawyerAuthModule,
     LawyerAccountModule,
+    LawyerProfileModule,
     LawyerRegistrationModule,
   ],
   controllers: [HealthController],

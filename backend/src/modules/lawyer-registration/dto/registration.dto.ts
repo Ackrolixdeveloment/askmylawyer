@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -15,8 +16,14 @@ import {
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const trimUpper = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toUpperCase() : value;
+const trimLower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 const digitsOnly = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.replace(/[\s-]/g, '') : value;
+/** Multipart sends omitted fields as empty strings; treat those as absent. */
+const emptyToUndefinedRaw = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const emptyToUndefined = ({ value }: { value: unknown }) => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim().toUpperCase();
@@ -40,24 +47,36 @@ const toStringList = ({ value }: { value: unknown }) => {
 
 const NAME_PATTERN = /^[a-zA-Z][a-zA-Z .'-]*$/;
 
-/**
- * Step 1 — Personal Information.
- *
- * The mobile number and email are not part of this form: both are verified
- * by OTP through `/lawyer/account`, so they are properties of the account.
- */
+/** Step 1 — Personal Information. */
 export class PersonalDto {
   @Transform(trim)
   @Length(3, 150, { message: 'Enter your full name (at least 3 letters).' })
   @Matches(NAME_PATTERN, { message: 'Full name can contain letters only.' })
   fullName: string;
+
+  @Transform(trimLower)
+  @IsEmail({}, { message: 'Enter a valid email address.' })
+  @MaxLength(255)
+  email: string;
+
+  /** Only used when the account was created without a phone (email/Google/Apple). */
+  @IsOptional()
+  @Transform(digitsOnly)
+  @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number.' })
+  mobile?: string;
 }
 
 /** Step 2 — KYC (manual). Files: aadhaarFile, panFile. */
 export class KycDto {
+  /**
+   * Left out when re-saving the step: the stored (encrypted) number is kept,
+   * since it is never sent back to the app to prefill.
+   */
+  @IsOptional()
+  @Transform(emptyToUndefinedRaw)
   @Transform(digitsOnly)
   @Matches(/^\d{12}$/, { message: 'Aadhaar must be 12 digits.' })
-  aadhaarNumber: string;
+  aadhaarNumber?: string;
 
   @Transform(trimUpper)
   @Matches(/^[A-Z]{5}\d{4}[A-Z]$/, { message: 'PAN must look like ABCDE1234F.' })
@@ -95,13 +114,18 @@ export class BankDto {
   @Matches(NAME_PATTERN, { message: 'Account holder name can contain letters only.' })
   accountHolderName: string;
 
+  /** Left out when re-saving: the stored (encrypted) number is kept. */
+  @IsOptional()
+  @Transform(emptyToUndefinedRaw)
   @Transform(digitsOnly)
   @Matches(/^\d{9,18}$/, { message: 'Account number must be 9 to 18 digits.' })
-  accountNumber: string;
+  accountNumber?: string;
 
+  @IsOptional()
+  @Transform(emptyToUndefinedRaw)
   @Transform(digitsOnly)
   @IsString()
-  confirmAccountNumber: string;
+  confirmAccountNumber?: string;
 
   @Transform(trimUpper)
   @Matches(/^[A-Z]{4}0[A-Z0-9]{6}$/, { message: 'IFSC must look like HDFC0001234.' })

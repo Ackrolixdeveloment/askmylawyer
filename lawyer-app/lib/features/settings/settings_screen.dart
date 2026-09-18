@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/auth_repository.dart';
 import '../auth/get_started_screen.dart';
+import '../profile/lawyer_avatar.dart';
+import '../profile/profile_repository.dart';
+import '../profile/profile_screen.dart';
 import '../referral/referral_screen.dart';
 import '../support/help_faq_screen.dart';
 import 'change_mobile_screen.dart';
@@ -11,8 +15,50 @@ import 'delete_account_dialog.dart';
 import 'logout_dialog.dart';
 
 /// Profile, preferences and account actions, opened from the home menu.
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key, this.onEditProfile});
+
+  /// Switches the home shell to the Profile tab. Without it the row falls
+  /// back to pushing the profile on top of settings.
+  final VoidCallback? onEditProfile;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  LawyerProfile? _profile;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  /// Opens the change-number flow, then picks up the new number.
+  Future<void> _changeMobile() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ChangeMobileScreen(
+          currentNumber: (_profile?.mobile ?? '').replaceFirst('+91', ''),
+        ),
+      ),
+    );
+
+    if (changed == true) await _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+
+    try {
+      final profile = await ProfileRepository.instance.load();
+      if (mounted) setState(() => _profile = profile);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +115,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            const _ProfileCard(),
+            _ProfileCard(profile: _profile, error: _error, onRetry: _load),
             const SizedBox(height: 20),
 
             const _SectionLabel('Account Setting'),
@@ -79,16 +125,25 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.person_outline,
                   title: 'Edit Profile',
                   subtitle: 'Edit Profile information',
+                  onTap:
+                      widget.onEditProfile ??
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => Scaffold(
+                            backgroundColor: AppColors.canvas,
+                            body: SafeArea(
+                              bottom: false,
+                              child: const ProfileScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
                 ),
                 _Row(
                   icon: Icons.smartphone_outlined,
                   title: 'Change Mobile Number',
-                  subtitle: 'OTP verification on old + new number',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ChangeMobileScreen(),
-                    ),
-                  ),
+                  subtitle: 'Verified by an OTP on the new number',
+                  onTap: _profile == null ? null : _changeMobile,
                 ),
                 _Row(
                   icon: Icons.account_balance_outlined,
@@ -155,7 +210,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.logout,
                   title: 'Logout',
                   subtitle: 'Log out of Ask My Lawyer',
-                  onTap: () => _logout(context),
+                  onTap: () => _logout(context, _profile),
                 ),
                 _Row(
                   icon: Icons.delete_outline,
@@ -177,8 +232,17 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// Ends the session on the server, clears the tokens and returns to sign-in.
-Future<void> _logout(BuildContext context) async {
-  if (!await LogoutDialog.show(context)) return;
+Future<void> _logout(BuildContext context, LawyerProfile? profile) async {
+  final confirmed = await LogoutDialog.show(
+    context,
+    name: profile?.fullName ?? 'Your account',
+    initials: profile?.initials ?? '··',
+    detail: [
+      profile?.mobileDisplay,
+      profile?.headline.isNotEmpty ?? false ? profile!.headline : null,
+    ].whereType<String>().join(' · '),
+  );
+  if (!confirmed) return;
 
   await AuthRepository.instance.logout();
   if (!context.mounted) return;
@@ -211,7 +275,15 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard();
+  const _ProfileCard({
+    required this.profile,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final LawyerProfile? profile;
+  final String? error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -224,67 +296,57 @@ class _ProfileCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.ink,
-              shape: BoxShape.circle,
-            ),
-            child: const Text(
-              'SM',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
+          LawyerAvatar(
+            initials: profile?.initials ?? '··',
+            photoUrl: profile?.photoUrl,
+            verified: profile?.isVerified ?? false,
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Adv. Sanjh M',
-                  style: TextStyle(
+                  profile?.fullName ??
+                      (error == null ? 'Loading…' : 'Your account'),
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'Family Law Specialist',
-                  style: TextStyle(fontSize: 11, color: AppColors.inkSubtle),
-                ),
-              ],
-            ),
-          ),
-          // The badge sits opposite the name rather than under it.
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.positive.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.check, size: 12, color: AppColors.positive),
-                SizedBox(width: 4),
-                Text(
-                  'Verified Lawyer',
+                  error ??
+                      (profile == null
+                          ? ''
+                          : profile!.headline.isNotEmpty
+                          ? profile!.headline
+                          : profile!.mobileDisplay),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.positive,
+                    fontSize: 11,
+                    color: error == null
+                        ? AppColors.inkSubtle
+                        : AppColors.negative,
                   ),
                 ),
               ],
             ),
           ),
+          // Only the retry sits opposite the name; the verified tick is on
+          // the photo.
+          if (error != null)
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Retry', style: TextStyle(fontSize: 11)),
+            ),
         ],
       ),
     );

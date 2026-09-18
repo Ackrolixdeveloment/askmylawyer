@@ -11,6 +11,7 @@ class MultiSelectField extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onChanged,
+    this.enabled = true,
     this.placeholder = 'Select all that apply',
   });
 
@@ -18,6 +19,9 @@ class MultiSelectField extends StatelessWidget {
   final List<String> options;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
+
+  /// False for a section the admin has approved.
+  final bool enabled;
   final String placeholder;
 
   Future<void> _open(BuildContext context) async {
@@ -93,7 +97,7 @@ class MultiSelectField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InkWell(
-          onTap: () => _open(context),
+          onTap: enabled ? () => _open(context) : null,
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),

@@ -14,6 +14,8 @@ interface ProfileOverviewProps {
   email: string;
   mobile: string;
   tabs: DraftTab[];
+  /** Optional card between the header and the tabs. */
+  banner?: React.ReactNode;
   backHref: string;
   backLabel: string;
   /** Small caption above "Read-only overview" in the footer. */
@@ -32,6 +34,7 @@ export function ProfileOverview({
   email,
   mobile,
   tabs,
+  banner,
   backHref,
   backLabel,
   footerCaption,
@@ -56,6 +59,8 @@ export function ProfileOverview({
           <span>{mobile}</span>
         </div>
       </Card>
+
+      {banner}
 
       <Card className="overflow-hidden">
         <div

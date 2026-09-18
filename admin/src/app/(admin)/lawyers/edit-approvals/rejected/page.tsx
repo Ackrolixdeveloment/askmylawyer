@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
 import { EditRequestsTable } from "@/components/lawyers/edit-requests-table";
-import { periodOptions } from "@/data/mock-edit-requests";
 
 export const metadata: Metadata = {
   title: "Rejected Edit Requests",
@@ -18,7 +17,7 @@ export default function RejectedEditRequestsPage() {
         </h1>
 
         <div className="mt-6">
-          <EditRequestsTable status="rejected" periodOptions={periodOptions} />
+          <EditRequestsTable status="rejected" />
         </div>
       </main>
     </>

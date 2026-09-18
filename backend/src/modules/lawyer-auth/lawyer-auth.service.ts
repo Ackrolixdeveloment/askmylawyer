@@ -14,6 +14,7 @@ const lawyerSelect = {
   email: true,
   fullName: true,
   status: true,
+  suspensionReason: true,
   deletedAt: true,
   lastLoginAt: true,
   createdAt: true,
@@ -41,11 +42,14 @@ const toE164 = (mobile: string) => `+91${mobile}`;
 const sessionExpired = () =>
   new AppException(HttpStatus.UNAUTHORIZED, 'SESSION_EXPIRED', 'Please sign in again.');
 
-const suspended = () =>
+/** The reason, when an admin gave one, reads in the app's sign-out notice. */
+const suspended = (reason?: string | null) =>
   new AppException(
     HttpStatus.FORBIDDEN,
     'ACCOUNT_SUSPENDED',
-    'Your account is suspended. Please contact support.',
+    reason
+      ? `Your account has been suspended. Reason: ${reason}`
+      : 'Your account has been suspended. Please contact support.',
   );
 
 /** What the app receives about the signed-in lawyer. */
@@ -194,10 +198,20 @@ export class LawyerAuthService {
   async refresh(refreshToken: string, client: ClientInfo) {
     const session = await this.prisma.userSession.findUnique({
       where: { refreshTokenHash: sha256(refreshToken) },
-      include: { user: { select: { role: true, status: true, deletedAt: true } } },
+      include: {
+        user: {
+          select: {
+            role: true,
+            status: true,
+            suspensionReason: true,
+            deletedAt: true,
+          },
+        },
+      },
     });
 
     if (!session || session.user.role !== 'lawyer') throw sessionExpired();
+    if (session.user.status === 'suspended') throw suspended(session.user.suspensionReason);
 
     if (session.revokedAt) {
       await this.prisma.userSession.updateMany({
@@ -208,7 +222,6 @@ export class LawyerAuthService {
     }
 
     if (session.expiresAt <= new Date() || session.user.deletedAt) throw sessionExpired();
-    if (session.user.status === 'suspended') throw suspended();
 
     await this.prisma.userSession.update({
       where: { id: session.id },
@@ -227,6 +240,16 @@ export class LawyerAuthService {
 
   /** Used by the guard on every protected request. */
   async validateAccess(payload: LawyerPayload) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.sub, role: 'lawyer', deletedAt: null },
+      select: lawyerSelect,
+    });
+    if (!user) return null;
+
+    // Checked before the session, which suspending revokes: a plain 401 would
+    // leave the app signing the lawyer out with no idea why.
+    if (user.status === 'suspended') throw suspended(user.suspensionReason);
+
     const session = await this.prisma.userSession.findUnique({
       where: { id: payload.sid },
       select: { userId: true, revokedAt: true, expiresAt: true },
@@ -234,10 +257,7 @@ export class LawyerAuthService {
     if (!session || session.userId !== payload.sub || session.revokedAt) return null;
     if (session.expiresAt <= new Date()) return null;
 
-    return this.prisma.user.findFirst({
-      where: { id: payload.sub, role: 'lawyer', status: 'active', deletedAt: null },
-      select: lawyerSelect,
-    });
+    return user;
   }
 
   // ---- Helpers ----
@@ -273,7 +293,7 @@ export class LawyerAuthService {
         'This account was deleted. Please contact support.',
       );
     }
-    if (user.status === 'suspended') throw suspended();
+    if (user.status === 'suspended') throw suspended(user.suspensionReason);
 
     const lawyer = await this.prisma.user.update({
       where: { id: user.id },
@@ -302,11 +322,20 @@ export class LawyerAuthService {
       },
     });
 
-    const payload: LawyerPayload = { sub: userId, sid: session.id, typ: 'lawyer' };
+    const payload: LawyerPayload = {
+      sub: userId,
+      sid: session.id,
+      typ: 'lawyer',
+    };
     const accessToken = await this.jwt.signAsync(payload, {
       expiresIn: env.ACCESS_TOKEN_TTL_MINUTES * 60,
     });
 
-    return { accessToken, refreshToken, accessTokenExpiresAt, refreshTokenExpiresAt };
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    };
   }
 }

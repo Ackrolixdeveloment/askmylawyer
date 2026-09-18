@@ -2,7 +2,7 @@
 
 import { CircleCheck, CircleX, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import {
   Badge,
   DataTable,
@@ -15,13 +15,10 @@ import {
   type MenuAction,
   type SelectOption,
 } from "@/components/ui";
-import {
-  decide,
-  getAllRequests,
-  getDecisions,
-  getServerDecisions,
-  subscribe,
-} from "@/lib/edit-request-store";
+import { ScreenState } from "@/components/common/screen-state";
+import { ApiError } from "@/lib/api";
+import { approveEditRequest, fetchEditRequests } from "@/lib/edit-requests";
+import { useApiData } from "@/lib/use-api-data";
 import { formatDdMmYyyy } from "@/lib/format";
 import type { EditRequest, EditRequestStatus } from "@/types/edit-request";
 
@@ -176,28 +173,41 @@ function buildColumns(
   ];
 }
 
-interface EditRequestsTableProps {
-  status: EditRequestStatus;
-  periodOptions: SelectOption[];
-}
+/** How far back to look; the API returns everything, so this filters here. */
+const periodOptions: SelectOption[] = [
+  { value: "all", label: "All time" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+];
 
-export function EditRequestsTable({
-  status,
-  periodOptions,
-}: EditRequestsTableProps) {
+export function EditRequestsTable({ status }: { status: EditRequestStatus }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("all");
+  const [actionError, setActionError] = useState("");
 
-  // Decisions are shared across the three screens, so approving here removes
-  // the row and it shows up on the Approved list.
-  const decisions = useSyncExternalStore(
-    subscribe,
-    getDecisions,
-    getServerDecisions,
+  const { data, loading, error, retry } = useApiData(
+    () => fetchEditRequests(status),
+    [status],
   );
 
   const listPath = `/lawyers/edit-approvals/${status}`;
+
+  /** Approving from the row: apply it, then reload the list. */
+  async function approve(id: string) {
+    setActionError("");
+    try {
+      await approveEditRequest(id);
+      retry();
+      router.refresh();
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError
+          ? caught.message
+          : "Could not approve this request.",
+      );
+    }
+  }
 
   const columns = useMemo(
     () =>
@@ -205,24 +215,24 @@ export function EditRequestsTable({
         status,
         listPath,
         (row) => router.push(`${listPath}/${row.id}`),
-        (row) => decide(row.id, "approved"),
+        (row) => void approve(row.id),
       ),
+    // `approve` is rebuilt each render; the columns only need the route.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [status, listPath, router],
   );
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
-    return getAllRequests(decisions).filter((row) => {
-      const matchesQuery =
+    return (data?.data ?? []).filter(
+      (row) =>
         !needle ||
         [row.lawyerName, row.lawyerEmail, row.lawyerMobile, row.lawyerId].some(
           (field) => field.toLowerCase().includes(needle),
-        );
-
-      return row.status === status && matchesQuery;
-    });
-  }, [decisions, status, query]);
+        ),
+    );
+  }, [data, query]);
 
   return (
     <div className="space-y-4">
@@ -245,14 +255,27 @@ export function EditRequestsTable({
         />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        minWidth={900}
-        defaultSort={{ key: "requestedAt", direction: "desc" }}
-        emptyMessage={`No ${statusLabel[status].toLowerCase()} requests.`}
-      />
+      {actionError ? (
+        <p role="alert" className="text-sm text-negative">
+          {actionError}
+        </p>
+      ) : null}
+
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={retry}
+        loadingLabel="Loading requests…"
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.id}
+          minWidth={900}
+          defaultSort={{ key: "requestedAt", direction: "desc" }}
+          emptyMessage={`No ${statusLabel[status].toLowerCase()} requests.`}
+        />
+      </ScreenState>
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   RejectLawyerDto,
   RequestCorrectionDto,
   SaveReviewProgressDto,
+  SuspendLawyerDto,
 } from './dto/review.dto';
 
 @Controller('admin/lawyers')
@@ -51,6 +52,12 @@ export class AdminLawyersController {
   @Get('verified')
   listVerified(@Query() query: ListOnboardingDto) {
     return this.lawyers.listVerified(query);
+  }
+
+  /** Removed accounts, kept for the record. */
+  @Get('deleted')
+  listDeleted(@Query() query: ListOnboardingDto) {
+    return this.lawyers.listDeleted(query);
   }
 
   @Get('summary')
@@ -101,6 +108,20 @@ export class AdminLawyersController {
     @Req() request: AdminRequest,
   ) {
     return this.lawyers.requestCorrection(id, request.admin.id, dto.notes);
+  }
+
+  /** Takes the lawyer off the marketplace and signs them out of the app. */
+  @Post(':id/suspend')
+  @HttpCode(200)
+  suspend(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SuspendLawyerDto) {
+    return this.lawyers.suspend(id, dto.reason ?? null);
+  }
+
+  /** Puts a suspended lawyer back on the marketplace. */
+  @Post(':id/reactivate')
+  @HttpCode(200)
+  reactivate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.lawyers.reactivate(id);
   }
 
   /** Streams an uploaded document; `?download=1` saves it instead of previewing. */

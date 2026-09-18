@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { EditRequestDetail } from "@/components/lawyers/edit-request-detail";
-import { getEditRequest } from "@/data/mock-edit-requests";
+import { EditRequestView } from "@/components/lawyers/edit-request-view";
 
 export const metadata: Metadata = {
   title: "Edit Request Details",
 };
 
-export default async function EditRequestPage({
+export default async function RejectedEditRequestsDetailPage({
   params,
 }: PageProps<"/lawyers/edit-approvals/rejected/[id]">) {
   const { id } = await params;
@@ -18,8 +17,8 @@ export default async function EditRequestPage({
 
       <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
         {/* Nested under the list so the sidebar keeps it highlighted. */}
-        <EditRequestDetail
-          request={getEditRequest(id)}
+        <EditRequestView
+          id={id}
           listPath="/lawyers/edit-approvals/rejected"
         />
       </main>

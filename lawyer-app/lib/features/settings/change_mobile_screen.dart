@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../account/account_repository.dart';
 import '../../core/validators.dart';
 import 'verify_mobile_screen.dart';
 
 /// Swaps the account's mobile number, verified by OTP on the new one.
 class ChangeMobileScreen extends StatefulWidget {
-  const ChangeMobileScreen({super.key, this.currentNumber = '1234567890'});
+  const ChangeMobileScreen({super.key, required this.currentNumber});
 
   /// Shown read-only; it is already verified.
   final String currentNumber;
@@ -18,6 +20,7 @@ class ChangeMobileScreen extends StatefulWidget {
 
 class _ChangeMobileScreenState extends State<ChangeMobileScreen> {
   final _mobile = TextEditingController();
+  bool _sending = false;
 
   @override
   void initState() {
@@ -35,15 +38,42 @@ class _ChangeMobileScreenState extends State<ChangeMobileScreen> {
 
   /// The new number must be valid and actually different.
   bool get _canSend =>
-      _error == null && _mobile.text.trim() != widget.currentNumber;
+      _error == null &&
+      !_sending &&
+      _mobile.text.trim() != widget.currentNumber;
 
-  void _sendOtp() {
-    // TODO: request the OTP from the backend before opening this screen.
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => VerifyMobileScreen(mobile: _mobile.text.trim()),
+  Future<void> _sendOtp() async {
+    final mobile = _mobile.text.trim();
+    setState(() => _sending = true);
+
+    int? resendAfter;
+    try {
+      resendAfter = await AccountRepository.instance.sendMobileOtp(mobile);
+    } on ApiException catch (error) {
+      // A code sent moments ago is still valid, so carry on with it.
+      if (error.code != 'OTP_COOLDOWN') {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _sending = false);
+
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => VerifyMobileScreen(
+          mobile: mobile,
+          resendAfterSeconds: resendAfter ?? 24,
+        ),
       ),
     );
+
+    // The number is saved — hand the result back to settings.
+    if (changed == true && mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -126,11 +156,7 @@ class _ChangeMobileScreenState extends State<ChangeMobileScreen> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.check,
-                          size: 12,
-                          color: AppColors.positive,
-                        ),
+                        Icon(Icons.check, size: 12, color: AppColors.positive),
                         SizedBox(width: 4),
                         Text(
                           'Verified',
@@ -225,10 +251,7 @@ class _ChangeMobileScreenState extends State<ChangeMobileScreen> {
               const SizedBox(height: 6),
               Text(
                 _error!,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.negative,
-                ),
+                style: const TextStyle(fontSize: 11, color: AppColors.negative),
               ),
             ],
             const SizedBox(height: 20),
@@ -238,7 +261,12 @@ class _ChangeMobileScreenState extends State<ChangeMobileScreen> {
               height: 48,
               child: FilledButton(
                 onPressed: _canSend ? _sendOtp : null,
-                child: const Text('Send OTP'),
+                child: _sending
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Send OTP'),
               ),
             ),
             const SizedBox(height: 12),

@@ -45,9 +45,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
 
   void _copyLink() {
     Clipboard.setData(ClipboardData(text: widget.data.inviteLink));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invite link copied')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Invite link copied')));
   }
 
   @override
@@ -352,10 +351,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search by lawyer name or referral ID',
-          hintStyle: const TextStyle(
-            fontSize: 13,
-            color: AppColors.inkSubtle,
-          ),
+          hintStyle: const TextStyle(fontSize: 13, color: AppColors.inkSubtle),
           prefixIcon: const Icon(
             Icons.search,
             size: 18,
@@ -485,10 +481,7 @@ class _EarningCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.canvas,
                   borderRadius: BorderRadius.circular(6),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -37,6 +38,10 @@ class ApiClient {
   /// Shared so parallel 401s wait on a single refresh.
   Future<bool>? _refreshing;
 
+  /// Called when the backend reports the account is suspended. Set once at
+  /// startup; see `installSuspensionHandler`.
+  void Function(String message)? onAccountSuspended;
+
   Future<Map<String, dynamic>> get(String path, {bool auth = true}) =>
       _send(() async => _json('GET', path, null), auth: auth);
 
@@ -50,7 +55,8 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool auth = true,
-  }) => _send(() async => _json('PUT', path, body), auth: auth);
+    String method = 'PUT',
+  }) => _send(() async => _json(method, path, body), auth: auth);
 
   /// Multipart form with text [fields] and [files] (field name → local path).
   Future<Map<String, dynamic>> multipart(
@@ -81,6 +87,35 @@ class ApiClient {
     auth: auth,
     timeout: _uploadTimeout,
   );
+
+  /// Downloads a file (an uploaded document, say) rather than JSON.
+  Future<Uint8List> bytes(String path) async {
+    final token = await _tokens.accessToken;
+    final response = await _http
+        .get(
+          _uri(path),
+          headers: {if (token != null) 'Authorization': 'Bearer $token'},
+        )
+        .timeout(_uploadTimeout)
+        .catchError((_) {
+          throw const ApiException(
+            0,
+            'NETWORK_ERROR',
+            "Can't reach the server. Check your internet connection.",
+          );
+        });
+
+    if (response.statusCode == 401 && await _refresh()) return bytes(path);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw const ApiException(
+        0,
+        'DOCUMENT_UNAVAILABLE',
+        'This file could not be opened. Please try again.',
+      );
+    }
+    return response.bodyBytes;
+  }
 
   Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
@@ -145,11 +180,17 @@ class ApiClient {
       final message = details is List && details.isNotEmpty
           ? details.first.toString()
           : data['message'] as String?;
-      throw ApiException(
-        response.statusCode,
-        data['code'] as String? ?? 'UNKNOWN_ERROR',
-        message ?? 'Something went wrong. Please try again.',
-      );
+      final code = data['code'] as String? ?? 'UNKNOWN_ERROR';
+      final text = message ?? 'Something went wrong. Please try again.';
+
+      // An admin suspended the account: end the session here, so no screen
+      // is left holding a token that no longer works.
+      if (code == 'ACCOUNT_SUSPENDED') {
+        await _tokens.clear();
+        onAccountSuspended?.call(text);
+      }
+
+      throw ApiException(response.statusCode, code, text);
     }
     return data;
   }

@@ -56,9 +56,8 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
       if (error.code != 'OTP_COOLDOWN') {
         if (mounted) {
           setState(() => _sending = false);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(error.message)));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(error.message)));
         }
         return;
       }

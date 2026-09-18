@@ -21,7 +21,12 @@ class AppTextField extends StatefulWidget {
     this.maxLength,
     this.inputFormatters,
     this.textCapitalization = TextCapitalization.none,
+    this.correction,
   });
+
+  /// Feedback from the admin review. Any value turns the field red; a
+  /// non-empty one is also shown as the helper text underneath.
+  final String? correction;
 
   final String label;
   final String hint;
@@ -45,9 +50,17 @@ class AppTextField extends StatefulWidget {
 class _AppTextFieldState extends State<AppTextField> {
   bool _touched = false;
 
+  bool get _flagged => widget.correction != null;
+
   String? get _error {
-    if (!_touched || widget.validator == null) return null;
-    return widget.validator!(widget.controller?.text ?? '');
+    // The lawyer's own mistakes take priority over the admin's note.
+    final validation = !_touched || widget.validator == null
+        ? null
+        : widget.validator!(widget.controller?.text ?? '');
+    if (validation != null) return validation;
+
+    final correction = widget.correction;
+    return correction != null && correction.isNotEmpty ? correction : null;
   }
 
   @override
@@ -57,7 +70,11 @@ class _AppTextFieldState extends State<AppTextField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FieldLabel(label: widget.label, required: widget.required),
+        _FieldLabel(
+          label: widget.label,
+          required: widget.required,
+          flagged: _flagged,
+        ),
         const SizedBox(height: 6),
         Focus(
           // Mark as touched on blur, so errors appear after the first attempt.
@@ -81,7 +98,7 @@ class _AppTextFieldState extends State<AppTextField> {
             decoration: _decoration(
               widget.hint,
               enabled: widget.enabled,
-              hasError: error != null,
+              hasError: error != null || _flagged,
             ),
           ),
         ),
@@ -109,20 +126,31 @@ class AppSelectField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.required = false,
+    this.correction,
   });
 
   final String label;
   final List<String> options;
   final String? value;
-  final ValueChanged<String?> onChanged;
+
+  /// Null disables the dropdown, e.g. a section approved by the admin.
+  final ValueChanged<String?>? onChanged;
+
   final bool required;
+
+  /// Feedback from the admin review; turns the field red.
+  final String? correction;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FieldLabel(label: label, required: required),
+        _FieldLabel(
+          label: label,
+          required: required,
+          flagged: correction != null,
+        ),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           initialValue: value,
@@ -140,27 +168,45 @@ class AppSelectField extends StatelessWidget {
               )
               .toList(),
           onChanged: onChanged,
-          decoration: _decoration('Select', enabled: true, hasError: false),
+          decoration: _decoration(
+            'Select',
+            enabled: true,
+            hasError: correction != null,
+          ),
         ),
+        if (correction != null && correction!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            correction!,
+            style: const TextStyle(fontSize: 10, color: AppColors.negative),
+          ),
+        ],
       ],
     );
   }
 }
 
 class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label, required this.required});
+  const _FieldLabel({
+    required this.label,
+    required this.required,
+    this.flagged = false,
+  });
 
   final String label;
   final bool required;
+
+  /// Marked for correction by the admin review.
+  final bool flagged;
 
   @override
   Widget build(BuildContext context) {
     return Text(
       required ? '$label*' : label,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: AppColors.ink,
+        color: flagged ? AppColors.negative : AppColors.ink,
       ),
     );
   }

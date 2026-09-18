@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/api_client.dart';
+import '../../core/options.dart';
 import '../../core/theme/app_colors.dart';
+import '../profile/profile_repository.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/form_fields.dart';
 import '../../core/widgets/upload_field.dart';
@@ -9,34 +12,29 @@ import '../../core/widgets/upload_field.dart';
 /// Replaces the payout account. Mirrors the registration bank step, so the
 /// same details are collected and checked the same way.
 class ChangeBankScreen extends StatefulWidget {
-  const ChangeBankScreen({super.key});
+  const ChangeBankScreen({super.key, this.current});
+
+  /// The account on file, used to prefill everything but the number itself.
+  final BankAccount? current;
 
   @override
   State<ChangeBankScreen> createState() => _ChangeBankScreenState();
 }
 
 class _ChangeBankScreenState extends State<ChangeBankScreen> {
-  static const _banks = [
-    'State Bank of India',
-    'HDFC Bank',
-    'ICICI Bank',
-    'Axis Bank',
-    'Punjab National Bank',
-    'Bank of Baroda',
-    'Kotak Mahindra Bank',
-    'Canara Bank',
-    'Union Bank of India',
-    'IndusInd Bank',
-  ];
+  static const _banks = LawyerOptions.banks;
 
-  final _holder = TextEditingController();
+  late final _holder = TextEditingController(text: widget.current?.holderName);
   final _account = TextEditingController();
   final _confirmAccount = TextEditingController();
-  final _ifsc = TextEditingController();
-  final _swift = TextEditingController();
+  late final _ifsc = TextEditingController(text: widget.current?.ifscCode);
+  late final _swift = TextEditingController(text: widget.current?.swiftCode);
 
-  String? _bank;
+  late String? _bank = _banks.contains(widget.current?.bankName)
+      ? widget.current?.bankName
+      : null;
   PickedDocument? _proof;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -73,6 +71,7 @@ class _ChangeBankScreenState extends State<ChangeBankScreen> {
   }
 
   bool get _canContinue =>
+      !_saving &&
       Validators.name(_holder.text) == null &&
       Validators.accountNumber(_account.text) == null &&
       _confirmError(_confirmAccount.text) == null &&
@@ -80,16 +79,33 @@ class _ChangeBankScreenState extends State<ChangeBankScreen> {
       _bank != null &&
       _proof != null;
 
-  void _submit() {
-    // Captured before popping: afterwards this route's context is gone.
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _submit() async {
+    setState(() => _saving = true);
 
-    // TODO: save the new account through the backend.
-    navigator.pop();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Bank account updated')),
-    );
+    try {
+      await ProfileRepository.instance.updateBank(
+        accountHolderName: _holder.text.trim(),
+        accountNumber: _account.text.trim(),
+        confirmAccountNumber: _confirmAccount.text.trim(),
+        ifscCode: _ifsc.text.trim().toUpperCase(),
+        bankName: _bank!,
+        swiftCode: _swift.text.trim().toUpperCase(),
+        proofPath: _proof?.path,
+      );
+      if (!mounted) return;
+
+      // Captured before popping: afterwards this route's context is gone.
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop(true);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Bank account updated')),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   @override

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'core/app_navigator.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/account_suspended.dart';
 import 'features/splash/splash_screen.dart';
 
 void main() {
+  installSuspensionHandler();
   runApp(const LawyerApp());
 }
 
@@ -14,6 +17,7 @@ class LawyerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ask My Lawyer',
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       // A large system font setting would otherwise scale every screen past

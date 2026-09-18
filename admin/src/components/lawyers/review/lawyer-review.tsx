@@ -7,6 +7,7 @@ import { ApplicationHeader, overallStatus } from "./application-header";
 import { ReviewProvider, useReview } from "./review-context";
 import { ReviewStepper, type ReviewStep } from "./review-stepper";
 import {
+  BankDetailsStep,
   BarCouncilVerificationStep,
   IdentityVerificationStep,
   PersonalInformationStep,
@@ -31,14 +32,20 @@ const steps: ReviewStep[] = [
   { id: "personal", label: "Personal Information" },
   { id: "identity", label: "Identity Verification" },
   { id: "barCouncil", label: "Bar Council Verification" },
+  { id: "bank", label: "Bank Details" },
   { id: "professional", label: "Professional Profile" },
 ];
 
-/** Reviewable blocks inside each step — all must be decided to continue. */
+/**
+ * Reviewable blocks inside each step — all must be decided to continue.
+ * Personal Information carries none: it is the base the rest is checked
+ * against, so the admin reads it rather than approving it.
+ */
 const stepBlocks: Record<ReviewStepId, string[]> = {
-  personal: ["Personal Information"],
+  personal: [],
   identity: ["Aadhar Card", "PAN Card"],
   barCouncil: ["Certificate"],
+  bank: ["Bank Details"],
   professional: ["Professional Profile"],
 };
 
@@ -46,6 +53,7 @@ const initialStatuses: Record<ReviewStepId, StepStatus> = {
   personal: "reviewing",
   identity: "pending",
   barCouncil: "pending",
+  bank: "pending",
   professional: "pending",
 };
 
@@ -292,6 +300,9 @@ function ReviewBody({ application }: { application: LawyerApplication }) {
           ) : null}
           {current === "barCouncil" ? (
             <BarCouncilVerificationStep application={application} />
+          ) : null}
+          {current === "bank" ? (
+            <BankDetailsStep application={application} />
           ) : null}
           {current === "professional" ? (
             <ProfessionalProfileStep application={application} />

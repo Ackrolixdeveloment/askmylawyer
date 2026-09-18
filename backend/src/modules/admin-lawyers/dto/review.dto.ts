@@ -46,6 +46,7 @@ export enum ReviewStepId {
   personal = 'personal',
   identity = 'identity',
   barCouncil = 'barCouncil',
+  bank = 'bank',
   professional = 'professional',
 }
 
@@ -80,4 +81,13 @@ export class SaveReviewProgressDto {
   @ValidateNested({ each: true })
   @Type(() => ReviewBlockDto)
   blocks: ReviewBlockDto[];
+}
+
+export class SuspendLawyerDto {
+  /** Shown to the lawyer when the app signs them out. */
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
 }

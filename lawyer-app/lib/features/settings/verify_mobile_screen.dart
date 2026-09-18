@@ -2,31 +2,40 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/otp_input.dart';
+import '../account/account_repository.dart';
 
 /// Confirms the code sent to the new number, then saves it.
 class VerifyMobileScreen extends StatefulWidget {
-  const VerifyMobileScreen({super.key, required this.mobile});
+  const VerifyMobileScreen({
+    super.key,
+    required this.mobile,
+    this.resendAfterSeconds = 24,
+  });
 
   /// The new ten digit number awaiting verification.
   final String mobile;
+
+  /// Wait before "Resend code" unlocks, as told by the backend.
+  final int resendAfterSeconds;
 
   @override
   State<VerifyMobileScreen> createState() => _VerifyMobileScreenState();
 }
 
 class _VerifyMobileScreenState extends State<VerifyMobileScreen> {
-  static const _resendSeconds = 24;
-
   Timer? _timer;
-  int _secondsLeft = _resendSeconds;
+  late int _secondsLeft = widget.resendAfterSeconds;
   String _code = '';
+  String? _error;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _startCountdown(widget.resendAfterSeconds);
   }
 
   @override
@@ -35,8 +44,8 @@ class _VerifyMobileScreenState extends State<VerifyMobileScreen> {
     super.dispose();
   }
 
-  void _startCountdown() {
-    setState(() => _secondsLeft = _resendSeconds);
+  void _startCountdown(int seconds) {
+    setState(() => _secondsLeft = seconds);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsLeft <= 1) {
@@ -48,28 +57,54 @@ class _VerifyMobileScreenState extends State<VerifyMobileScreen> {
     });
   }
 
-  bool get _canSave => _code.length == 6;
+  bool get _canSave => _code.length == 6 && !_saving;
 
-  void _save() {
-    // Both are looked up before popping: afterwards this route is gone and
-    // its context can no longer resolve them.
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
 
-    // TODO: verify the code and persist the new number.
-    // Unwinds both this screen and the form, back to settings.
-    navigator
-      ..pop()
-      ..pop();
+    try {
+      await AccountRepository.instance.verifyMobile(widget.mobile, _code);
+      if (!mounted) return;
 
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Mobile number updated')),
-    );
+      // Looked up before popping: afterwards this route is gone and its
+      // context can no longer resolve the messenger.
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop(true);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Mobile number updated')),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = error.message;
+      });
+    }
   }
 
-  void _resend() {
-    // TODO: request a fresh code.
-    _startCountdown();
+  Future<void> _resend() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final wait = await AccountRepository.instance.sendMobileOtp(
+        widget.mobile,
+      );
+      if (!mounted) return;
+      _startCountdown(wait);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('A new code has been sent')));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -102,7 +137,22 @@ class _VerifyMobileScreenState extends State<VerifyMobileScreen> {
               ),
               const SizedBox(height: 24),
 
-              OtpInput(onChanged: (code) => setState(() => _code = code)),
+              OtpInput(
+                onChanged: (code) => setState(() {
+                  _code = code;
+                  _error = null;
+                }),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.negative,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               Align(
@@ -151,7 +201,12 @@ class _VerifyMobileScreenState extends State<VerifyMobileScreen> {
                   ),
                   FilledButton(
                     onPressed: _canSave ? _save : null,
-                    child: const Text('Save'),
+                    child: _saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save'),
                   ),
                 ],
               ),

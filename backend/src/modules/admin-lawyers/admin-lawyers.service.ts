@@ -54,6 +54,11 @@ const lawyerSelect = {
       updatedAt: true,
       correctionRequestedAt: true,
       correctionNotes: true,
+      personalCompletedAt: true,
+      kycCompletedAt: true,
+      professionalCompletedAt: true,
+      bankCompletedAt: true,
+      profileCompletedAt: true,
     },
   },
 } satisfies Prisma.UserSelect;
@@ -66,12 +71,45 @@ const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const daysSince = (value: Date) =>
   Math.max(0, Math.floor((Date.now() - value.getTime()) / 86_400_000));
 
+/**
+ * The registration form, in the order the app walks the lawyer through it.
+ * Each step stamps its timestamp when saved, so the first one still missing
+ * is where the lawyer stopped.
+ */
+const REGISTRATION_STEPS = [
+  { field: 'personalCompletedAt', label: 'Personal Information' },
+  { field: 'kycCompletedAt', label: 'KYC Verification' },
+  { field: 'professionalCompletedAt', label: 'Professional Verification' },
+  { field: 'bankCompletedAt', label: 'Bank Details' },
+  { field: 'profileCompletedAt', label: 'Professional Profile' },
+] as const;
+
+type StepTimestamps = Partial<Record<(typeof REGISTRATION_STEPS)[number]['field'], Date | null>>;
+
+/** How far a half-finished registration got. */
+function registrationProgress(profile: StepTimestamps | null | undefined) {
+  const done = REGISTRATION_STEPS.map((step) => Boolean(profile?.[step.field]));
+  const stoppedIndex = done.indexOf(false);
+
+  return {
+    completedSteps: done.filter(Boolean).length,
+    totalSteps: REGISTRATION_STEPS.length,
+    // Null once every step is filled in — the lawyer only has to submit.
+    stoppedAtStep: stoppedIndex === -1 ? null : stoppedIndex + 1,
+    stoppedAt: stoppedIndex === -1 ? null : REGISTRATION_STEPS[stoppedIndex].label,
+    steps: REGISTRATION_STEPS.map((step, index) => ({
+      label: step.label,
+      completed: done[index],
+    })),
+  };
+}
+
 /** Which review step each flagged block belongs to. */
 const BLOCK_SECTIONS: Record<string, string> = {
-  'Personal Information': 'Personal Information',
   'Aadhar Card': 'Identity Verification',
   'PAN Card': 'Identity Verification',
   Certificate: 'Bar Council Verification',
+  'Bank Details': 'Bank Details',
   'Professional Profile': 'Professional Profile',
 };
 
@@ -137,6 +175,8 @@ export class AdminLawyersService {
       location: profile.residentialAddress ?? '',
       digilockerVerified: profile.kycMethod === 'digilocker',
       onboardingStatus: profile.onboardingStatus,
+      // How far a half-finished registration got.
+      progress: registrationProgress(profile),
       submittedAt: profile.submittedAt,
       reviewedAt: profile.reviewedAt,
       rejectionReason: profile.rejectionReason,
@@ -221,6 +261,15 @@ export class AdminLawyersService {
 
   /** Send it back so the lawyer can fix the flagged sections. */
   requestCorrection(id: string, adminId: string, notes: CorrectionNoteDto[]) {
+    const unknown = notes.filter((note) => !(note.block in BLOCK_SECTIONS));
+    if (unknown.length > 0) {
+      throw new AppException(
+        HttpStatus.BAD_REQUEST,
+        'UNKNOWN_REVIEW_BLOCK',
+        `Cannot ask for a correction on: ${unknown.map((note) => note.block).join(', ')}.`,
+      );
+    }
+
     return this.decide(id, adminId, 'correction', {
       onboardingStatus: 'correction_requested',
       correctionRequestedAt: new Date(),
@@ -404,6 +453,8 @@ export class AdminLawyersService {
         practiceType: null,
         email: row.email ?? '',
         mobile: row.phone ?? '',
+        // Where in the form the lawyer stopped.
+        ...registrationProgress(row.lawyerProfile),
         lastUpdated: isoDate(row.lawyerProfile?.updatedAt ?? row.createdAt),
         referredByName: null,
         referredByCode: null,
@@ -448,6 +499,82 @@ export class AdminLawyersService {
           status: row.status === 'suspended' ? 'suspended' : 'active',
         };
       }),
+      meta: { page, limit, total },
+    };
+  }
+
+  /**
+   * Takes the lawyer off the marketplace and ends every open app session, so
+   * the app signs them out the moment they touch it.
+   */
+  async suspend(id: string, reason: string | null) {
+    const lawyer = await this.findLawyer(id);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: lawyer.id },
+        data: { status: 'suspended', suspendedAt: new Date(), suspensionReason: reason },
+      }),
+      this.prisma.userSession.updateMany({
+        where: { userId: lawyer.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { id: lawyer.id, status: 'suspended' as const };
+  }
+
+  /** Puts a suspended lawyer back on the marketplace. */
+  async reactivate(id: string) {
+    const lawyer = await this.findLawyer(id);
+
+    await this.prisma.user.update({
+      where: { id: lawyer.id },
+      data: { status: 'active', suspendedAt: null, suspensionReason: null },
+    });
+
+    return { id: lawyer.id, status: 'active' as const };
+  }
+
+  private async findLawyer(id: string) {
+    const lawyer = await this.prisma.user.findFirst({
+      where: { id, role: 'lawyer', deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!lawyer) {
+      throw new AppException(HttpStatus.NOT_FOUND, 'LAWYER_NOT_FOUND', 'Lawyer not found.');
+    }
+    return lawyer;
+  }
+
+  /** Accounts that were removed; kept for the audit trail. */
+  async listDeleted({ page, limit }: ListOnboardingDto) {
+    const where: Prisma.UserWhereInput = {
+      role: 'lawyer',
+      deletedAt: { not: null },
+    };
+
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        select: { ...lawyerSelect, deletedAt: true },
+        orderBy: { deletedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        lawyerId: lawyerCode(row.id),
+        name: row.fullName ?? '',
+        email: row.email ?? '',
+        phone: row.phone ?? '',
+        createdOn: isoDate(row.createdAt),
+        deletedOn: isoDate(row.deletedAt!),
+      })),
       meta: { page, limit, total },
     };
   }

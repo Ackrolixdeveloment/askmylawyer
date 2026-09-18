@@ -20,7 +20,7 @@ const columns: Column<DeletedLawyer>[] = [
     sortValue: (row) => row.name,
     cell: (row) => (
       <TableLink
-        href={`/lawyers/edit-approvals/deleted/${row.id}`}
+        href={`/lawyers/deleted/${row.id}`}
         className="font-semibold text-ink hover:text-brand"
       >
         {row.name}
@@ -65,7 +65,7 @@ const columns: Column<DeletedLawyer>[] = [
     align: "left",
     cell: (row) => (
       <TableLink
-        href={`/lawyers/edit-approvals/deleted/${row.id}`}
+        href={`/lawyers/deleted/${row.id}`}
         aria-label={`View ${row.name}`}
         className="grid size-8 place-items-center rounded-lg bg-blue-50 text-brand hover:bg-blue-100"
       >
