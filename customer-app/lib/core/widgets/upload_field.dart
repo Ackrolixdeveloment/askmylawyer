@@ -146,7 +146,7 @@ class _UploadFieldState extends State<UploadField> {
                   Text(
                     file.sizeLabel,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       color: AppColors.inkMuted,
                     ),
                   ),
@@ -173,7 +173,7 @@ class _UploadFieldState extends State<UploadField> {
         Text(
           _error ?? widget.helper,
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 12,
             color: _error != null ? AppColors.negative : AppColors.inkSubtle,
           ),
         ),

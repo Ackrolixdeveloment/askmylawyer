@@ -16,6 +16,7 @@ class AppTextField extends StatefulWidget {
     this.keyboardType,
     this.enabled = true,
     this.required = false,
+    this.optionalNote,
     this.helper,
     this.validator,
     this.maxLength,
@@ -29,6 +30,10 @@ class AppTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final bool enabled;
   final bool required;
+
+  /// Grey note shown at the end of the label row, e.g. "(Optional)".
+  final String? optionalNote;
+
   final String? helper;
 
   /// Returns an error message, or null when the value is acceptable.
@@ -57,7 +62,11 @@ class _AppTextFieldState extends State<AppTextField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FieldLabel(label: widget.label, required: widget.required),
+        _FieldLabel(
+          label: widget.label,
+          required: widget.required,
+          optionalNote: widget.optionalNote,
+        ),
         const SizedBox(height: 6),
         Focus(
           // Mark as touched on blur, so errors appear after the first attempt.
@@ -90,7 +99,7 @@ class _AppTextFieldState extends State<AppTextField> {
           Text(
             error ?? widget.helper!,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 12,
               color: error != null ? AppColors.negative : AppColors.inkSubtle,
             ),
           ),
@@ -148,20 +157,39 @@ class AppSelectField extends StatelessWidget {
 }
 
 class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label, required this.required});
+  const _FieldLabel({
+    required this.label,
+    required this.required,
+    this.optionalNote,
+  });
 
   final String label;
   final bool required;
+  final String? optionalNote;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    final text = Text(
       required ? '$label*' : label,
       style: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppColors.ink,
       ),
+    );
+
+    final note = optionalNote;
+    if (note == null) return text;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        text,
+        Text(
+          note,
+          style: const TextStyle(fontSize: 12, color: AppColors.inkSubtle),
+        ),
+      ],
     );
   }
 }

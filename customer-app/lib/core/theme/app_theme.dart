@@ -17,10 +17,8 @@ abstract final class AppTheme {
 
     return base.copyWith(
       // Inter everywhere; each widget's own TextStyle still applies on top.
-      textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
-        bodyColor: AppColors.ink,
-        displayColor: AppColors.ink,
-      ),
+      textTheme: GoogleFonts.interTextTheme(base.textTheme)
+          .apply(bodyColor: AppColors.ink, displayColor: AppColors.ink),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.ink,
@@ -57,9 +55,7 @@ abstract final class AppTheme {
       // part of it onto the app's ink palette instead.
       timePickerTheme: TimePickerThemeData(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         helpTextStyle: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w600,

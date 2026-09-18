@@ -41,5 +41,12 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Lets the referral share sheet see apps that accept plain text.
+             Without this, package visibility on Android 11+ hides them and
+             the chooser comes up empty. -->
+        <intent>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
     </queries>
 </manifest>
