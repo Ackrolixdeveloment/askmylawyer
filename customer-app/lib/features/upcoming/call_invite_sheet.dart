@@ -40,17 +40,41 @@ class _CallInviteSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            // Grab handle centred, with the dismiss cross pinned to the
+            // corner so it never shifts the handle off-centre. The row is
+            // tall enough to hold the cross without clipping it.
+            SizedBox(
+              height: 32,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.line,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(16),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.close,
+                          size: 20,
+                          color: AppColors.inkMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
 
             Center(child: _Avatar(initials: consultation.initials)),
             const SizedBox(height: 12),

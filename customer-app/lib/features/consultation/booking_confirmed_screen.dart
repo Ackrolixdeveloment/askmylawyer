@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../home/home_screen.dart';
 import 'consult_draft.dart';
 
 /// Shown after paying for a scheduled consultation: the slot is held, and
@@ -84,10 +85,10 @@ class BookingConfirmedScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: _DoneButton(
-                // Unwinds the booking flow, leaving the client back in the
-                // tab they started from.
+                // Closes the booking flow and lands on Upcoming, where the
+                // consultation now sits.
                 onTap: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
+                    HomeScreen.openTab(context, HomeScreen.upcomingTab),
               ),
             ),
           ],

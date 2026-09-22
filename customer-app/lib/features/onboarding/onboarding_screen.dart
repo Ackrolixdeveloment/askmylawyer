@@ -106,6 +106,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         page.asset,
                         width: page.isWordmark ? 220 : null,
                         filterQuality: FilterQuality.high,
+                        // A missing illustration should degrade to a muted
+                        // glyph rather than paint a red error box over the
+                        // first screen a customer ever sees.
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.gavel_rounded,
+                          size: 96,
+                          color: AppColors.brand.withValues(alpha: 0.35),
+                        ),
                       ),
                     ),
                   );
