@@ -4,17 +4,34 @@ import { Eye, Filter, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
+  Button,
   Card,
   DataTable,
   DropdownMenu,
   FilterSelect,
+  Modal,
   SearchInput,
   type Column,
   type SelectOption,
 } from "@/components/ui";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
+import { ApiError } from "@/lib/api";
+import { deleteDraftLawyer } from "@/lib/lawyers";
 import { formatDdMmYyyy } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DraftProfile } from "@/types/lawyer";
+
+const identity = (row: DraftProfile): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.mobile,
+  email: row.email,
+  href: `/lawyers/onboarding/drafts/${row.id}`,
+});
 
 /** Which step of the registration form the lawyer left off on. */
 function StoppedAt({ row }: { row: DraftProfile }) {
@@ -43,43 +60,11 @@ function StoppedAt({ row }: { row: DraftProfile }) {
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
   onView: (row: DraftProfile) => void,
+  onDelete: (row: DraftProfile) => void,
 ): Column<DraftProfile>[] {
   return [
-    {
-      key: "lawyerId",
-      header: "LAWYER ID",
-      align: "left",
-      sortValue: (row) => row.lawyerId,
-      cell: (row) => <span className="font-semibold text-ink">{row.lawyerId}</span>,
-    },
-    {
-      key: "name",
-      header: "NAME",
-      align: "left",
-      sortValue: (row) => row.name,
-      cell: (row) => (
-        <>
-          <p className="font-semibold text-ink">{row.name}</p>
-          {row.practiceType ? (
-          <p className="mt-0.5 text-xs text-ink-subtle">{row.practiceType}</p>
-        ) : null}
-        </>
-      ),
-    },
-    {
-      key: "email",
-      header: "EMAIL",
-      align: "left",
-      sortValue: (row) => row.email,
-      cell: (row) => <span className="text-brand">{row.email}</span>,
-    },
-    {
-      key: "mobile",
-      header: "MOBILE",
-      align: "left",
-      sortValue: (row) => row.mobile,
-      cell: (row) => <span className="text-ink-muted">{row.mobile}</span>,
-    },
+    lawyerIdColumn((row: DraftProfile) => identity(row)),
+    lawyerDetailsColumn((row: DraftProfile) => identity(row)),
     {
       key: "stoppedAt",
       header: "STOPPED AT",
@@ -123,7 +108,7 @@ function buildColumns(
             {
               label: "Delete",
               icon: Trash2,
-              onSelect: () => {},
+              onSelect: () => onDelete(row),
               destructive: true,
             },
           ]}
@@ -137,25 +122,57 @@ interface DraftsTableProps {
   drafts: DraftProfile[];
   typeOptions: SelectOption[];
   periodOptions: SelectOption[];
+  /** Reloads the list once a draft is deleted. */
+  onChanged?: () => void;
 }
 
 export function DraftsTable({
   drafts,
   typeOptions,
   periodOptions,
+  onChanged,
 }: DraftsTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [practiceType, setPracticeType] = useState("all");
   const [period, setPeriod] = useState("all");
 
+  /** The draft waiting on a confirmed delete. */
+  const [target, setTarget] = useState<DraftProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const columns = useMemo(
     () =>
-      buildColumns((row) =>
-        router.push(`/lawyers/onboarding/drafts/${row.id}`),
+      buildColumns(
+        (row) => router.push(`/lawyers/onboarding/drafts/${row.id}`),
+        (row) => {
+          setTarget(row);
+          setError(null);
+        },
       ),
     [router],
   );
+
+  async function confirmDelete() {
+    if (!target) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      await deleteDraftLawyer(target.id);
+      setTarget(null);
+      onChanged?.();
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -215,10 +232,38 @@ export function DraftsTable({
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
-        minWidth={1240}
+        minWidth={1080}
         defaultSort={{ key: "lastUpdated", direction: "desc" }}
         emptyMessage="No draft registrations."
       />
+
+      <Modal
+        open={target !== null}
+        onClose={() => (busy ? undefined : setTarget(null))}
+        title="Delete draft registration"
+        description={`${target?.name || target?.lawyerId} has not finished signing up.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setTarget(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={busy}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete draft
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          Everything they entered and uploaded is removed for good. The mobile
+          number is freed up, so they can register again from the app.
+        </p>
+
+        {error ? <p className="mt-3 text-sm text-negative">{error}</p> : null}
+      </Modal>
     </div>
   );
 }

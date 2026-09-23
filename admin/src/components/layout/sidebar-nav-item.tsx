@@ -44,6 +44,10 @@ interface SidebarNavItemProps {
   expanded: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
+  /** Icon-only rail: labels are hidden and children stay tucked away. */
+  collapsed?: boolean;
+  /** Opens the rail back up, so a clicked item can show its children. */
+  onExpand?: () => void;
 }
 
 export function SidebarNavItem({
@@ -53,11 +57,14 @@ export function SidebarNavItem({
   expanded,
   onToggle,
   onNavigate,
+  collapsed = false,
+  onExpand,
 }: SidebarNavItemProps) {
   const Icon = item.icon;
 
   const rowClasses = cn(
-    "flex w-full items-center gap-2.5 rounded-lg px-3 py-3 text-base font-medium transition-colors",
+    "flex w-full items-center gap-2.5 rounded-lg py-3 text-base font-medium transition-colors",
+    collapsed ? "justify-center px-0" : "px-3",
     "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
     branchActive && !item.children
       ? "bg-sidebar-highlight font-semibold text-sidebar-active"
@@ -67,9 +74,18 @@ export function SidebarNavItem({
 
   if (!item.children) {
     return (
-      <Link href={item.href} onClick={onNavigate} className={rowClasses}>
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        className={rowClasses}
+        title={collapsed ? item.label : undefined}
+      >
         <Icon className="size-[18px] shrink-0" aria-hidden />
-        <span className="truncate">{item.label}</span>
+        {collapsed ? (
+          <span className="sr-only">{item.label}</span>
+        ) : (
+          <span className="truncate">{item.label}</span>
+        )}
       </Link>
     );
   }
@@ -78,19 +94,33 @@ export function SidebarNavItem({
     <div>
       <button
         type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
+        // On the rail there is no room for the children, so a click opens the
+        // sidebar back up on this item.
+        onClick={() => {
+          if (collapsed) onExpand?.();
+          if (!collapsed || !expanded) onToggle();
+        }}
+        aria-expanded={collapsed ? undefined : expanded}
         className={rowClasses}
+        title={collapsed ? item.label : undefined}
       >
         <Icon className="size-[18px] shrink-0" aria-hidden />
-        <span className="flex-1 truncate text-left">{item.label}</span>
-        <ChevronDown
-          className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-180")}
-          aria-hidden
-        />
+        {collapsed ? (
+          <span className="sr-only">{item.label}</span>
+        ) : (
+          <>
+            <span className="flex-1 truncate text-left">{item.label}</span>
+            <ChevronDown
+              className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-180")}
+              aria-hidden
+            />
+          </>
+        )}
       </button>
 
-      {expanded ? <ItemChildren item={item} pathname={pathname} onNavigate={onNavigate} /> : null}
+      {expanded && !collapsed ? (
+        <ItemChildren item={item} pathname={pathname} onNavigate={onNavigate} />
+      ) : null}
     </div>
   );
 }
@@ -170,6 +200,10 @@ function NavSubGroup({
   expanded: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
+  /** Icon-only rail: labels are hidden and children stay tucked away. */
+  collapsed?: boolean;
+  /** Opens the rail back up, so a clicked item can show its children. */
+  onExpand?: () => void;
 }) {
   const groupActive = group.children.some((leaf) =>
     isActive(pathname, leaf.href, siblings),

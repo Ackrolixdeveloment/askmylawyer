@@ -1,5 +1,6 @@
 import '../../core/network/api_client.dart';
 import '../../core/network/token_storage.dart';
+import '../../core/push/device_repository.dart';
 
 /// The signed-in lawyer's account, as returned by the backend.
 class LawyerAccount {
@@ -99,6 +100,10 @@ class AuthRepository {
       access: data['accessToken'] as String,
       refresh: data['refreshToken'] as String,
     );
+
+    // Now that there is a session, hand over the push token.
+    await DeviceRepository.instance.register();
+
     return (
       isNewUser: data['isNewUser'] as bool,
       lawyer: LawyerAccount.fromJson(data['lawyer'] as Map<String, dynamic>),
@@ -111,6 +116,8 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    await DeviceRepository.instance.unregister();
+
     final refreshToken = await _tokens.refreshToken;
     if (refreshToken != null) {
       try {

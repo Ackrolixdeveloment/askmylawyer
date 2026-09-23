@@ -5,12 +5,16 @@ import { LoggerModule } from 'nestjs-pino';
 import { env } from './config/env';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { PushModule } from './infrastructure/push/push.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { LawyerRegistrationModule } from './modules/lawyer-registration/lawyer-registration.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminEditRequestsModule } from './modules/admin-edit-requests/admin-edit-requests.module';
 import { AdminLawyersModule } from './modules/admin-lawyers/admin-lawyers.module';
+import { AdminNotificationsModule } from './modules/admin-notifications/admin-notifications.module';
+import { DevicesModule } from './modules/devices/devices.module';
+import { UserNotificationsModule } from './modules/lawyer-notifications/user-notifications.module';
 import { LawyerAccountModule } from './modules/lawyer-account/lawyer-account.module';
 import { LawyerAuthModule } from './modules/lawyer-auth/lawyer-auth.module';
 import { LawyerProfileModule } from './modules/lawyer-profile/lawyer-profile.module';
@@ -50,10 +54,14 @@ class HealthController {
     PrismaModule,
     MailModule,
     StorageModule,
+    PushModule,
     NotificationsModule,
     AdminAuthModule,
     AdminLawyersModule,
     AdminEditRequestsModule,
+    AdminNotificationsModule,
+    DevicesModule,
+    UserNotificationsModule,
     LawyerAuthModule,
     LawyerAccountModule,
     LawyerProfileModule,

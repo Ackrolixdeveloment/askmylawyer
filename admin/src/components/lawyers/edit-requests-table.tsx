@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   FilterSelect,
   SearchInput,
-  TableLink,
   type BadgeTone,
   type Column,
   type MenuAction,
@@ -19,6 +18,11 @@ import { ScreenState } from "@/components/common/screen-state";
 import { ApiError } from "@/lib/api";
 import { approveEditRequest, fetchEditRequests } from "@/lib/edit-requests";
 import { useApiData } from "@/lib/use-api-data";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import { formatDdMmYyyy } from "@/lib/format";
 import type { EditRequest, EditRequestStatus } from "@/types/edit-request";
 
@@ -42,22 +46,13 @@ function buildColumns(
   onOpen: (row: EditRequest) => void,
   onApprove: (row: EditRequest) => void,
 ): Column<EditRequest>[] {
-  const lawyerColumn: Column<EditRequest> = {
-    key: "lawyer",
-    header: "Lawyer",
-    sortValue: (row) => row.lawyerName,
-    cell: (row) => (
-      <>
-        <TableLink
-          href={`${listPath}/${row.id}`}
-          className="text-ink hover:text-brand"
-        >
-          {row.lawyerName}
-        </TableLink>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.lawyerEmail}</p>
-      </>
-    ),
-  };
+  const identity = (row: EditRequest): LawyerIdentity => ({
+    lawyerId: row.lawyerId,
+    name: row.lawyerName,
+    mobile: row.lawyerMobile,
+    email: row.lawyerEmail,
+    href: `${listPath}/${row.id}`,
+  });
 
   const actionColumn: Column<EditRequest> = {
     key: "action",
@@ -86,31 +81,8 @@ function buildColumns(
 
   if (status === "pending") {
     return [
-      {
-        key: "lawyerId",
-        header: "Lawyer ID",
-        sortValue: (row) => row.lawyerId,
-        cell: (row) => (
-          <TableLink href={`${listPath}/${row.id}`}>{row.lawyerId}</TableLink>
-        ),
-      },
-      {
-        key: "lawyerName",
-        header: "Lawyer",
-        sortValue: (row) => row.lawyerName,
-        cell: (row) => <span className="text-ink">{row.lawyerName}</span>,
-      },
-      {
-        key: "mobile",
-        header: "Mobile",
-        sortValue: (row) => row.lawyerMobile,
-        cell: (row) => (
-          <>
-            <p className="text-ink">{row.lawyerMobile}</p>
-            <p className="mt-0.5 text-xs text-ink-subtle">{row.lawyerEmail}</p>
-          </>
-        ),
-      },
+      lawyerIdColumn(identity),
+      lawyerDetailsColumn(identity),
       {
         key: "requestedAt",
         header: "Last Updated",
@@ -124,7 +96,8 @@ function buildColumns(
   }
 
   return [
-    lawyerColumn,
+    lawyerIdColumn(identity),
+    lawyerDetailsColumn(identity),
     {
       key: "section",
       header: status === "approved" ? "Correction" : "Rejection",

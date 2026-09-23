@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "11580874309",
+    "project_id": "askmylawyer-3d8e6",
+    "storage_bucket": "askmylawyer-3d8e6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:11580874309:android:c749ef6e019ea21f938d2c",
+        "android_client_info": {
+          "package_name": "com.askmylawyer.lawyer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUht8rLXohuyPv07f29UTDSGKTSv1Kdes"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

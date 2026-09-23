@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppException } from '../../common/app-exception';
+import { lawyerCode } from '../../common/lawyer-code';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { encryptField } from '../../common/field-encryption';
@@ -151,6 +152,7 @@ export class LawyerProfileService {
       where: { id: userId },
       select: {
         id: true,
+        lawyerNumber: true,
         fullName: true,
         phone: true,
         email: true,
@@ -182,6 +184,8 @@ export class LawyerProfileService {
 
     return {
       id: user.id,
+      // The reference a lawyer quotes to support; same code the admin sees.
+      lawyerId: lawyerCode(user.lawyerNumber),
       fullName: user.fullName,
       mobile: user.phone,
       email: user.email,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../bookings/bookings_screen.dart';
 import '../commission/commission_screen.dart';
+import '../notifications/notification_poller.dart';
+import '../notifications/notification_repository.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../referral/referral_screen.dart';
@@ -473,45 +475,101 @@ class _TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 10),
 
-            InkWell(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const NotificationsScreen(),
-                ),
-              ),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 38,
-                height: 38,
-                // Outlined circle on the dark band, not a filled disc.
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(
-                      Icons.notifications_none,
-                      size: 19,
-                      color: Colors.white,
+            const _NotificationBell(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Bell on the home banner, carrying the unread count.
+class _NotificationBell extends StatefulWidget {
+  const _NotificationBell();
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  final _notifications = NotificationRepository.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _notifications.refreshBadge();
+    // Banners come from here, so they appear even on a phone push cannot
+    // reach.
+    NotificationPoller.instance.start();
+  }
+
+  @override
+  void dispose() {
+    NotificationPoller.instance.stop();
+    super.dispose();
+  }
+
+  Future<void> _open() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+    // Reading the list clears the badge; pick up whatever it left behind.
+    await _notifications.refreshBadge();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _open,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 38,
+        height: 38,
+        // Outlined circle on the dark band, not a filled disc.
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(
+              Icons.notifications_none,
+              size: 19,
+              color: Colors.white,
+            ),
+            ValueListenableBuilder<int>(
+              valueListenable: _notifications.unreadBadge,
+              builder: (context, unread, _) {
+                if (unread == 0) return const SizedBox.shrink();
+
+                return Positioned(
+                  top: 2,
+                  right: 1,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 15),
+                    height: 15,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.negative,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white, width: 1.2),
                     ),
-                    // Unread marker, tucked into the bell's top right.
-                    Positioned(
-                      top: 8,
-                      right: 9,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: AppColors.negative,
-                          shape: BoxShape.circle,
-                        ),
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ],
         ),

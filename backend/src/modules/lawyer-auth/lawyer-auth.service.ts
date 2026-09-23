@@ -262,11 +262,25 @@ export class LawyerAuthService {
 
   // ---- Helpers ----
 
-  private createLawyer(data: Omit<Prisma.UserCreateInput, 'role' | 'lawyerProfile'>) {
+  private async createLawyer(data: Omit<Prisma.UserCreateInput, 'role' | 'lawyerProfile'>) {
     return this.prisma.user.create({
-      data: { ...data, role: 'lawyer', lawyerProfile: { create: {} } },
+      data: {
+        ...data,
+        role: 'lawyer',
+        // "LAW0001" and up, counted only over lawyers.
+        lawyerNumber: await this.nextLawyerNumber(),
+        lawyerProfile: { create: {} },
+      },
       select: lawyerSelect,
     });
+  }
+
+  /** The next value of `lawyer_number_seq`, created with the column. */
+  private async nextLawyerNumber() {
+    const [row] = await this.prisma.$queryRaw<
+      { value: number }[]
+    >`SELECT nextval('lawyer_number_seq')::int AS value`;
+    return row.value;
   }
 
   private async assertPhoneFreeForLawyer(phone: string) {

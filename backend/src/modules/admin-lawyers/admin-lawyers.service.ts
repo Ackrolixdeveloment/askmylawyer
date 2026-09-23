@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { LawyerDocumentType, OnboardingStatus, Prisma } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
+import { lawyerCode } from '../../common/lawyer-code';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { LawyerNotificationsService } from '../notifications/lawyer-notifications.service';
@@ -38,6 +39,7 @@ const BUCKET_STATUSES: Record<OnboardingBucket, OnboardingStatus[]> = {
 
 const lawyerSelect = {
   id: true,
+  lawyerNumber: true,
   fullName: true,
   phone: true,
   email: true,
@@ -114,7 +116,6 @@ const BLOCK_SECTIONS: Record<string, string> = {
 };
 
 /** Short, readable handle for a lawyer until the platform issues its own codes. */
-const lawyerCode = (id: string) => `LAW-${id.slice(0, 8).toUpperCase()}`;
 
 @Injectable()
 export class AdminLawyersService {
@@ -421,7 +422,7 @@ export class AdminLawyersService {
 
         return {
           id: row.id,
-          lawyerId: lawyerCode(row.id),
+          lawyerId: lawyerCode(row.lawyerNumber),
           name: row.fullName ?? '',
           phone: row.phone ?? '',
           email: row.email ?? '',
@@ -447,7 +448,7 @@ export class AdminLawyersService {
     return {
       data: rows.map((row) => ({
         id: row.id,
-        lawyerId: lawyerCode(row.id),
+        lawyerId: lawyerCode(row.lawyerNumber),
         name: row.fullName ?? '',
         // Not collected during registration yet.
         practiceType: null,
@@ -488,6 +489,7 @@ export class AdminLawyersService {
         const profile = row.lawyerProfile;
         return {
           id: row.id,
+          lawyerId: lawyerCode(row.lawyerNumber),
           name: row.fullName ?? '',
           phone: row.phone ?? '',
           email: row.email ?? '',
@@ -547,6 +549,44 @@ export class AdminLawyersService {
     return lawyer;
   }
 
+  /**
+   * Purges an abandoned registration. Only drafts can go this way, and they
+   * go for good: a soft delete would keep the phone number tied to the row
+   * and the lawyer could never sign up again.
+   */
+  async deleteDraft(id: string) {
+    const lawyer = await this.prisma.user.findFirst({
+      where: { id, role: 'lawyer', deletedAt: null },
+      select: {
+        id: true,
+        lawyerProfile: { select: { onboardingStatus: true } },
+        documents: { select: { storageKey: true } },
+      },
+    });
+
+    if (!lawyer) {
+      throw new AppException(HttpStatus.NOT_FOUND, 'LAWYER_NOT_FOUND', 'Lawyer not found.');
+    }
+    if (lawyer.lawyerProfile?.onboardingStatus !== 'draft') {
+      throw new AppException(
+        HttpStatus.CONFLICT,
+        'NOT_A_DRAFT',
+        'Only an incomplete registration can be deleted.',
+      );
+    }
+
+    // The profile, documents, sessions and identities go with the user.
+    await this.prisma.user.delete({ where: { id: lawyer.id } });
+
+    // Files last: a failure here leaves an orphaned upload, not a half-deleted
+    // account.
+    for (const document of lawyer.documents) {
+      await this.storage.delete(document.storageKey);
+    }
+
+    return { id: lawyer.id, deleted: true };
+  }
+
   /** Accounts that were removed; kept for the audit trail. */
   async listDeleted({ page, limit }: ListOnboardingDto) {
     const where: Prisma.UserWhereInput = {
@@ -568,7 +608,7 @@ export class AdminLawyersService {
     return {
       data: rows.map((row) => ({
         id: row.id,
-        lawyerId: lawyerCode(row.id),
+        lawyerId: lawyerCode(row.lawyerNumber),
         name: row.fullName ?? '',
         email: row.email ?? '',
         phone: row.phone ?? '',
@@ -633,6 +673,7 @@ export class AdminLawyersService {
     const profile = row.lawyerProfile;
     return {
       id: row.id,
+      lawyerId: lawyerCode(row.lawyerNumber),
       name: row.fullName ?? '',
       phone: row.phone ?? '',
       email: row.email ?? '',

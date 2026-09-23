@@ -1,12 +1,37 @@
 import 'package:flutter/material.dart';
 
 import 'core/app_navigator.dart';
+import 'core/push/device_repository.dart';
+import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/account_suspended.dart';
+import 'features/notifications/notification_poller.dart';
+import 'features/notifications/notifications_screen.dart';
 import 'features/splash/splash_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   installSuspensionHandler();
+
+  // The backend needs the device token to reach this phone. A token that
+  // arrives before sign-in is registered again once the session exists.
+  PushService.instance.onToken = DeviceRepository.instance.register;
+
+  // A push that does arrive just brings the next check forward; the banner
+  // itself comes from the poller, so it shows even where push cannot reach.
+  PushService.instance.onMessage = NotificationPoller.instance.checkNow;
+  PushService.instance.onOpened = (_) {
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+  };
+
+  // Notifications must not hold up the first frame; if Firebase is missing
+  // its config the app still runs, just without push.
+  PushService.instance.start().catchError((Object error) {
+    debugPrint('[push] not started: $error');
+  });
+
   runApp(const LawyerApp());
 }
 

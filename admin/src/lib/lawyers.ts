@@ -62,6 +62,13 @@ export function fetchDeletedLawyers() {
   return api<Paginated<DeletedLawyer>>("/admin/lawyers/deleted");
 }
 
+/** Purges an abandoned registration for good. Drafts only. */
+export function deleteDraftLawyer(id: string) {
+  return api<{ id: string; deleted: boolean }>(`/admin/lawyers/${id}/draft`, {
+    method: "DELETE",
+  });
+}
+
 /** Takes the lawyer off the marketplace and signs them out of the app. */
 export function suspendLawyer(id: string, reason: string) {
   return api<{ id: string; status: LawyerStatus }>(`/admin/lawyers/${id}/suspend`, {

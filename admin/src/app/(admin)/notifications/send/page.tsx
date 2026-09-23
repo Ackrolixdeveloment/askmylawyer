@@ -1,28 +1,20 @@
 import type { Metadata } from "next";
 import { Bell } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
-import { PushNotificationComposer } from "@/components/notifications/push-notification-composer";
-import {
-  audienceSegments,
-  notificationTemplates,
-  recurrenceOptions,
-  scheduledBroadcasts,
-  timingOptions,
-} from "@/data/mock-notifications";
+import { SendNotificationView } from "@/components/notifications/send-notification-view";
+import { notificationTemplates } from "@/data/mock-notifications";
 
 export const metadata: Metadata = {
-  title: "Push Notifications",
+  title: "Send Notification",
 };
 
-export default async function PushNotificationsPage({
+export default async function SendNotificationPage({
   searchParams,
 }: PageProps<"/notifications/send">) {
-  const { template: templateId, broadcast: broadcastId } = await searchParams;
+  const { template: templateId } = await searchParams;
 
   // Opened from the Templates screen: seed the copy fields.
   const template = notificationTemplates.find((item) => item.id === templateId);
-  // Opened from Scheduled → Edit: restore the whole broadcast.
-  const broadcast = scheduledBroadcasts.find((item) => item.id === broadcastId);
 
   return (
     <>
@@ -37,34 +29,21 @@ export default async function PushNotificationsPage({
             <Bell className="size-6" />
           </span>
           <div>
-            <h1 className="text-2xl leading-8 font-bold text-ink">
-              Push Notification
-            </h1>
+            <h1 className="text-2xl leading-8 font-bold text-ink">Send Notification</h1>
             <p className="mt-1 text-sm text-ink-muted">
-              {broadcast
-                ? "Editing scheduled broadcast"
-                : template
-                  ? `Using template — ${template.name}`
-                  : "Send bulk notifications"}
+              {template
+                ? `Using template — ${template.name}`
+                : "Broadcast to everyone, or message one lawyer or customer"}
             </p>
           </div>
         </div>
 
         <div className="mt-6">
-          {/*
-            Keyed on the template so picking a different one resets the form
-            rather than keeping the previous copy.
-          */}
-          <PushNotificationComposer
-            key={broadcast?.id ?? template?.id ?? "blank"}
-            segments={audienceSegments}
-            timingOptions={timingOptions}
-            recurrenceOptions={recurrenceOptions}
-            initialTitle={broadcast?.title ?? template?.title}
-            initialBody={broadcast?.body ?? template?.body}
-            initialSegmentValue={broadcast?.segmentValue}
-            initialTiming={broadcast ? "scheduled" : undefined}
-            initialScheduledAt={broadcast?.scheduledFor}
+          {/* Keyed on the template so picking another one resets the copy. */}
+          <SendNotificationView
+            key={template?.id ?? "blank"}
+            initialTitle={template?.title}
+            initialBody={template?.body}
           />
         </div>
       </main>

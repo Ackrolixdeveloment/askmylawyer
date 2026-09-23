@@ -9,13 +9,25 @@ import {
   DropdownMenu,
   FilterSelect,
   SearchInput,
-  TableLink,
   type BadgeTone,
   type Column,
   type SelectOption,
 } from "@/components/ui";
 import { formatDdMmYyyy } from "@/lib/format";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import type { CorrectionRequest } from "@/types/lawyer";
+
+const identity = (row: CorrectionRequest, basePath: string): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.phone,
+  email: row.email,
+  href: `${basePath}/${row.id}`,
+});
 
 /** Each review block gets its own colour, so the queue scans quickly. */
 const sectionTone: Record<string, BadgeTone> = {
@@ -31,36 +43,8 @@ function buildColumns(
   basePath: string,
 ): Column<CorrectionRequest>[] {
   return [
-    {
-      key: "lawyerId",
-      header: "Lawyer ID",
-      align: "left",
-      sortValue: (row) => row.lawyerId,
-      cell: (row) => (
-        <TableLink href={`${basePath}/${row.id}`}>
-          {row.lawyerId}
-        </TableLink>
-      ),
-    },
-    {
-      key: "name",
-      header: "Name",
-      align: "left",
-      sortValue: (row) => row.name,
-      cell: (row) => <span className="text-ink">{row.name}</span>,
-    },
-    {
-      key: "phone",
-      header: "Lawyer",
-      align: "left",
-      sortValue: (row) => row.phone,
-      cell: (row) => (
-        <>
-          <p className="text-ink">{row.phone}</p>
-          <p className="mt-0.5 text-xs text-ink-subtle">{row.email}</p>
-        </>
-      ),
-    },
+    lawyerIdColumn((row: CorrectionRequest) => identity(row, basePath)),
+    lawyerDetailsColumn((row: CorrectionRequest) => identity(row, basePath)),
     {
       key: "section",
       header: "Correction",

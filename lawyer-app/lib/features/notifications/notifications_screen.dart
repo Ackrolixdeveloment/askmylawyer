@@ -1,89 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-
-enum NotificationKind { consultation, earnings, system }
-
-class AppNotification {
-  const AppNotification({
-    required this.title,
-    required this.body,
-    required this.time,
-    required this.kind,
-    required this.isToday,
-    this.unread = false,
-  });
-
-  final String title;
-  final String body;
-  final String time;
-  final NotificationKind kind;
-
-  /// Groups the list into Today / Yesterday.
-  final bool isToday;
-  final bool unread;
-}
-
-const _sample = <AppNotification>[
-  AppNotification(
-    title: 'New Consultation Request',
-    body:
-        'Arjun Mehta has requested a 15-min session on corporate '
-        'restructuring.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: true,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'New Consultation Request',
-    body:
-        'Arjun Mehta has requested a 15-min session on corporate '
-        'restructuring.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: true,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'Payment credited',
-    body: '₹4,500 has been credited to your HDFC account ending 4521.',
-    time: '2:30 PM',
-    kind: NotificationKind.earnings,
-    isToday: false,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'New Consultation Request',
-    body:
-        'Arjun Mehta has requested a 15-min session on corporate '
-        'restructuring.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: false,
-  ),
-];
+import 'notification_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, this.notifications = _sample});
-
-  /// Pass an empty list to see the first-run state.
-  final List<AppNotification> notifications;
+  const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  static const _filters = ['All', 'Unread', 'Consultations', 'Earnings'];
+  static const _filters = ['All', 'Unread'];
 
   final _search = TextEditingController();
   String _filter = 'All';
+
+  List<AppNotification> _notifications = const [];
+  int _unreadCount = 0;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+    _load();
   }
 
   @override
@@ -92,32 +35,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.dispose();
   }
 
-  int get _unreadCount =>
-      widget.notifications.where((item) => item.unread).length;
+  Future<void> _load() async {
+    setState(() => _error = null);
+
+    try {
+      final result = await NotificationRepository.instance.load();
+      if (!mounted) return;
+      setState(() {
+        _notifications = result.items;
+        _unreadCount = result.unread;
+        _loading = false;
+      });
+
+      // Opening the list counts as reading it, so the bell clears.
+      if (result.unread > 0) {
+        await NotificationRepository.instance.markAllRead();
+      }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
+    }
+  }
 
   List<AppNotification> get _visible {
     final query = _search.text.trim().toLowerCase();
 
-    return widget.notifications.where((item) {
+    return _notifications.where((item) {
       final matchesQuery =
           query.isEmpty ||
           item.title.toLowerCase().contains(query) ||
           item.body.toLowerCase().contains(query);
 
-      final matchesFilter = switch (_filter) {
-        'Unread' => item.unread,
-        'Consultations' => item.kind == NotificationKind.consultation,
-        'Earnings' => item.kind == NotificationKind.earnings,
-        _ => true,
-      };
-
-      return matchesQuery && matchesFilter;
+      return matchesQuery && (_filter != 'Unread' || !item.read);
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = widget.notifications.isEmpty;
+    final isEmpty = _notifications.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -143,7 +101,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             : null,
         centerTitle: true,
       ),
-      body: isEmpty ? const _EmptyNotifications() : _list(),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _Failed(message: _error!, onRetry: _load)
+          : isEmpty
+          ? const _EmptyNotifications()
+          : RefreshIndicator(onRefresh: _load, child: _list()),
     );
   }
 
@@ -153,6 +117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final earlier = visible.where((item) => !item.isToday).toList();
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
         const Text(
@@ -270,7 +235,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ],
 
         if (earlier.isNotEmpty) ...[
-          const _GroupHeader(label: 'Yesterday', action: 'View All'),
+          const _GroupHeader(label: 'Earlier'),
           for (final item in earlier) _NotificationCard(item: item),
         ],
       ],
@@ -279,10 +244,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.label, this.action});
+  const _GroupHeader({required this.label});
 
   final String label;
-  final String? action;
 
   @override
   Widget build(BuildContext context) {
@@ -300,11 +264,6 @@ class _GroupHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (action != null)
-            Text(
-              action!,
-              style: const TextStyle(fontSize: 11, color: AppColors.inkSubtle),
-            ),
         ],
       ),
     );
@@ -333,6 +292,17 @@ class _NotificationCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!item.read) ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(top: 5, right: 8),
+                  decoration: const BoxDecoration(
+                    color: AppColors.negative,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
               Expanded(
                 child: Text(
                   item.title,
@@ -404,6 +374,36 @@ class _EmptyNotifications extends StatelessWidget {
                 color: AppColors.inkSubtle,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// The list could not be loaded — offer another go.
+class _Failed extends StatelessWidget {
+  const _Failed({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.inkSubtle),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
       ),
