@@ -77,6 +77,31 @@ export class LawyerNotificationsService {
     });
   }
 
+  bankChangeApproved(to: Recipient, last4: string) {
+    return this.send(to, {
+      subject: 'Your new bank account is approved',
+      text: `Hi ${to.name},\n\nThe bank account ending ${last4} has been approved. Future payouts will go to it.\n\nAsk My Lawyer`,
+      html: layout(
+        'Your new bank account is approved',
+        `<p>Hi ${to.name},</p>
+         <p>The bank account ending <strong>${last4}</strong> has been approved. Future payouts will go to it.</p>`,
+      ),
+    });
+  }
+
+  bankChangeRejected(to: Recipient, reason: string) {
+    return this.send(to, {
+      subject: 'Your bank account change was not approved',
+      text: `Hi ${to.name},\n\nWe could not approve your new bank account.\n\nReason: ${reason}\n\nYour payouts continue to the account already on file.\n\nAsk My Lawyer`,
+      html: layout(
+        'Your bank account change was not approved',
+        `<p>Hi ${to.name},</p>
+         <p style="padding:12px 14px;background:#fef2f2;border-left:3px solid #ef4444"><strong>Reason:</strong> ${reason}</p>
+         <p>Your payouts continue to the account already on file.</p>`,
+      ),
+    });
+  }
+
   /** A failed email must never fail the admin's decision. */
   private async send(
     to: Recipient,

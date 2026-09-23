@@ -1,4 +1,4 @@
-// Placeholder profile content. Swap for the API once it exists.
+import '../../core/options.dart';
 
 /// The editable sections shown on the profile screen.
 enum ProfileSection {
@@ -23,6 +23,9 @@ extension ProfileSectionInfo on ProfileSection {
   /// Free text sections use a textarea; the rest pick from a fixed list.
   bool get isFreeText => this == ProfileSection.aboutMe;
 
+  /// Experience is a single band, so picking one replaces the last.
+  bool get isSingleChoice => this == ProfileSection.experience;
+
   String get hint => switch (this) {
     ProfileSection.aboutMe => 'Tell clients about your practice',
     _ => '',
@@ -30,52 +33,11 @@ extension ProfileSectionInfo on ProfileSection {
 
   /// Choices offered for the multi-select sections.
   List<String> get options => switch (this) {
-    ProfileSection.experience => const [
-      '0-2 years',
-      '3-5 years',
-      '6-10 years',
-      '10+ years',
-      'District Court',
-      'High Court',
-      'Supreme Court',
-      'Tribunals',
-    ],
-    ProfileSection.languages => const [
-      'English',
-      'Hindi',
-      'Punjabi',
-      'Marathi',
-      'Gujarati',
-      'Bengali',
-      'Tamil',
-      'Telugu',
-      'Kannada',
-      'Malayalam',
-    ],
-    ProfileSection.specialization => const [
-      'Criminal Law',
-      'Family Law',
-      'Civil Law',
-      'Corporate Law',
-      'Property Law',
-      'Tax Law',
-      'Labour Law',
-      'Constitutional Law',
-    ],
-    ProfileSection.caseCategories => const [
-      'Divorce & Custody',
-      'Bail Applications',
-      'Property Dispute',
-      'Cheque Bounce',
-      'Consumer Complaint',
-      'Contract Dispute',
-      'Employment Dispute',
-    ],
-    ProfileSection.consultationType => const [
-      'Audio Consultation',
-      'Video Consultation',
-      'Chat Consultation',
-    ],
+    ProfileSection.experience => LawyerOptions.experienceBands,
+    ProfileSection.languages => LawyerOptions.languages,
+    ProfileSection.specialization => LawyerOptions.specialisations,
+    ProfileSection.caseCategories => LawyerOptions.caseCategories,
+    ProfileSection.consultationType => LawyerOptions.consultationTypes,
     _ => const [],
   };
 }

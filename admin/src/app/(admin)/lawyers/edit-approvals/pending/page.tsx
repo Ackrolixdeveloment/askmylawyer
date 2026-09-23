@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
 import { EditRequestsTable } from "@/components/lawyers/edit-requests-table";
-import { periodOptions } from "@/data/mock-edit-requests";
 
 export const metadata: Metadata = {
   title: "Pending Edit Requests",
@@ -18,7 +17,7 @@ export default function PendingEditRequestsPage() {
         </h1>
 
         <div className="mt-6">
-          <EditRequestsTable status="pending" periodOptions={periodOptions} />
+          <EditRequestsTable status="pending" />
         </div>
       </main>
     </>

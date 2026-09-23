@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../../core/network/api_client.dart';
 import '../../core/widgets/upload_field.dart';
@@ -35,6 +36,7 @@ class RegistrationSnapshot {
     this.emailVerified = false,
     this.emailLocked = false,
     this.mobile,
+    this.aadhaarNumberMasked,
     this.panNumber,
     this.residentialAddress,
     this.aadhaarFile,
@@ -44,6 +46,7 @@ class RegistrationSnapshot {
     this.enrollmentNumber,
     this.certificate,
     this.accountHolderName,
+    this.accountNumberMasked,
     this.ifscCode,
     this.bankName,
     this.swiftCode,
@@ -90,6 +93,7 @@ class RegistrationSnapshot {
       emailVerified: personal['emailVerified'] as bool? ?? false,
       emailLocked: personal['emailLocked'] as bool? ?? false,
       mobile: personal['mobile'] as String?,
+      aadhaarNumberMasked: kyc['aadhaarNumberMasked'] as String?,
       panNumber: kyc['panNumber'] as String?,
       residentialAddress: kyc['residentialAddress'] as String?,
       aadhaarFile: doc(kyc, 'aadhaarFile'),
@@ -99,6 +103,7 @@ class RegistrationSnapshot {
       enrollmentNumber: professional['enrollmentNumber'] as String?,
       certificate: doc(professional, 'certificate'),
       accountHolderName: bank['accountHolderName'] as String?,
+      accountNumberMasked: bank['accountNumberMasked'] as String?,
       ifscCode: bank['ifscCode'] as String?,
       bankName: bank['bankName'] as String?,
       swiftCode: bank['swiftCode'] as String?,
@@ -125,6 +130,14 @@ class RegistrationSnapshot {
   /// Why the application was turned down.
   final String? rejectionReason;
 
+  /// True while the admin has sent the application back.
+  bool get isCorrection => onboardingStatus == 'correction_requested';
+
+  /// Approved sections are read-only during a correction; everything is open
+  /// while the application is still a draft.
+  bool canEditSection(String block) =>
+      !isCorrection || correctionNotes.containsKey(block);
+
   final String? fullName;
   final String? email;
 
@@ -137,6 +150,9 @@ class RegistrationSnapshot {
   /// E.164, e.g. +919876543210.
   final String? mobile;
 
+  /// "XXXX XXXX 5428" — the full number never leaves the server.
+  final String? aadhaarNumberMasked;
+
   final String? panNumber;
   final String? residentialAddress;
   final RegistrationDocument? aadhaarFile;
@@ -148,6 +164,10 @@ class RegistrationSnapshot {
   final RegistrationDocument? certificate;
 
   final String? accountHolderName;
+
+  /// "XXXXXX6655" — the full number never leaves the server.
+  final String? accountNumberMasked;
+
   final String? ifscCode;
   final String? bankName;
   final String? swiftCode;
@@ -163,21 +183,31 @@ class RegistrationSnapshot {
 }
 
 class PersonalInput {
-  const PersonalInput({required this.fullName});
+  const PersonalInput({
+    required this.fullName,
+    required this.email,
+    this.mobile,
+  });
 
   final String fullName;
+  final String email;
+
+  /// Only sent when the account has no verified number yet.
+  final String? mobile;
 }
 
 class KycInput {
   const KycInput({
-    required this.aadhaarNumber,
+    this.aadhaarNumber,
     required this.panNumber,
     required this.residentialAddress,
     required this.aadhaarFile,
     required this.panFile,
   });
 
-  final String aadhaarNumber;
+  /// Null keeps the number already on file.
+  final String? aadhaarNumber;
+
   final String panNumber;
   final String residentialAddress;
   final PickedDocument aadhaarFile;
@@ -201,8 +231,8 @@ class ProfessionalInput {
 class BankInput {
   const BankInput({
     required this.accountHolderName,
-    required this.accountNumber,
-    required this.confirmAccountNumber,
+    this.accountNumber,
+    this.confirmAccountNumber,
     required this.ifscCode,
     required this.bankName,
     required this.swiftCode,
@@ -210,8 +240,10 @@ class BankInput {
   });
 
   final String accountHolderName;
-  final String accountNumber;
-  final String confirmAccountNumber;
+
+  /// Null keeps the account already on file.
+  final String? accountNumber;
+  final String? confirmAccountNumber;
   final String ifscCode;
   final String bankName;
   final String swiftCode;
@@ -245,13 +277,23 @@ class RegistrationRepository {
 
   final _api = ApiClient.instance;
 
+  /// The file behind one of the uploads, for previewing it in the app.
+  /// `type` is aadhaar, pan, bar_certificate, bank_proof, profile_photo or
+  /// signature.
+  Future<Uint8List> documentBytes(String type) =>
+      _api.bytes('$_base/documents/$type');
+
   Future<RegistrationSnapshot> load() async =>
       RegistrationSnapshot.fromJson(await _api.get(_base));
 
   Future<RegistrationSnapshot> savePersonal(PersonalInput input) async {
     final data = await _api.put(
       '$_base/personal',
-      body: {'fullName': input.fullName},
+      body: {
+        'fullName': input.fullName,
+        'email': input.email,
+        if (input.mobile != null) 'mobile': input.mobile,
+      },
     );
     return RegistrationSnapshot.fromJson(data);
   }
@@ -259,7 +301,7 @@ class RegistrationRepository {
   Future<RegistrationSnapshot> saveKyc(KycInput input) => _multipart(
     '$_base/kyc',
     fields: {
-      'aadhaarNumber': input.aadhaarNumber,
+      if (input.aadhaarNumber != null) 'aadhaarNumber': input.aadhaarNumber!,
       'panNumber': input.panNumber,
       'residentialAddress': input.residentialAddress,
     },
@@ -281,8 +323,9 @@ class RegistrationRepository {
     '$_base/bank',
     fields: {
       'accountHolderName': input.accountHolderName,
-      'accountNumber': input.accountNumber,
-      'confirmAccountNumber': input.confirmAccountNumber,
+      if (input.accountNumber != null) 'accountNumber': input.accountNumber!,
+      if (input.confirmAccountNumber != null)
+        'confirmAccountNumber': input.confirmAccountNumber!,
       'ifscCode': input.ifscCode,
       'bankName': input.bankName,
       'swiftCode': input.swiftCode,

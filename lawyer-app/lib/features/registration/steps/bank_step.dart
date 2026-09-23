@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 
+import '../../../core/options.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../document_preview.dart';
 import '../registration_repository.dart';
 
 /// Step 4 — the account earnings are paid into.
@@ -24,26 +26,22 @@ class BankStep extends StatefulWidget {
 }
 
 class _BankStepState extends State<BankStep> {
-  static const _banks = [
-    'State Bank of India',
-    'HDFC Bank',
-    'ICICI Bank',
-    'Axis Bank',
-    'Punjab National Bank',
-    'Bank of Baroda',
-    'Kotak Mahindra Bank',
-    'Canara Bank',
-    'Union Bank of India',
-    'IndusInd Bank',
-  ];
+  static const _banks = LawyerOptions.banks;
 
   late final _holder = TextEditingController(
     text: widget.initial?.accountHolderName,
   );
-  // The account number is stored encrypted and never sent back, so it has to
-  // be typed again when this step is re-saved.
+  // The account number is stored encrypted and never sent back. Leaving both
+  // fields blank keeps whatever is on file.
   final _account = TextEditingController();
   final _confirmAccount = TextEditingController();
+
+  /// Read-only once the admin has approved this section.
+  bool get _editable => widget.initial?.canEditSection('Bank Details') ?? true;
+
+  String? get _savedAccount => widget.initial?.accountNumberMasked;
+  bool get _keepingSavedAccount =>
+      _savedAccount != null && _account.text.trim().isEmpty;
   late final _ifsc = TextEditingController(text: widget.initial?.ifscCode);
   late final _swift = TextEditingController(text: widget.initial?.swiftCode);
 
@@ -86,8 +84,12 @@ class _BankStepState extends State<BankStep> {
         _isValid
             ? BankInput(
                 accountHolderName: _holder.text.trim(),
-                accountNumber: _account.text.trim(),
-                confirmAccountNumber: _confirmAccount.text.trim(),
+                accountNumber: _keepingSavedAccount
+                    ? null
+                    : _account.text.trim(),
+                confirmAccountNumber: _keepingSavedAccount
+                    ? null
+                    : _confirmAccount.text.trim(),
                 ifscCode: _ifsc.text.trim().toUpperCase(),
                 bankName: _bank!,
                 swiftCode: _swift.text.trim().toUpperCase(),
@@ -101,6 +103,7 @@ class _BankStepState extends State<BankStep> {
   /// Re-typing the account number guards against a typo in a field that is
   /// masked to the eye by its own length.
   String? _confirmError(String value) {
+    if (_keepingSavedAccount) return null;
     if (value.trim().isEmpty) return 'Re-enter your account number';
     if (value.trim() != _account.text.trim()) {
       return 'Account numbers do not match';
@@ -111,7 +114,8 @@ class _BankStepState extends State<BankStep> {
   // SWIFT is only needed for international transfers, so it stays optional.
   bool get _isValid =>
       Validators.name(_holder.text) == null &&
-      Validators.accountNumber(_account.text) == null &&
+      (_keepingSavedAccount ||
+          Validators.accountNumber(_account.text) == null) &&
       _confirmError(_confirmAccount.text) == null &&
       Validators.ifsc(_ifsc.text) == null &&
       _bank != null &&
@@ -126,6 +130,7 @@ class _BankStepState extends State<BankStep> {
           label: 'Account Holder Name',
           hint: 'Enter account holder name',
           controller: _holder,
+          enabled: _editable,
           required: true,
           textCapitalization: TextCapitalization.words,
           validator: Validators.name,
@@ -136,11 +141,17 @@ class _BankStepState extends State<BankStep> {
           label: 'Account Number',
           hint: 'Enter bank account number',
           controller: _account,
+          enabled: _editable,
           keyboardType: TextInputType.number,
           required: true,
           maxLength: 18,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          validator: Validators.accountNumber,
+          helper: _savedAccount == null
+              ? null
+              : _editable
+              ? 'Saved: $_savedAccount · leave blank to keep it'
+              : 'Saved: $_savedAccount · approved by our team',
+          validator: _keepingSavedAccount ? null : Validators.accountNumber,
         ),
         const SizedBox(height: 16),
 
@@ -148,6 +159,7 @@ class _BankStepState extends State<BankStep> {
           label: 'Confirm Account Number',
           hint: 'Enter bank account number',
           controller: _confirmAccount,
+          enabled: _editable,
           keyboardType: TextInputType.number,
           required: true,
           maxLength: 18,
@@ -160,6 +172,7 @@ class _BankStepState extends State<BankStep> {
           label: 'IFSC Code',
           hint: 'Enter IFSC code',
           controller: _ifsc,
+          enabled: _editable,
           required: true,
           maxLength: 11,
           textCapitalization: TextCapitalization.characters,
@@ -173,10 +186,12 @@ class _BankStepState extends State<BankStep> {
           required: true,
           options: _banks,
           value: _bank,
-          onChanged: (value) {
-            setState(() => _bank = value);
-            _report();
-          },
+          onChanged: _editable
+              ? (value) {
+                  setState(() => _bank = value);
+                  _report();
+                }
+              : null,
         ),
         const SizedBox(height: 16),
 
@@ -184,6 +199,7 @@ class _BankStepState extends State<BankStep> {
           label: 'SWIFT Code',
           hint: 'Enter SWIFT code',
           controller: _swift,
+          enabled: _editable,
           maxLength: 11,
           textCapitalization: TextCapitalization.characters,
           inputFormatters: [UpperCaseTextFormatter()],
@@ -197,6 +213,13 @@ class _BankStepState extends State<BankStep> {
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
           initialFile: _proof,
+          readOnly: !_editable,
+          onPreview: (file) => openDocumentPreview(
+            context,
+            title: 'Proof of Bank Account',
+            file: file,
+            documentType: 'bank_proof',
+          ),
           onChanged: (file) {
             setState(() => _proof = file);
             _report();

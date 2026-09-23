@@ -7,9 +7,9 @@ import 'sheet_shell.dart';
 class LogoutDialog extends StatelessWidget {
   const LogoutDialog({
     super.key,
-    this.name = 'Adv. Sanjh M',
-    this.initials = 'SM',
-    this.detail = '+01 98XXX12345 . Family Law',
+    required this.name,
+    required this.initials,
+    required this.detail,
   });
 
   final String name;
@@ -17,13 +17,19 @@ class LogoutDialog extends StatelessWidget {
   final String detail;
 
   /// Returns true when the lawyer confirms. Callers clear the session.
-  static Future<bool> show(BuildContext context) async {
+  static Future<bool> show(
+    BuildContext context, {
+    required String name,
+    required String initials,
+    required String detail,
+  }) async {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       // The close button sits above the sheet, so it must not be clipped.
       clipBehavior: Clip.none,
-      builder: (_) => const LogoutDialog(),
+      builder: (_) =>
+          LogoutDialog(name: name, initials: initials, detail: detail),
     );
     return confirmed ?? false;
   }

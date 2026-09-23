@@ -1,10 +1,12 @@
 import { api } from "./api";
+import type { DeletedLawyer } from "@/types/edit-history";
 import type {
   CorrectionRequest,
   DraftProfile,
   Lawyer,
   LawyerApplication,
   LawyerRequest,
+  LawyerStatus,
 } from "@/types/lawyer";
 
 /** The onboarding screens in the sidebar. */
@@ -53,6 +55,26 @@ export function fetchDrafts() {
 /** Approved lawyers. */
 export function fetchVerifiedLawyers() {
   return api<Paginated<Lawyer>>("/admin/lawyers/verified");
+}
+
+/** Accounts that were removed, kept for the audit trail. */
+export function fetchDeletedLawyers() {
+  return api<Paginated<DeletedLawyer>>("/admin/lawyers/deleted");
+}
+
+/** Takes the lawyer off the marketplace and signs them out of the app. */
+export function suspendLawyer(id: string, reason: string) {
+  return api<{ id: string; status: LawyerStatus }>(`/admin/lawyers/${id}/suspend`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+/** Puts a suspended lawyer back on the marketplace. */
+export function reactivateLawyer(id: string) {
+  return api<{ id: string; status: LawyerStatus }>(`/admin/lawyers/${id}/reactivate`, {
+    method: "POST",
+  });
 }
 
 export function fetchLawyerSummary() {

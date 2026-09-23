@@ -20,6 +20,24 @@ interface PendingUpload {
 /** The application can only be changed before it is submitted, or when sent back for correction. */
 const EDITABLE: OnboardingStatus[] = ['draft', 'correction_requested'];
 
+/**
+ * During a correction only the flagged sections may be changed; everything
+ * the admin approved is read-only. These are the blocks each step covers.
+ */
+const STEP_BLOCKS = {
+  kyc: ['Aadhar Card', 'PAN Card'],
+  professional: ['Certificate'],
+  bank: ['Bank Details'],
+  profile: ['Professional Profile'],
+} as const;
+
+const locked = (what: string) =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'SECTION_LOCKED',
+    `${what} cannot be changed: this section was approved by our team. Contact support if something is wrong.`,
+  );
+
 const STEPS = [
   { key: 'personal', field: 'personalCompletedAt', label: 'Personal Information' },
   { key: 'kyc', field: 'kycCompletedAt', label: 'KYC Verification' },
@@ -121,39 +139,125 @@ export class LawyerRegistrationService {
     };
   }
 
-  /** Step 1 — the name only; the phone and email are verified separately. */
+  /** Step 1 */
   async savePersonal(userId: string, dto: PersonalDto) {
-    await this.assertEditable(userId);
+    const profile = await this.assertEditable(userId);
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { phone: true, email: true, fullName: true },
+    });
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { fullName: dto.fullName },
-      }),
-      this.prisma.lawyerProfile.update({
-        where: { userId },
-        data: { personalCompletedAt: new Date() },
-      }),
-    ]);
+    // Personal details are the base the review is built on: during a
+    // correction they are read-only, apart from anything left blank.
+    if (this.flagged(profile)) {
+      const changed =
+        (user.fullName && user.fullName !== dto.fullName) ||
+        (user.email && user.email !== dto.email);
+      if (changed) {
+        throw new AppException(
+          HttpStatus.CONFLICT,
+          'SECTION_LOCKED',
+          'Your name and email cannot be changed during a correction. Contact support if something is wrong.',
+        );
+      }
+    }
+
+    const data: Prisma.UserUpdateInput = { fullName: dto.fullName };
+
+    if (dto.email !== user.email) {
+      const taken = await this.prisma.user.findFirst({
+        where: { email: dto.email, role: 'lawyer', id: { not: userId } },
+        select: { id: true },
+      });
+      if (taken) throw emailInUse();
+      data.email = dto.email;
+      data.emailVerifiedAt = null;
+    }
+
+    if (!user.phone) {
+      if (!dto.mobile) {
+        throw new AppException(
+          HttpStatus.BAD_REQUEST,
+          'MOBILE_REQUIRED',
+          'Enter your mobile number.',
+        );
+      }
+      const phone = `+91${dto.mobile}`;
+      const taken = await this.prisma.user.findFirst({
+        where: { phone, role: 'lawyer', id: { not: userId } },
+        select: { id: true },
+      });
+      if (taken) throw mobileInUse();
+      data.phone = phone;
+    }
+
+    try {
+      await this.prisma.$transaction([
+        this.prisma.user.update({ where: { id: userId }, data }),
+        this.prisma.lawyerProfile.update({
+          where: { userId },
+          data: { personalCompletedAt: new Date() },
+        }),
+      ]);
+    } catch (error) {
+      // Lost a race for the same email / phone.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw String(error.meta?.target).includes('email') ? emailInUse() : mobileInUse();
+      }
+      throw error;
+    }
 
     return this.get(userId);
   }
 
   /** Step 2 */
   async saveKyc(userId: string, dto: KycDto, files: UploadedFiles) {
-    await this.assertEditable(userId);
+    const profile = await this.assertEditable(userId);
+    const flagged = this.assertStepOpen(profile, 'kyc', 'Your identity documents');
+
+    // Half-flagged step: leave the approved document exactly as it is.
+    if (flagged && !flagged.has('Aadhar Card')) {
+      if (dto.aadhaarNumber || files.aadhaarFile?.length) {
+        throw locked('Your Aadhaar card');
+      }
+    }
+    if (flagged && !flagged.has('PAN Card')) {
+      if (files.panFile?.length || dto.panNumber !== profile.panNumber) {
+        throw locked('Your PAN card');
+      }
+    }
+
     const uploads = await this.prepareUploads(userId, files, [
       { field: 'aadhaarFile', type: 'aadhaar', rule: FILE_RULES.idImage, label: 'Aadhaar card', required: true },
       { field: 'panFile', type: 'pan', rule: FILE_RULES.idImage, label: 'PAN card', required: true },
     ]);
+
+    // Blank means "keep what is stored" — the number never leaves the server.
+    if (!dto.aadhaarNumber) {
+      const stored = await this.prisma.lawyerProfile.findUnique({
+        where: { userId },
+        select: { aadhaarNumberEnc: true },
+      });
+      if (!stored?.aadhaarNumberEnc) {
+        throw new AppException(
+          HttpStatus.BAD_REQUEST,
+          'AADHAAR_REQUIRED',
+          'Enter your Aadhaar number.',
+        );
+      }
+    }
 
     await this.storeUploads(userId, uploads);
     await this.prisma.lawyerProfile.update({
       where: { userId },
       data: {
         kycMethod: 'manual',
-        aadhaarNumberEnc: encryptField(dto.aadhaarNumber),
-        aadhaarLast4: dto.aadhaarNumber.slice(-4),
+        ...(dto.aadhaarNumber
+          ? {
+              aadhaarNumberEnc: encryptField(dto.aadhaarNumber),
+              aadhaarLast4: dto.aadhaarNumber.slice(-4),
+            }
+          : {}),
         panNumber: dto.panNumber,
         residentialAddress: dto.residentialAddress || null,
         kycCompletedAt: new Date(),
@@ -165,7 +269,8 @@ export class LawyerRegistrationService {
 
   /** Step 3 */
   async saveProfessional(userId: string, dto: ProfessionalDto, files: UploadedFiles) {
-    await this.assertEditable(userId);
+    const profile = await this.assertEditable(userId);
+    this.assertStepOpen(profile, 'professional', 'Your bar council details');
     const uploads = await this.prepareUploads(userId, files, [
       {
         field: 'certificate',
@@ -192,8 +297,22 @@ export class LawyerRegistrationService {
 
   /** Step 4 */
   async saveBank(userId: string, dto: BankDto, files: UploadedFiles) {
-    await this.assertEditable(userId);
-    if (dto.accountNumber !== dto.confirmAccountNumber) {
+    const profile = await this.assertEditable(userId);
+    this.assertStepOpen(profile, 'bank', 'Your bank details');
+    const stored = await this.prisma.lawyerBankAccount.findUnique({
+      where: { userId },
+      select: { accountNumberEnc: true, accountLast4: true },
+    });
+
+    // Blank means "keep the account already on file".
+    if (!dto.accountNumber && !stored) {
+      throw new AppException(
+        HttpStatus.BAD_REQUEST,
+        'ACCOUNT_NUMBER_REQUIRED',
+        'Enter your bank account number.',
+      );
+    }
+    if (dto.accountNumber && dto.accountNumber !== dto.confirmAccountNumber) {
       throw new AppException(
         HttpStatus.BAD_REQUEST,
         'ACCOUNT_NUMBER_MISMATCH',
@@ -207,8 +326,12 @@ export class LawyerRegistrationService {
 
     const account = {
       holderName: dto.accountHolderName,
-      accountNumberEnc: encryptField(dto.accountNumber),
-      accountLast4: dto.accountNumber.slice(-4),
+      accountNumberEnc: dto.accountNumber
+        ? encryptField(dto.accountNumber)
+        : stored!.accountNumberEnc,
+      accountLast4: dto.accountNumber
+        ? dto.accountNumber.slice(-4)
+        : stored!.accountLast4,
       ifscCode: dto.ifscCode,
       bankName: dto.bankName,
       swiftCode: dto.swiftCode ?? null,
@@ -232,7 +355,8 @@ export class LawyerRegistrationService {
 
   /** Professional profile (last screen before submitting). */
   async saveProfile(userId: string, dto: ProfileDto, files: UploadedFiles) {
-    await this.assertEditable(userId);
+    const profile = await this.assertEditable(userId);
+    this.assertStepOpen(profile, 'profile', 'Your professional profile');
     const uploads = await this.prepareUploads(userId, files, [
       { field: 'photo', type: 'profile_photo', rule: FILE_RULES.profileImage, label: 'Profile photo', required: false },
       { field: 'signature', type: 'signature', rule: FILE_RULES.profileImage, label: 'Signature', required: false },
@@ -267,24 +391,6 @@ export class LawyerRegistrationService {
       );
     }
 
-    // Both are how we reach the lawyer about this application.
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { phone: true, emailVerifiedAt: true },
-    });
-    const unverified = [
-      user.phone ? null : 'mobile number',
-      user.emailVerifiedAt ? null : 'email address',
-    ].filter(Boolean);
-
-    if (unverified.length > 0) {
-      throw new AppException(
-        HttpStatus.BAD_REQUEST,
-        'IDENTITY_UNVERIFIED',
-        `Please verify your ${unverified.join(' and ')} before submitting.`,
-      );
-    }
-
     // Guarded on the status we read, so a double tap can't submit twice.
     const { count } = await this.prisma.lawyerProfile.updateMany({
       where: { userId, onboardingStatus: profile.onboardingStatus },
@@ -294,7 +400,7 @@ export class LawyerRegistrationService {
         submittedAt: new Date(),
       },
     });
-    if (count === 0) throw locked();
+    if (count === 0) throw applicationLocked();
 
     return this.get(userId);
   }
@@ -317,8 +423,30 @@ export class LawyerRegistrationService {
     if (!profile) {
       throw new AppException(HttpStatus.NOT_FOUND, 'PROFILE_NOT_FOUND', 'Lawyer profile not found.');
     }
-    if (!EDITABLE.includes(profile.onboardingStatus)) throw locked();
+    if (!EDITABLE.includes(profile.onboardingStatus)) throw applicationLocked();
     return profile;
+  }
+
+  /**
+   * The sections an admin flagged, or null while the application is still a
+   * draft — then everything is open.
+   */
+  private flagged(profile: { onboardingStatus: OnboardingStatus; correctionNotes: unknown }) {
+    if (profile.onboardingStatus !== 'correction_requested') return null;
+    return new Set(Object.keys((profile.correctionNotes ?? {}) as Record<string, string>));
+  }
+
+  /** Throws when a step is closed for editing. */
+  private assertStepOpen(
+    profile: { onboardingStatus: OnboardingStatus; correctionNotes: unknown },
+    step: keyof typeof STEP_BLOCKS,
+    label: string,
+  ) {
+    const flagged = this.flagged(profile);
+    if (!flagged) return null;
+
+    if (!STEP_BLOCKS[step].some((block) => flagged.has(block))) throw locked(label);
+    return flagged;
   }
 
   /** Validates every file before anything is stored, so a bad second file doesn't leave the first behind. */
@@ -381,9 +509,23 @@ export class LawyerRegistrationService {
   }
 }
 
-const locked = () =>
+const applicationLocked = () =>
   new AppException(
     HttpStatus.CONFLICT,
     'APPLICATION_LOCKED',
     'Your application has been submitted and can no longer be edited.',
+  );
+
+const emailInUse = () =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'EMAIL_IN_USE',
+    'This email is already used by another lawyer account.',
+  );
+
+const mobileInUse = () =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'MOBILE_IN_USE',
+    'This mobile number is already used by another lawyer account.',
   );

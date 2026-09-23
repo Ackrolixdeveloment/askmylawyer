@@ -61,9 +61,7 @@ class _RaiseTicketScreenState extends State<RaiseTicketScreen> {
 
     // TODO: create the ticket through the backend.
     navigator.pop();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Ticket raised')),
-    );
+    messenger.showSnackBar(const SnackBar(content: Text('Ticket raised')));
   }
 
   @override

@@ -13,7 +13,32 @@ import {
   type SelectOption,
 } from "@/components/ui";
 import { formatDdMmYyyy } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { DraftProfile } from "@/types/lawyer";
+
+/** Which step of the registration form the lawyer left off on. */
+function StoppedAt({ row }: { row: DraftProfile }) {
+  const filled = row.totalSteps > 0 ? row.completedSteps / row.totalSteps : 0;
+
+  return (
+    <div className="min-w-40">
+      <p className={cn("font-medium", row.stoppedAt ? "text-ink" : "text-positive")}>
+        {row.stoppedAt ?? "Ready to submit"}
+      </p>
+      <p className="mt-0.5 text-xs text-ink-subtle">
+        {row.stoppedAtStep
+          ? `Step ${row.stoppedAtStep} of ${row.totalSteps} · ${row.completedSteps} completed`
+          : `All ${row.totalSteps} steps completed`}
+      </p>
+      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={cn("h-full rounded-full", row.stoppedAt ? "bg-warn" : "bg-positive")}
+          style={{ width: `${Math.round(filled * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
@@ -54,6 +79,13 @@ function buildColumns(
       align: "left",
       sortValue: (row) => row.mobile,
       cell: (row) => <span className="text-ink-muted">{row.mobile}</span>,
+    },
+    {
+      key: "stoppedAt",
+      header: "STOPPED AT",
+      align: "left",
+      sortValue: (row) => row.stoppedAtStep ?? row.totalSteps + 1,
+      cell: (row) => <StoppedAt row={row} />,
     },
     {
       key: "lastUpdated",
@@ -183,7 +215,7 @@ export function DraftsTable({
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
-        minWidth={1080}
+        minWidth={1240}
         defaultSort={{ key: "lastUpdated", direction: "desc" }}
         emptyMessage="No draft registrations."
       />

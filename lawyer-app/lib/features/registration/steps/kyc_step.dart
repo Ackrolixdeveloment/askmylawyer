@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../document_preview.dart';
 import '../registration_repository.dart';
 
 /// Step 2 — DigiLocker first, with a manual fallback when it fails.
@@ -28,9 +29,11 @@ class _KycStepState extends State<KycStep> {
   /// Details were entered by hand before, so reopen the manual form.
   late bool _manual = widget.initial?.panNumber != null;
 
-  // The Aadhaar number is stored encrypted and never sent back, so it has to
-  // be typed again when this step is re-saved.
+  // The Aadhaar number is stored encrypted and never sent back. Leaving the
+  // field blank keeps whatever is on file.
   final _aadhaar = TextEditingController();
+
+  String? get _savedAadhaar => widget.initial?.aadhaarNumberMasked;
   late final _pan = TextEditingController(text: widget.initial?.panNumber);
   late final _address = TextEditingController(
     text: widget.initial?.residentialAddress,
@@ -56,7 +59,9 @@ class _KycStepState extends State<KycStep> {
       widget.onChanged(
         _manual && _isValid
             ? KycInput(
-                aadhaarNumber: _aadhaar.text.replaceAll(' ', ''),
+                aadhaarNumber: _aadhaar.text.trim().isEmpty
+                    ? null
+                    : _aadhaar.text.replaceAll(' ', ''),
                 panNumber: _pan.text.trim().toUpperCase(),
                 residentialAddress: _address.text.trim(),
                 aadhaarFile: _aadhaarFile!,
@@ -75,12 +80,22 @@ class _KycStepState extends State<KycStep> {
     super.dispose();
   }
 
+  /// A blank Aadhaar is fine once one is stored.
+  bool get _aadhaarReady => _aadhaar.text.trim().isEmpty
+      ? _savedAadhaar != null
+      : Validators.aadhaar(_aadhaar.text) == null;
+
   // Both the numbers and their scans are required before moving on.
   bool get _isValid =>
-      Validators.aadhaar(_aadhaar.text) == null &&
+      _aadhaarReady &&
       Validators.pan(_pan.text) == null &&
       _aadhaarFile != null &&
       _panFile != null;
+
+  /// Approved documents are read-only while the rest is corrected.
+  bool get _aadhaarEditable =>
+      widget.initial?.canEditSection('Aadhar Card') ?? true;
+  bool get _panEditable => widget.initial?.canEditSection('PAN Card') ?? true;
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +204,15 @@ class _KycStepState extends State<KycStep> {
           required: true,
           maxLength: 12,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          validator: Validators.aadhaar,
+          enabled: _aadhaarEditable,
+          helper: _savedAadhaar == null
+              ? null
+              : _aadhaarEditable
+              ? 'Saved: $_savedAadhaar · leave blank to keep it'
+              : 'Saved: $_savedAadhaar · approved by our team',
+          validator: _savedAadhaar != null && _aadhaar.text.trim().isEmpty
+              ? null
+              : Validators.aadhaar,
         ),
         const SizedBox(height: 10),
         UploadField(
@@ -197,6 +220,13 @@ class _KycStepState extends State<KycStep> {
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
           initialFile: _aadhaarFile,
+          readOnly: !_aadhaarEditable,
+          onPreview: (file) => openDocumentPreview(
+            context,
+            title: 'Aadhaar Card',
+            file: file,
+            documentType: 'aadhaar',
+          ),
           onChanged: (file) {
             setState(() => _aadhaarFile = file);
             _report();
@@ -212,6 +242,8 @@ class _KycStepState extends State<KycStep> {
           maxLength: 10,
           textCapitalization: TextCapitalization.characters,
           inputFormatters: [UpperCaseTextFormatter()],
+          enabled: _panEditable,
+          helper: _panEditable ? null : 'Approved by our team',
           validator: Validators.pan,
         ),
         const SizedBox(height: 10),
@@ -220,6 +252,13 @@ class _KycStepState extends State<KycStep> {
           helper: 'Max Size 2 MB (PNG or JPEG)',
           maxSizeMb: 2,
           initialFile: _panFile,
+          readOnly: !_panEditable,
+          onPreview: (file) => openDocumentPreview(
+            context,
+            title: 'PAN Card',
+            file: file,
+            documentType: 'pan',
+          ),
           onChanged: (file) {
             setState(() => _panFile = file);
             _report();
@@ -252,6 +291,7 @@ class _KycStepState extends State<KycStep> {
         TextField(
           controller: _address,
           maxLines: 2,
+          enabled: _aadhaarEditable || _panEditable,
           style: const TextStyle(fontSize: 14, color: AppColors.ink),
           decoration: InputDecoration(
             hintText: 'Enter your Residential Address',

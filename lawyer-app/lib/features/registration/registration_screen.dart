@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/correction_notice.dart';
+import '../../core/widgets/step_header.dart';
+import '../auth/auth_repository.dart';
+import '../auth/get_started_screen.dart';
 import '../profile/application_submitted_screen.dart';
 import '../profile/professional_profile_screen.dart';
 import 'registration_repository.dart';
@@ -41,7 +45,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     'Aadhar Card': 1,
     'PAN Card': 1,
     'Certificate': 2,
+    'Bank Details': 3,
     'Professional Profile': 4,
+  };
+
+  /// The admin's notes for the step on screen, in the order they were flagged.
+  Map<String, String> get _notesForStep => {
+    for (final entry in _data!.correctionNotes.entries)
+      if (_blockSteps[entry.key] == _step) entry.key: entry.value,
   };
 
   final _repository = RegistrationRepository.instance;
@@ -63,7 +74,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _load();
   }
 
-  Future<void> _load({bool keepStep = false}) async {
+  Future<void> _load() async {
     setState(() {
       _loading = true;
       _loadError = null;
@@ -105,9 +116,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       setState(() {
         _data = data;
-        if (!keepStep) {
-          _step = flaggedStep ?? (firstOpen == -1 ? 0 : firstOpen);
-        }
+        _step = flaggedStep ?? (firstOpen == -1 ? 0 : firstOpen);
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -158,16 +167,55 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
   }
 
-  void _back() {
+  Future<void> _back() async {
     if (_saving) return;
+
+    // Registration is the first screen after signing in, so there is nothing
+    // behind step one — going back means leaving the account.
     if (_step == 0) {
-      Navigator.of(context).maybePop();
+      await _leave();
       return;
     }
     setState(() {
       _step -= 1;
       _input = null;
     });
+  }
+
+  /// Signs out and returns to the sign-in screen. Saved steps stay on the
+  /// server, so signing in again picks the form back up.
+  Future<void> _leave() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Leave registration?'),
+        content: const Text(
+          'Your saved steps are kept. You will need to sign in again to '
+          'finish your application.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Stay'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await AuthRepository.instance.logout();
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const GetStartedScreen()),
+      (_) => false,
+    );
   }
 
   void _setInput(Object? input) {
@@ -229,13 +277,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
 
     // The header always points at what comes next, so the lawyer knows the
-    // shape of the whole flow.
+    // shape of the whole flow. The profile screen is the fifth step.
     final nextLabel = _step < _steps.length - 1
         ? 'Next - ${_steps[_step + 1]}'
-        : 'Last step';
+        : 'Next - Professional Profile';
 
     return PopScope(
-      canPop: _step == 0 && !_saving,
+      // Handled below: earlier steps go back one, step one asks to log out.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back();
       },
@@ -243,11 +292,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         backgroundColor: AppColors.surface,
         body: Column(
           children: [
-            _StepHeader(
+            StepHeader(
               title: _steps[_step],
               subtitle: nextLabel,
               step: _step + 1,
-              total: _steps.length,
+              total: totalOnboardingSteps,
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -257,19 +306,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_data!.correctionNotes.isNotEmpty) ...[
-                      _CorrectionNotice(notes: _data!.correctionNotes),
+                    if (_notesForStep.isNotEmpty) ...[
+                      CorrectionNotice(notes: _notesForStep),
                       const SizedBox(height: 16),
                     ],
                     switch (_step) {
                       0 => PersonalStep(
-                        key: ValueKey(
-                          'personal-${_data!.mobile}-${_data!.email}',
-                        ),
+                        key: const ValueKey('personal'),
                         mobile: widget.mobile,
                         initial: _data,
                         onChanged: _setInput,
-                        onIdentityChanged: () => _load(keepStep: true),
                       ),
                       1 => KycStep(
                         key: const ValueKey('kyc'),
@@ -323,166 +369,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _StepHeader extends StatelessWidget {
-  const _StepHeader({
-    required this.title,
-    required this.subtitle,
-    required this.step,
-    required this.total,
-  });
-
-  final String title;
-  final String subtitle;
-  final int step;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      decoration: const BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFB6C0D4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _StepProgressRing(step: step, total: total),
-        ],
-      ),
-    );
-  }
-}
-
-/// Step counter drawn as a ring that fills as the lawyer moves through the
-/// form, so progress is readable at a glance.
-class _StepProgressRing extends StatelessWidget {
-  const _StepProgressRing({required this.step, required this.total});
-
-  final int step;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 48,
-      height: 48,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: step / total),
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOut,
-            builder: (context, value, _) => SizedBox.expand(
-              child: CircularProgressIndicator(
-                value: value,
-                strokeWidth: 3,
-                strokeCap: StrokeCap.round,
-                backgroundColor: Colors.white.withValues(alpha: 0.28),
-                valueColor: const AlwaysStoppedAnimation(Colors.white),
-              ),
-            ),
-          ),
-          Text(
-            '$step of $total',
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// What the admin asked the lawyer to fix, shown above the form.
-class _CorrectionNotice extends StatelessWidget {
-  const _CorrectionNotice({required this.notes});
-
-  final Map<String, String> notes;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        border: Border.all(color: const Color(0xFFFED7AA)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.error_outline, size: 18, color: Color(0xFFC2410C)),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Please update the details below',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFC2410C),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...notes.entries.map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${entry.key}: ',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(text: entry.value),
-                  ],
-                ),
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.45,
-                  color: AppColors.ink,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

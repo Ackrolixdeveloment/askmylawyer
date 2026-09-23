@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { DeletedLawyersTable } from "@/components/lawyers/deleted-lawyers-table";
-import { deletedLawyers } from "@/data/mock-edit-history";
+import { DeletedLawyersView } from "@/components/lawyers/deleted-lawyers-view";
 
 export const metadata: Metadata = {
   title: "Deleted Lawyers",
@@ -19,7 +18,7 @@ export default function DeletedLawyersPage() {
         </p>
 
         <div className="mt-6">
-          <DeletedLawyersTable rows={deletedLawyers} />
+          <DeletedLawyersView />
         </div>
       </main>
     </>

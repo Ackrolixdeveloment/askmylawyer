@@ -31,7 +31,20 @@ class UploadField extends StatefulWidget {
     this.allowedExtensions = const ['png', 'jpg', 'jpeg'],
     this.onChanged,
     this.initialFile,
+    this.correction,
+    this.onPreview,
+    this.readOnly = false,
   });
+
+  /// Shows the attached file but does not allow changing it.
+  final bool readOnly;
+
+  /// Opens the attached file. The eye only appears when this is set.
+  final ValueChanged<PickedDocument>? onPreview;
+
+  /// Feedback from the admin review. Any value turns the row red; a non-empty
+  /// one replaces the helper text underneath.
+  final String? correction;
 
   /// A file uploaded earlier, shown until the lawyer picks a new one.
   final PickedDocument? initialFile;
@@ -92,9 +105,14 @@ class _UploadFieldState extends State<UploadField> {
     widget.onChanged?.call(null);
   }
 
+  bool get _flagged => widget.correction != null;
+
   @override
   Widget build(BuildContext context) {
     final file = _file;
+    final note =
+        _error ??
+        (widget.correction?.isNotEmpty ?? false ? widget.correction : null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,24 +120,26 @@ class _UploadFieldState extends State<UploadField> {
         if (widget.label != null) ...[
           Text(
             widget.required ? '${widget.label}*' : widget.label!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.ink,
+              color: _flagged ? AppColors.negative : AppColors.ink,
             ),
           ),
           const SizedBox(height: 6),
         ],
 
         InkWell(
-          onTap: _pick,
+          onTap: widget.readOnly ? null : _pick,
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
             decoration: BoxDecoration(
               color: file == null ? AppColors.surface : AppColors.canvas,
               border: Border.all(
-                color: _error != null ? AppColors.negative : AppColors.line,
+                color: _error != null || _flagged
+                    ? AppColors.negative
+                    : AppColors.line,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -147,6 +167,20 @@ class _UploadFieldState extends State<UploadField> {
                   ),
                 ),
                 if (file != null) ...[
+                  if (widget.onPreview != null)
+                    InkWell(
+                      onTap: () => widget.onPreview!(file),
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.visibility_outlined,
+                          size: 17,
+                          color: AppColors.brand,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
                   Text(
                     file.sizeLabel,
                     style: const TextStyle(
@@ -155,18 +189,19 @@ class _UploadFieldState extends State<UploadField> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  InkWell(
-                    onTap: _clear,
-                    borderRadius: BorderRadius.circular(20),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.close,
-                        size: 15,
-                        color: AppColors.inkMuted,
+                  if (!widget.readOnly)
+                    InkWell(
+                      onTap: _clear,
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.close,
+                          size: 15,
+                          color: AppColors.inkMuted,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ],
             ),
@@ -175,10 +210,10 @@ class _UploadFieldState extends State<UploadField> {
 
         const SizedBox(height: 4),
         Text(
-          _error ?? widget.helper,
+          note ?? widget.helper,
           style: TextStyle(
             fontSize: 10,
-            color: _error != null ? AppColors.negative : AppColors.inkSubtle,
+            color: note != null ? AppColors.negative : AppColors.inkSubtle,
           ),
         ),
       ],

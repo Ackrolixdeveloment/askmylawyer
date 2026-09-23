@@ -51,6 +51,13 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
     super.dispose();
   }
 
+  /// Anything already saved stays visible, even if it predates the current
+  /// list of choices.
+  List<String> get _options => [
+    ...widget.section.options,
+    ..._selection.where((value) => !widget.section.options.contains(value)),
+  ];
+
   void _save() {
     if (widget.section.isFreeText) {
       widget.data.setText(widget.section, _text.text.trim());
@@ -146,11 +153,18 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      for (final option in section.options)
+                      for (final option in _options)
                         _OptionChip(
                           label: option,
                           selected: _selection.contains(option),
                           onTap: () => setState(() {
+                            // One band only for experience; the rest toggle.
+                            if (widget.section.isSingleChoice) {
+                              _selection
+                                ..clear()
+                                ..add(option);
+                              return;
+                            }
                             if (!_selection.remove(option)) {
                               _selection.add(option);
                             }

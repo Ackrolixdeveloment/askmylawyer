@@ -44,24 +44,28 @@ enum AuthProvider {
 }
 
 model User {
-  id              String         @id @default(uuid()) @db.Uuid
-  role            AppRole
+  id               String              @id @default(uuid()) @db.Uuid
+  role             AppRole
   /// E.164, e.g. +919876543210. Empty for accounts created via email/Google/Apple.
-  phone           String?        @db.VarChar(15)
+  phone            String?             @db.VarChar(15)
   /// Always stored lowercase.
-  email           String?        @db.VarChar(255)
-  emailVerifiedAt DateTime?      @map("email_verified_at") @db.Timestamptz(6)
-  fullName        String?        @map("full_name") @db.VarChar(150)
-  status          UserStatus     @default(active)
-  lastLoginAt     DateTime?      @map("last_login_at") @db.Timestamptz(6)
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
-  lawyerProfile   LawyerProfile?
-  bankAccount     LawyerBankAccount?
-  documents       LawyerDocument[]
-  sessions        UserSession[]
-  identities      AuthIdentity[]
+  email            String?             @db.VarChar(255)
+  emailVerifiedAt  DateTime?           @map("email_verified_at") @db.Timestamptz(6)
+  fullName         String?             @map("full_name") @db.VarChar(150)
+  status           UserStatus          @default(active)
+  suspendedAt      DateTime?           @map("suspended_at") @db.Timestamptz(6)
+  /// Shown to the lawyer when the app signs them out.
+  suspensionReason String?             @map("suspension_reason") @db.VarChar(500)
+  lastLoginAt      DateTime?           @map("last_login_at") @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  lawyerProfile    LawyerProfile?
+  bankAccount      LawyerBankAccount?
+  documents        LawyerDocument[]
+  sessions         UserSession[]
+  identities       AuthIdentity[]
+  editRequests     LawyerEditRequest[]
 
   /// The same phone/email may hold one account per role (see ALLOW_MULTI_ROLE_PHONE).
   @@unique([phone, role])
@@ -101,52 +105,54 @@ enum LawyerDocumentType {
 }
 
 model LawyerProfile {
-  userId                  String           @id @map("user_id") @db.Uuid
-  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  onboardingStatus        OnboardingStatus @default(draft) @map("onboarding_status")
+  userId           String           @id @map("user_id") @db.Uuid
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  onboardingStatus OnboardingStatus @default(draft) @map("onboarding_status")
 
   // Step 2 — KYC. Aadhaar is stored encrypted; only the last 4 digits are readable.
-  kycMethod               KycMethod?       @map("kyc_method")
-  aadhaarNumberEnc        String?          @map("aadhaar_number_enc")
-  aadhaarLast4            String?          @map("aadhaar_last4") @db.VarChar(4)
-  panNumber               String?          @map("pan_number") @db.VarChar(10)
-  residentialAddress      String?          @map("residential_address") @db.VarChar(500)
+  kycMethod          KycMethod? @map("kyc_method")
+  aadhaarNumberEnc   String?    @map("aadhaar_number_enc")
+  aadhaarLast4       String?    @map("aadhaar_last4") @db.VarChar(4)
+  panNumber          String?    @map("pan_number") @db.VarChar(10)
+  residentialAddress String?    @map("residential_address") @db.VarChar(500)
 
   // Step 3 — Bar Council.
-  qualification           String?          @db.VarChar(100)
-  barCouncilState         String?          @map("bar_council_state") @db.VarChar(100)
-  enrollmentNumber        String?          @map("enrollment_number") @db.VarChar(50)
+  qualification    String? @db.VarChar(100)
+  barCouncilState  String? @map("bar_council_state") @db.VarChar(100)
+  enrollmentNumber String? @map("enrollment_number") @db.VarChar(50)
 
   // Professional profile shown to customers.
-  about                   String?          @db.VarChar(500)
-  experienceBand          String?          @map("experience_band") @db.VarChar(30)
-  languages               String[]         @default([])
-  caseCategories          String[]         @default([]) @map("case_categories")
-  specialisations         String[]         @default([])
+  about             String?  @db.VarChar(500)
+  experienceBand    String?  @map("experience_band") @db.VarChar(30)
+  languages         String[] @default([])
+  caseCategories    String[] @default([]) @map("case_categories")
+  specialisations   String[] @default([])
+  /// Audio / Video / Chat, chosen by the lawyer on their profile.
+  consultationTypes String[] @default([]) @map("consultation_types")
 
   // Admin review outcome.
-  reviewedById            String?          @map("reviewed_by_id") @db.Uuid
-  reviewedBy              AdminUser?       @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt              DateTime?        @map("reviewed_at") @db.Timestamptz(6)
-  approvedAt              DateTime?        @map("approved_at") @db.Timestamptz(6)
-  rejectedAt              DateTime?        @map("rejected_at") @db.Timestamptz(6)
-  rejectionReason         String?          @map("rejection_reason") @db.VarChar(1000)
-  correctionRequestedAt   DateTime?        @map("correction_requested_at") @db.Timestamptz(6)
+  reviewedById          String?    @map("reviewed_by_id") @db.Uuid
+  reviewedBy            AdminUser? @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt            DateTime?  @map("reviewed_at") @db.Timestamptz(6)
+  approvedAt            DateTime?  @map("approved_at") @db.Timestamptz(6)
+  rejectedAt            DateTime?  @map("rejected_at") @db.Timestamptz(6)
+  rejectionReason       String?    @map("rejection_reason") @db.VarChar(1000)
+  correctionRequestedAt DateTime?  @map("correction_requested_at") @db.Timestamptz(6)
   /// Feedback per review block, e.g. { "Aadhar Card": "Scan is blurry" }.
-  correctionNotes         Json?            @map("correction_notes")
+  correctionNotes       Json?      @map("correction_notes")
   /// Work in progress on the review screen: which step the admin reached and
   /// the tick / cross (plus draft note) on each block. Cleared once decided.
-  reviewProgress          Json?            @map("review_progress")
+  reviewProgress        Json?      @map("review_progress")
 
-  personalCompletedAt     DateTime?        @map("personal_completed_at") @db.Timestamptz(6)
-  kycCompletedAt          DateTime?        @map("kyc_completed_at") @db.Timestamptz(6)
-  professionalCompletedAt DateTime?        @map("professional_completed_at") @db.Timestamptz(6)
-  bankCompletedAt         DateTime?        @map("bank_completed_at") @db.Timestamptz(6)
-  profileCompletedAt      DateTime?        @map("profile_completed_at") @db.Timestamptz(6)
-  submittedAt             DateTime?        @map("submitted_at") @db.Timestamptz(6)
+  personalCompletedAt     DateTime? @map("personal_completed_at") @db.Timestamptz(6)
+  kycCompletedAt          DateTime? @map("kyc_completed_at") @db.Timestamptz(6)
+  professionalCompletedAt DateTime? @map("professional_completed_at") @db.Timestamptz(6)
+  bankCompletedAt         DateTime? @map("bank_completed_at") @db.Timestamptz(6)
+  profileCompletedAt      DateTime? @map("profile_completed_at") @db.Timestamptz(6)
+  submittedAt             DateTime? @map("submitted_at") @db.Timestamptz(6)
 
-  createdAt               DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt               DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([onboardingStatus])
   @@index([enrollmentNumber])
@@ -168,6 +174,43 @@ model LawyerBankAccount {
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("lawyer_bank_accounts")
+}
+
+enum EditRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+/// A change an approved lawyer asked for that an admin has to sign off.
+/// Only bank details need this today; the section column keeps it open.
+model LawyerEditRequest {
+  id      String            @id @default(uuid()) @db.Uuid
+  userId  String            @map("user_id") @db.Uuid
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section String            @db.VarChar(60)
+  status  EditRequestStatus @default(pending)
+
+  /// The requested values. Account numbers are encrypted, as they are on the
+  /// live record.
+  payload Json
+
+  /// The new cancelled cheque, held aside until the change is approved.
+  proofKey  String? @map("proof_key")
+  proofName String? @map("proof_name") @db.VarChar(255)
+  proofMime String? @map("proof_mime") @db.VarChar(100)
+  proofSize Int?    @map("proof_size")
+
+  requestedAt DateTime   @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedAt   DateTime?  @map("decided_at") @db.Timestamptz(6)
+  decidedById String?    @map("decided_by_id") @db.Uuid
+  decidedBy   AdminUser? @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+  /// Why it was turned down, shown to the lawyer.
+  feedback    String?    @db.VarChar(1000)
+
+  @@index([status, requestedAt])
+  @@index([userId])
+  @@map("lawyer_edit_requests")
 }
 
 /// Uploaded files (S3 in production). One current file per type.
@@ -233,24 +276,25 @@ model Role {
 }
 
 model AdminUser {
-  id               String         @id @default(uuid()) @db.Uuid
-  employeeCode     String         @unique @map("employee_code") @db.VarChar(20)
-  name             String         @db.VarChar(150)
+  id               String              @id @default(uuid()) @db.Uuid
+  employeeCode     String              @unique @map("employee_code") @db.VarChar(20)
+  name             String              @db.VarChar(150)
   /// Always stored lowercase.
-  email            String         @unique @db.VarChar(255)
-  phone            String?        @db.VarChar(15)
-  passwordHash     String         @map("password_hash")
-  roleId           String         @map("role_id") @db.Uuid
-  role             Role           @relation(fields: [roleId], references: [id])
-  status           AdminStatus    @default(active)
-  failedLoginCount Int            @default(0) @map("failed_login_count")
-  lockedUntil      DateTime?      @map("locked_until") @db.Timestamptz(6)
-  lastLoginAt      DateTime?      @map("last_login_at") @db.Timestamptz(6)
-  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt        DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  email            String              @unique @db.VarChar(255)
+  phone            String?             @db.VarChar(15)
+  passwordHash     String              @map("password_hash")
+  roleId           String              @map("role_id") @db.Uuid
+  role             Role                @relation(fields: [roleId], references: [id])
+  status           AdminStatus         @default(active)
+  failedLoginCount Int                 @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?           @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt      DateTime?           @map("last_login_at") @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?           @map("deleted_at") @db.Timestamptz(6)
   sessions         AdminSession[]
   reviewedLawyers  LawyerProfile[]
+  decidedEdits     LawyerEditRequest[]
 
   @@index([roleId])
   @@map("admin_users")

@@ -14,7 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import {
   Badge,
   BackButton,
@@ -23,13 +23,12 @@ import {
   Modal,
   type BadgeTone,
 } from "@/components/ui";
+import { ApiError } from "@/lib/api";
 import {
-  decide,
-  getAllRequests,
-  getDecisions,
-  getServerDecisions,
-  subscribe,
-} from "@/lib/edit-request-store";
+  approveEditRequest,
+  editRequestProofUrl,
+  rejectEditRequest,
+} from "@/lib/edit-requests";
 import { formatDdMmYyyy } from "@/lib/format";
 import type { EditChange, EditRequest, EditRequestStatus } from "@/types/edit-request";
 
@@ -58,7 +57,7 @@ function StatusBadge({ status }: { status: EditRequestStatus }) {
 }
 
 export function EditRequestDetail({
-  request: seed,
+  request,
   listPath,
 }: {
   request: EditRequest;
@@ -68,31 +67,44 @@ export function EditRequestDetail({
   const router = useRouter();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
-
-  const decisions = useSyncExternalStore(
-    subscribe,
-    getDecisions,
-    getServerDecisions,
-  );
-
-  // Reflect a decision made here (or on the list) without a refetch.
-  const request = useMemo(
-    () => getAllRequests(decisions).find((item) => item.id === seed.id) ?? seed,
-    [decisions, seed],
-  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const pending = request.status === "pending";
 
+  /** Saves the decision, then moves to the list it now belongs to. */
+  async function decide(action: () => Promise<unknown>, destination: string) {
+    setBusy(true);
+    setError("");
+
+    try {
+      await action();
+      router.push(destination);
+      router.refresh();
+    } catch (caught) {
+      setBusy(false);
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : "Could not save the decision. Please try again.",
+      );
+    }
+  }
+
   function approve() {
-    decide(request.id, "approved");
-    router.push("/lawyers/edit-approvals/approved");
+    void decide(
+      () => approveEditRequest(request.id),
+      "/lawyers/edit-approvals/approved",
+    );
   }
 
   function submitRejection() {
-    if (!reason.trim()) return;
-    decide(request.id, "rejected", reason.trim());
+    if (reason.trim().length < 5) return;
     setRejecting(false);
-    router.push("/lawyers/edit-approvals/rejected");
+    void decide(
+      () => rejectEditRequest(request.id, reason.trim()),
+      "/lawyers/edit-approvals/rejected",
+    );
   }
 
   return (
@@ -112,18 +124,26 @@ export function EditRequestDetail({
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={request.status} />
 
+          {error ? (
+            <p role="alert" className="w-full text-sm text-negative">
+              {error}
+            </p>
+          ) : null}
+
           {/* Actions disappear once the request has been decided. */}
           {pending ? (
             <>
               <Button
                 onClick={approve}
+                disabled={busy}
                 className="bg-positive hover:bg-emerald-700"
               >
                 <CircleCheck className="size-4" aria-hidden />
-                Approve
+                {busy ? "Saving…" : "Approve"}
               </Button>
               <Button
                 onClick={() => setRejecting(true)}
+                disabled={busy}
                 className="bg-red-600 hover:bg-red-700"
               >
                 <CircleX className="size-4" aria-hidden />
@@ -164,7 +184,11 @@ export function EditRequestDetail({
 
             <div className="mt-4 space-y-4">
               {request.changes.map((change) => (
-                <ChangeRow key={change.field} change={change} />
+                <ChangeRow
+              key={change.field}
+              change={change}
+              proofHref={editRequestProofUrl(request.id)}
+            />
               ))}
             </div>
           </Card>
@@ -258,7 +282,7 @@ export function EditRequestDetail({
             </Button>
             <Button
               onClick={submitRejection}
-              disabled={!reason.trim()}
+              disabled={reason.trim().length < 5 || busy}
               className="bg-red-600 hover:bg-red-700"
             >
               Reject request
@@ -342,7 +366,14 @@ function TimelineItem({
 }
 
 /** Current vs requested value, side by side. Documents show a file card. */
-function ChangeRow({ change }: { change: EditChange }) {
+function ChangeRow({
+  change,
+  proofHref,
+}: {
+  change: EditChange;
+  /** Where the submitted document can be opened. */
+  proofHref: string;
+}) {
   return (
     <div className="rounded-xl border border-line p-4">
       <p className="text-sm font-semibold text-ink">{change.field}</p>
@@ -362,7 +393,11 @@ function ChangeRow({ change }: { change: EditChange }) {
         <div>
           <p className="text-xs text-ink-muted">Requested Value</p>
           {change.isDocument ? (
-            <DocumentCard name={change.requestedValue} highlighted />
+            <DocumentCard
+              name={change.requestedValue}
+              highlighted
+              href={proofHref}
+            />
           ) : (
             <p className="mt-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-ink">
               {change.requestedValue}
@@ -377,7 +412,10 @@ function ChangeRow({ change }: { change: EditChange }) {
 function DocumentCard({
   name,
   highlighted = false,
+  href,
 }: {
+  /** Only the submitted document can be opened; the old one is already live. */
+  href?: string;
   name: string;
   highlighted?: boolean;
 }) {
@@ -392,22 +430,27 @@ function DocumentCard({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs text-ink">{name}</p>
-        <div className="mt-1.5 flex flex-wrap gap-3">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-          >
-            <Eye className="size-3.5" aria-hidden />
-            View Full
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs font-medium text-positive hover:underline"
-          >
-            <Download className="size-3.5" aria-hidden />
-            Download
-          </button>
-        </div>
+        {href ? (
+          <div className="mt-1.5 flex flex-wrap gap-3">
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+            >
+              <Eye className="size-3.5" aria-hidden />
+              View Full
+            </a>
+            <a
+              href={href}
+              download
+              className="inline-flex items-center gap-1 text-xs font-medium text-positive hover:underline"
+            >
+              <Download className="size-3.5" aria-hidden />
+              Download
+            </a>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  Banknote,
   Building2,
+  CreditCard,
   Download,
   Eye,
   FileText,
@@ -9,6 +11,7 @@ import {
   Globe,
   Hash,
   Headphones,
+  Landmark,
   Mail,
   MapPin,
   Phone,
@@ -64,8 +67,16 @@ export function PersonalInformationStep({
 }) {
   const { personal } = application;
   return (
-    // Personal details are signed off as a single block.
-    <ReviewableBlock label="Personal Information" title="Personal Information">
+    // Taken as given: the details every other section is checked against, so
+    // there is nothing to approve or reject here.
+    <div className="rounded-xl border border-line p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">Personal Information</h3>
+        <span className="text-xs text-ink-muted">
+          Verified at sign-in · checked against the sections below
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
         <Field icon={User} label="Full Name">
           {personal.fullName || "-"}
@@ -80,7 +91,7 @@ export function PersonalInformationStep({
           {personal.languages || "-"}
         </Field>
       </div>
-    </ReviewableBlock>
+    </div>
   );
 }
 
@@ -99,11 +110,19 @@ export function IdentityVerificationStep({
             label={document.label}
             title={document.label}
           >
+            <div className="mb-4">
+              <Field
+                icon={Hash}
+                label={
+                  document.type === "aadhaar" ? "Aadhaar Number" : "PAN Number"
+                }
+              >
+                {document.number || "Not provided"}
+              </Field>
+            </div>
+
             <DocumentPreview lawyerId={application.id} document={document} />
-            <p className="mt-3 text-sm font-medium text-ink">
-              {document.number || "Number not provided"}
-            </p>
-            <p className="truncate text-xs text-ink-muted">
+            <p className="mt-2 truncate text-xs text-ink-muted">
               {document.fileName || "Not uploaded"}
             </p>
             <DocumentActions lawyerId={application.id} document={document} />
@@ -156,6 +175,65 @@ export function BarCouncilVerificationStep({
         </div>
       </ReviewableBlock>
     </div>
+  );
+}
+
+export function BankDetailsStep({
+  application,
+}: {
+  application: LawyerApplication;
+}) {
+  const { bank } = application;
+
+  if (!bank) {
+    return (
+      <p className="text-sm text-ink-subtle">
+        No bank account on this application yet.
+      </p>
+    );
+  }
+
+  return (
+    // The account and its proof are signed off together.
+    <ReviewableBlock label="Bank Details" title="Bank Details">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+        <Field icon={User} label="Account Holder">
+          {bank.accountHolderName || "-"}
+        </Field>
+        <Field icon={CreditCard} label="Account Number">
+          {/* Stored encrypted; only the last four digits are readable. */}
+          {bank.accountNumberMasked || "-"}
+        </Field>
+        <Field icon={Hash} label="IFSC Code">
+          {bank.ifscCode || "-"}
+        </Field>
+        <Field icon={Landmark} label="Bank">
+          {bank.bankName || "-"}
+        </Field>
+        <Field icon={Banknote} label="SWIFT Code">
+          {bank.swiftCode || "-"}
+        </Field>
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-2 text-xs text-ink-muted">Cancelled Cheque</p>
+        <div className="max-w-sm">
+          <DocumentPreview
+            lawyerId={application.id}
+            document={
+              bank.proof ?? {
+                type: "bank_proof",
+                fileName: "",
+                mimeType: "",
+                sizeBytes: 0,
+                uploadedAt: null,
+              }
+            }
+          />
+          <DocumentActions lawyerId={application.id} document={bank.proof} />
+        </div>
+      </div>
+    </ReviewableBlock>
   );
 }
 

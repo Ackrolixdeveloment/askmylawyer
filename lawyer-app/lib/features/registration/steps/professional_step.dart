@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/validators.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/upload_field.dart';
+import '../document_preview.dart';
 import '../registration_repository.dart';
 
 /// Step 3 — qualification and Bar Council enrolment.
@@ -74,6 +75,9 @@ class _ProfessionalStepState extends State<ProfessionalStep> {
     super.dispose();
   }
 
+  /// Read-only once the admin has approved this section.
+  bool get _editable => widget.initial?.canEditSection('Certificate') ?? true;
+
   bool get _isValid =>
       _qualification != null &&
       _state != null &&
@@ -89,26 +93,31 @@ class _ProfessionalStepState extends State<ProfessionalStep> {
           label: 'Qualification',
           options: _qualifications,
           value: _qualification,
-          onChanged: (value) {
-            setState(() => _qualification = value);
-            _report();
-          },
+          onChanged: _editable
+              ? (value) {
+                  setState(() => _qualification = value);
+                  _report();
+                }
+              : null,
         ),
         const SizedBox(height: 16),
         AppSelectField(
           label: 'Bar Council state',
           options: _states,
           value: _state,
-          onChanged: (value) {
-            setState(() => _state = value);
-            _report();
-          },
+          onChanged: _editable
+              ? (value) {
+                  setState(() => _state = value);
+                  _report();
+                }
+              : null,
         ),
         const SizedBox(height: 16),
         AppTextField(
           label: 'Enrollment no',
           hint: 'Enter your Enrollment no',
           controller: _enrollment,
+          enabled: _editable,
           validator: Validators.enrollment,
         ),
         const SizedBox(height: 16),
@@ -119,6 +128,13 @@ class _ProfessionalStepState extends State<ProfessionalStep> {
           maxSizeMb: 5,
           allowedExtensions: const ['pdf'],
           initialFile: _certificate,
+          readOnly: !_editable,
+          onPreview: (file) => openDocumentPreview(
+            context,
+            title: 'Bar Council Certificate',
+            file: file,
+            documentType: 'bar_certificate',
+          ),
           onChanged: (file) {
             setState(() => _certificate = file);
             _report();

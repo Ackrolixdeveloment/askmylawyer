@@ -5,6 +5,7 @@ export type EditSection =
   | "Personal Information"
   | "Identity Verification"
   | "Bar Council Verification"
+  | "Bank Details"
   | "Professional Profile";
 
 export interface EditChange {

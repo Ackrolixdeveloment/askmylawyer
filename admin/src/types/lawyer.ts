@@ -42,6 +42,7 @@ export type ReviewStepId =
   | "personal"
   | "identity"
   | "barCouncil"
+  | "bank"
   | "professional";
 
 /** Per-block outcome while reviewing an application. */
@@ -74,6 +75,7 @@ export interface LawyerApplication {
   location: string;
   digilockerVerified: boolean;
   onboardingStatus: string;
+  progress: RegistrationProgress;
   submittedAt: string | null;
   personal: {
     fullName: string;
@@ -163,6 +165,13 @@ export interface DraftProfile {
   practiceType: "Individual" | "Firm" | null;
   email: string;
   mobile: string;
+  /** How far through the registration form the lawyer got. */
+  completedSteps: number;
+  totalSteps: number;
+  /** 1-based; null once every step is filled and only submitting is left. */
+  stoppedAtStep: number | null;
+  /** The step the lawyer stopped on, e.g. "KYC Verification". */
+  stoppedAt: string | null;
   /** ISO yyyy-mm-dd. */
   lastUpdated: string;
   referredByName: string | null;
@@ -184,6 +193,17 @@ export interface DraftTab {
   id: string;
   label: string;
   sections: DraftSection[];
+}
+
+/** How far through the registration form the lawyer got. */
+export interface RegistrationProgress {
+  completedSteps: number;
+  totalSteps: number;
+  /** 1-based; null once every step is filled and only submitting is left. */
+  stoppedAtStep: number | null;
+  stoppedAt: string | null;
+  /** Every step of the form, in order. */
+  steps: { label: string; completed: boolean }[];
 }
 
 /** Everything captured before the lawyer abandoned the registration. */

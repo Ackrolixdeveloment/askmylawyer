@@ -67,7 +67,7 @@ export function VerifiedLawyersView() {
         >
           <div className="space-y-4">
             {summary ? <MetricCards metrics={toMetrics(summary)} /> : null}
-            <VerifiedLawyersTable lawyers={list?.data ?? []} />
+            <VerifiedLawyersTable lawyers={list?.data ?? []} onChanged={retry} />
           </div>
         </ScreenState>
       </div>

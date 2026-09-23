@@ -34,9 +34,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Rebuilds the shell whenever a tab's stack changes, so `canPop` below is
   /// never stale — without this the system back gesture reads last frame's
   /// answer and escapes the tab.
-  late final _stackObserver = _StackObserver(onChanged: () {
-    if (mounted) setState(() {});
-  });
+  late final _stackObserver = _StackObserver(
+    onChanged: () {
+      if (mounted) setState(() {});
+    },
+  );
 
   GlobalKey<NavigatorState> get _activeNavigator => _navigators[_tab];
 
@@ -57,8 +59,17 @@ class _HomeScreenState extends State<HomeScreen> {
   /// and Home — not Profile — remains the highlighted destination.
   void _openSettings() {
     _navigators[0].currentState?.push(
-      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(onEditProfile: _openProfileTab),
+      ),
     );
+  }
+
+  /// Closes settings and moves to the Profile tab, so the profile is always
+  /// the same screen inside the same shell.
+  void _openProfileTab() {
+    _navigators[0].currentState?.popUntil((route) => route.isFirst);
+    setState(() => _tab = 3);
   }
 
   /// Wraps a tab's content in its own navigator.
@@ -109,17 +120,11 @@ class _HomeScreenState extends State<HomeScreen> {
           1,
           const SafeArea(bottom: false, child: CommissionScreen()),
         ),
-        2 => _tabNavigator(
-          2,
-          SafeArea(bottom: false, child: BookingsScreen()),
-        ),
+        2 => _tabNavigator(2, SafeArea(bottom: false, child: BookingsScreen())),
         // Inside a tab there is nothing to pop, so close returns home.
         _ => _tabNavigator(
           3,
-          SafeArea(
-            bottom: false,
-            child: ProfileScreen(onClose: () => setState(() => _tab = 0)),
-          ),
+          SafeArea(bottom: false, child: const ProfileScreen()),
         ),
       },
       // Built by hand rather than with NavigationBar, which imposes its own
@@ -167,7 +172,8 @@ class _StackObserver extends NavigatorObserver {
   }
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _notify();
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _notify();
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _notify();
@@ -239,10 +245,7 @@ class _HomeTabState extends State<_HomeTab> {
 
     return Column(
       children: [
-        _TopBar(
-          name: data.greetingName,
-          onOpenSettings: widget.onOpenSettings,
-        ),
+        _TopBar(name: data.greetingName, onOpenSettings: widget.onOpenSettings),
         // Pinned under the top bar rather than scrolled away with the rest,
         // so availability can be toggled from anywhere on the page.
         Padding(
@@ -454,11 +457,7 @@ class _TopBar extends StatelessWidget {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.card_giftcard,
-                      size: 17,
-                      color: Colors.white,
-                    ),
+                    Icon(Icons.card_giftcard, size: 17, color: Colors.white),
                     SizedBox(width: 8),
                     Text(
                       'Refer & Earn',
