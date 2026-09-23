@@ -56,6 +56,24 @@ const schema = z.object({
       message: 'DATA_ENCRYPTION_KEY must be 32 bytes, base64 encoded (openssl rand -base64 32)',
     }),
 
+  /**
+   * Firebase service account for FCM (Project settings → Service accounts).
+   * Leave unset locally: pushes are logged instead of sent.
+   */
+  FIREBASE_PROJECT_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  FIREBASE_CLIENT_EMAIL: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  FIREBASE_PRIVATE_KEY: z
+    .string()
+    .optional()
+    // Env files keep the key on one line with \n in place of the breaks.
+    .transform((value) => value?.replace(/\\n/g, '\n') || undefined),
+
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./storage'),
   S3_BUCKET: z.string().optional(),

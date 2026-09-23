@@ -2,45 +2,25 @@
 
 import { Eye } from "lucide-react";
 import { DataTable, TableLink, type Column } from "@/components/ui";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import { formatDdMmYyyy } from "@/lib/format";
 import type { DeletedLawyer } from "@/types/edit-history";
 
+const identity = (row: DeletedLawyer): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.phone,
+  email: row.email,
+  href: `/lawyers/deleted/${row.id}`,
+});
+
 const columns: Column<DeletedLawyer>[] = [
-  {
-    key: "lawyerId",
-    header: "LAWYER ID",
-    align: "left",
-    sortValue: (row) => row.lawyerId,
-    cell: (row) => <span className="font-semibold text-ink">{row.lawyerId}</span>,
-  },
-  {
-    key: "name",
-    header: "LAWYER NAME",
-    align: "left",
-    sortValue: (row) => row.name,
-    cell: (row) => (
-      <TableLink
-        href={`/lawyers/deleted/${row.id}`}
-        className="font-semibold text-ink hover:text-brand"
-      >
-        {row.name}
-      </TableLink>
-    ),
-  },
-  {
-    key: "email",
-    header: "EMAIL",
-    align: "left",
-    sortValue: (row) => row.email,
-    cell: (row) => <span className="text-brand">{row.email}</span>,
-  },
-  {
-    key: "phone",
-    header: "PHONE",
-    align: "left",
-    sortValue: (row) => row.phone,
-    cell: (row) => <span className="text-ink-muted">{row.phone}</span>,
-  },
+  lawyerIdColumn(identity),
+  lawyerDetailsColumn(identity),
   {
     key: "createdOn",
     header: "CREATED DATE",

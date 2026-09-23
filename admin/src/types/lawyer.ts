@@ -4,6 +4,8 @@ export type LawyerStatus = "active" | "suspended" | "inactive";
 
 export interface Lawyer {
   id: string;
+  /** Short code shown in the tables, e.g. "LAW-3059057B". */
+  lawyerId: string;
   name: string;
   phone: string;
   email: string;
@@ -22,6 +24,7 @@ export interface Lawyer {
 /** A pending onboarding submission awaiting admin review. */
 export interface LawyerRequest {
   id: string;
+  lawyerId: string;
   name: string;
   phone: string;
   email: string;

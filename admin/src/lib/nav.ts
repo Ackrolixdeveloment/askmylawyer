@@ -107,6 +107,7 @@ export const navSections: NavSection[] = [
         icon: Bell,
         children: [
           { label: "Send Notification", href: "/notifications/send" },
+          { label: "History", href: "/notifications/history" },
           { label: "Templates", href: "/notifications/templates" },
           { label: "Scheduled", href: "/notifications/scheduled" },
         ],

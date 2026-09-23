@@ -10,13 +10,25 @@ import {
   DropdownMenu,
   Modal,
   SearchInput,
-  TableLink,
   type BadgeTone,
   type Column,
 } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { reactivateLawyer, suspendLawyer } from "@/lib/lawyers";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import type { Lawyer, LawyerStatus, VerificationMethod } from "@/types/lawyer";
+
+const identity = (row: Lawyer): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.phone,
+  email: row.email,
+  href: `/lawyers/verified/${row.id}`,
+});
 
 const verificationLabel: Record<VerificationMethod, string> = {
   digilocker: "DigiLocker",
@@ -46,27 +58,8 @@ function buildColumns(
   onToggleStatus: (row: Lawyer) => void,
 ): Column<Lawyer>[] {
   return [
-  {
-    key: "name",
-    header: "Name",
-    sortValue: (row) => row.name,
-    cell: (row) => (
-      <TableLink href={`/lawyers/verified/${row.id}`} className="text-ink hover:text-brand">
-        {row.name}
-      </TableLink>
-    ),
-  },
-  {
-    key: "phone",
-    header: "Lawyer",
-    sortValue: (row) => row.phone,
-    cell: (row) => (
-      <>
-        <p className="text-ink">{row.phone}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.email}</p>
-      </>
-    ),
-  },
+  lawyerIdColumn((row) => identity(row)),
+  lawyerDetailsColumn((row) => identity(row)),
   {
     key: "barId",
     header: "Bar ID",
@@ -192,7 +185,7 @@ export function VerifiedLawyersTable({
     if (!needle) return lawyers;
 
     return lawyers.filter((lawyer) =>
-      [lawyer.name, lawyer.phone, lawyer.barId, lawyer.email].some((field) =>
+      [lawyer.lawyerId, lawyer.name, lawyer.phone, lawyer.barId, lawyer.email].some((field) =>
         field.toLowerCase().includes(needle),
       ),
     );
@@ -201,7 +194,7 @@ export function VerifiedLawyersTable({
   return (
     <div className="space-y-4">
       <SearchInput
-        placeholder="Search by name, phone, Bar ID"
+        placeholder="Search by lawyer ID, name, phone, Bar ID"
         aria-label="Search lawyers"
         onValueChange={setQuery}
       />

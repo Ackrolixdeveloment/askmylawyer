@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -122,6 +123,13 @@ export class AdminLawyersController {
   @HttpCode(200)
   reactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.lawyers.reactivate(id);
+  }
+
+  /** Purges an abandoned registration. Drafts only. */
+  @Delete(':id/draft')
+  @HttpCode(200)
+  deleteDraft(@Param('id', ParseUUIDPipe) id: string) {
+    return this.lawyers.deleteDraft(id);
   }
 
   /** Streams an uploaded document; `?download=1` saves it instead of previewing. */

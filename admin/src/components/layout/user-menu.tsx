@@ -4,9 +4,10 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import { useAdmin } from "./auth-guard";
 
-export function UserMenu() {
+export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
   const admin = useAdmin();
   const [signingOut, setSigningOut] = useState(false);
@@ -25,17 +26,25 @@ export function UserMenu() {
   }
 
   return (
-    <div className="flex items-center gap-3 border-t border-line px-4 py-4">
+    <div
+      className={cn(
+        "flex border-t border-line py-4",
+        collapsed ? "flex-col items-center gap-2 px-2" : "items-center gap-3 px-4",
+      )}
+      title={collapsed ? `${admin.name} · ${admin.email}` : undefined}
+    >
       <span
         className="grid size-10 shrink-0 place-items-center rounded-full bg-ink text-sm font-semibold text-white"
         aria-hidden
       >
         {initials}
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-ink">{admin.name}</p>
-        <p className="truncate text-xs text-ink-muted">{admin.email}</p>
-      </div>
+      {collapsed ? null : (
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-ink">{admin.name}</p>
+          <p className="truncate text-xs text-ink-muted">{admin.email}</p>
+        </div>
+      )}
       <button
         type="button"
         onClick={handleSignOut}

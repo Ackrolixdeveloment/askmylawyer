@@ -8,12 +8,24 @@ import {
   DropdownMenu,
   FilterSelect,
   SearchInput,
-  TableLink,
   type Column,
   type SelectOption,
 } from "@/components/ui";
 import { formatDdMmYyyy } from "@/lib/format";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import type { LawyerRequest } from "@/types/lawyer";
+
+const identity = (row: LawyerRequest, basePath: string): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.phone,
+  email: row.email,
+  href: `${basePath}/${row.id}`,
+});
 
 /** Bar council state from the application; falls back to a city if one is set. */
 export function placeOf(row: LawyerRequest) {
@@ -27,30 +39,8 @@ function buildColumns(
   viewBasePath: string,
 ): Column<LawyerRequest>[] {
   return [
-  {
-    key: "name",
-    header: "Name",
-    sortValue: (row) => row.name,
-    cell: (row) => (
-      <TableLink
-        href={`${viewBasePath}/${row.id}`}
-        className="text-ink hover:text-brand"
-      >
-        {row.name}
-      </TableLink>
-    ),
-  },
-  {
-    key: "phone",
-    header: "Lawyer",
-    sortValue: (row) => row.phone,
-    cell: (row) => (
-      <>
-        <p className="text-ink">{row.phone}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.email}</p>
-      </>
-    ),
-  },
+  lawyerIdColumn((row: LawyerRequest) => identity(row, viewBasePath)),
+  lawyerDetailsColumn((row: LawyerRequest) => identity(row, viewBasePath)),
   {
     key: "barId",
     header: "Bar ID",

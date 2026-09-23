@@ -41,6 +41,7 @@ export function DraftsView() {
             "All types",
           )}
           periodOptions={daysWaitingOptions}
+          onChanged={retry}
         />
       </ScreenState>
     </>

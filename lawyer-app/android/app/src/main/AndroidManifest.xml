@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Needed in release builds to reach the backend. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ asks the lawyer before any notification is shown. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="lawyer_app"
         android:name="${applicationName}"
@@ -29,6 +31,11 @@
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Notifications that arrive while the app is closed land here. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="ask_my_lawyer_alerts" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

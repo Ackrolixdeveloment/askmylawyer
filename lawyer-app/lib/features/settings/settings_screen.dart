@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -315,23 +316,19 @@ class _ProfileCard extends StatelessWidget {
                     color: AppColors.ink,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  error ??
-                      (profile == null
-                          ? ''
-                          : profile!.headline.isNotEmpty
-                          ? profile!.headline
-                          : profile!.mobileDisplay),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: error == null
-                        ? AppColors.inkSubtle
-                        : AppColors.negative,
-                  ),
-                ),
+                const SizedBox(height: 4),
+                if (error != null)
+                  Text(
+                    error!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.negative,
+                    ),
+                  )
+                else if (profile != null && profile!.lawyerId.isNotEmpty)
+                  _LawyerIdChip(lawyerId: profile!.lawyerId),
               ],
             ),
           ),
@@ -349,6 +346,60 @@ class _ProfileCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The lawyer's reference number, with a one-tap copy.
+class _LawyerIdChip extends StatelessWidget {
+  const _LawyerIdChip({required this.lawyerId});
+
+  final String lawyerId;
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: lawyerId));
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lawyer ID copied'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            lawyerId,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+              color: AppColors.inkMuted,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        InkWell(
+          onTap: () => _copy(context),
+          borderRadius: BorderRadius.circular(6),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(
+              Icons.copy_rounded,
+              size: 13,
+              color: AppColors.inkSubtle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

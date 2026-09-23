@@ -4,9 +4,22 @@ import { CircleCheck, CircleX, Clock, Eye, TrendingUp, UsersRound } from "lucide
 import { useMemo, useState } from "react";
 import { Card, DataTable, SearchInput, TableLink, type Column } from "@/components/ui";
 import { MetricCards } from "@/components/common/metric-cards";
+import {
+  lawyerDetailsColumn,
+  lawyerIdColumn,
+  type LawyerIdentity,
+} from "@/components/lawyers/lawyer-columns";
 import { formatDdMmYyyy } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { LawyerEditHistory } from "@/types/edit-history";
+
+const identity = (row: LawyerEditHistory): LawyerIdentity => ({
+  lawyerId: row.lawyerId,
+  name: row.name,
+  mobile: row.mobile,
+  email: row.email,
+  href: `/lawyers/edit-approvals/history/${row.id}`,
+});
 
 /** Small circular count, tinted by what it represents. */
 function CountChip({
@@ -75,31 +88,8 @@ function historyMetrics(rows: LawyerEditHistory[]) {
 }
 
 const columns: Column<LawyerEditHistory>[] = [
-  {
-    key: "lawyer",
-    header: "LAWYER DETAILS",
-    align: "left",
-    sortValue: (row) => row.name,
-    cell: (row) => (
-      <>
-        <TableLink
-          href={`/lawyers/edit-approvals/history/${row.id}`}
-          className="font-semibold text-ink hover:text-brand"
-        >
-          {row.name}
-        </TableLink>
-        <p className="mt-0.5 text-xs text-brand">{row.email}</p>
-        <p className="text-xs text-ink-subtle">{row.mobile}</p>
-      </>
-    ),
-  },
-  {
-    key: "lawyerId",
-    header: "LAWYER ID",
-    align: "left",
-    sortValue: (row) => row.lawyerId,
-    cell: (row) => <span className="text-ink-muted">{row.lawyerId}</span>,
-  },
+  lawyerIdColumn(identity),
+  lawyerDetailsColumn(identity),
   {
     key: "totalRequests",
     header: "TOTAL REQUESTS",

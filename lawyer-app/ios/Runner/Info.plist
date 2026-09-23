@@ -14,16 +14,6 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<!-- Lets the simulator reach the local backend over http; live API uses https. -->
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Used to take your profile photo for verification.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Used to choose a profile photo and upload documents.</string>
 	<key>CFBundleName</key>
 	<string>lawyer_app</string>
 	<key>CFBundlePackageType</key>
@@ -36,6 +26,15 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Used to take your profile photo for verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to choose a profile photo and upload documents.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -75,6 +74,11 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- Lets a notification wake the app to fetch what it refers to. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

@@ -36,6 +36,7 @@ class BankAccount {
 /// The lawyer's own account, as shown on the settings and profile screens.
 class LawyerProfile {
   const LawyerProfile({
+    required this.lawyerId,
     required this.fullName,
     required this.mobile,
     required this.email,
@@ -65,6 +66,7 @@ class LawyerProfile {
         ((json[key] as List?) ?? const []).cast<String>();
 
     return LawyerProfile(
+      lawyerId: json['lawyerId'] as String? ?? '',
       fullName: json['fullName'] as String?,
       mobile: json['mobile'] as String?,
       email: json['email'] as String?,
@@ -97,6 +99,9 @@ class LawyerProfile {
 
   /// Live to customers — the application has been approved.
   final bool isVerified;
+
+  /// The reference to quote to support, e.g. "LAW-B321FFE0".
+  final String lawyerId;
 
   final String onboardingStatus;
 
