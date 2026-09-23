@@ -13,6 +13,12 @@ const DEV_TUNNEL = "https://f194n1ll-4000.inc1.devtunnels.ms";
 
 const apiUrl = (process.env.API_URL ?? DEV_TUNNEL).replace(/\/$/, "");
 
+// The browser only ever sees this app's own origin, so say once at startup
+// where /api/v1/* actually goes — otherwise a proxy failure is a bare 500.
+if (process.env.NODE_ENV !== "production") {
+  console.log(`[admin] /api/v1/* → ${apiUrl}`);
+}
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` }];
