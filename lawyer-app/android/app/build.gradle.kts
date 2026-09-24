@@ -8,7 +8,9 @@ plugins {
 
 android {
     namespace = "com.askmylawyer.lawyer"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android is built against 37 and refuses consumers
+    // on anything older, so this is pinned rather than following Flutter.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

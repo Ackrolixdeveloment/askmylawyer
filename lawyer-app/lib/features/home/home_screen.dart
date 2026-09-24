@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../bookings/bookings_screen.dart';
 import '../commission/commission_screen.dart';
+import '../consultations/availability_controller.dart';
+import '../consultations/offer_watcher.dart';
 import '../notifications/notification_poller.dart';
 import '../notifications/notification_repository.dart';
 import '../notifications/notifications_screen.dart';
@@ -239,7 +241,45 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> {
-  late bool _online = widget.data.isOnline;
+  final _availability = AvailabilityController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _availability.addListener(_onAvailabilityChanged);
+    _availability.load();
+    // Consultation offers ring from here.
+    OfferWatcher.instance.start();
+  }
+
+  @override
+  void dispose() {
+    _availability.removeListener(_onAvailabilityChanged);
+    OfferWatcher.instance.stop();
+    super.dispose();
+  }
+
+  void _onAvailabilityChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Why the toggle would not move, in the lawyer's words.
+  String? get _notice {
+    if (_availability.error != null) return _availability.error;
+
+    return switch (_availability.problem) {
+      LocationProblem.servicesOff =>
+        'Turn on location on your phone to go online and receive '
+            'consultations.',
+      LocationProblem.denied =>
+        'We need your location to send you nearby consultations. Allow it '
+            'and try again.',
+      LocationProblem.deniedForever =>
+        'Location is blocked for this app. Allow it in your phone settings '
+            'to go online.',
+      null => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,9 +293,14 @@ class _HomeTabState extends State<_HomeTab> {
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
           child: OnlineCard(
-            online: _online,
-            // TODO: push the availability change to the backend.
-            onChanged: (value) => setState(() => _online = value),
+            online: _availability.isOnline,
+            busy: _availability.busy,
+            notice: _notice,
+            onFixLocation:
+                _availability.problem == LocationProblem.deniedForever
+                ? _availability.openSettings
+                : null,
+            onChanged: _availability.setOnline,
           ),
         ),
 

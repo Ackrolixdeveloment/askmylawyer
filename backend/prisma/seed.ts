@@ -51,6 +51,43 @@ const ROLES = [
   },
 ];
 
+/**
+ * What a customer can book, and what it costs. Priced here to start with;
+ * the admin team changes it in Settings → App Setting.
+ */
+const PLANS = [
+  {
+    code: 'audio',
+    type: 'Audio Call',
+    amount: 499,
+    commissionMode: 'percent' as const,
+    commissionValue: 20,
+    durationMinutes: 15,
+    extensionMinutes: 5,
+    extensionAmount: 150,
+  },
+  {
+    code: 'video',
+    type: 'Video Call',
+    amount: 999,
+    commissionMode: 'percent' as const,
+    commissionValue: 20,
+    durationMinutes: 15,
+    extensionMinutes: 5,
+    extensionAmount: 300,
+  },
+  {
+    code: 'chat',
+    type: 'Chat',
+    amount: 299,
+    commissionMode: 'flat' as const,
+    commissionValue: 50,
+    durationMinutes: 15,
+    extensionMinutes: 10,
+    extensionAmount: 100,
+  },
+];
+
 /** The work each department handles — what a ticket can be filed under. */
 const CATEGORIES: Record<string, string[]> = {
   'Lawyer Operations': [
@@ -149,6 +186,17 @@ async function main() {
     });
   }
   console.log(`Seeded ${ROLES.length} roles.`);
+
+  // Safe to re-run: existing plans keep whatever the admin team set.
+  for (const [index, plan] of PLANS.entries()) {
+    await prisma.servicePlan.upsert({
+      where: { code: plan.code },
+      update: {},
+      create: { ...plan, sortOrder: index },
+    });
+  }
+  await prisma.platformSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
+  console.log(`Seeded ${PLANS.length} consultation plans.`);
 
   const superAdmin = await prisma.role.findUniqueOrThrow({
     where: { name: 'Super Admin' },

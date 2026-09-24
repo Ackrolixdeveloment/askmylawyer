@@ -34,6 +34,11 @@ const ROUTE_KEYS: { prefix: string; key: string; methods?: string[] }[] = [
   { prefix: 'notifications', key: 'notifications.send', methods: ['POST'] },
   { prefix: 'notifications', key: 'notifications.history' },
 
+  { prefix: 'settings/engine', key: 'settings.engine' },
+  { prefix: 'settings/plans', key: 'settings.app' },
+  { prefix: 'settings/payments', key: 'settings.integrations' },
+  { prefix: 'settings', key: 'settings' },
+
   // Still to be built, but guarded from the start.
   { prefix: 'customers', key: 'customers' },
   { prefix: 'consultations', key: 'consultations' },
@@ -61,7 +66,13 @@ export function requirementFor(method: string, path: string): RouteRequirement |
 
   const route = match[1].replace(/\/+$/, '');
   const [section] = route.split('/');
+
+  // Signing in and the admin's own bell are open to any signed-in admin.
   if (!section || section === 'auth' || section === 'alerts') return null;
+
+  // So is the demo-mode banner: a warning that every consultation is being
+  // broadcast has to reach everyone, not only whoever may edit the setting.
+  if (route === 'settings/engine/status') return null;
 
   // Longest prefix first, so the screen beats the module it sits in.
   const candidates = ROUTE_KEYS.filter(

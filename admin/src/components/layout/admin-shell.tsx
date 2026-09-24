@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoModeBanner } from "./demo-mode-banner";
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
 
@@ -39,6 +40,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <DemoModeBanner />
         {children}
       </div>
     </div>

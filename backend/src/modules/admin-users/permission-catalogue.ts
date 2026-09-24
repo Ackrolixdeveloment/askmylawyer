@@ -69,6 +69,15 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     ],
   },
   {
+    id: 'settings',
+    label: 'Settings',
+    actions: [
+      { id: 'settings.app', label: 'App Setting' },
+      { id: 'settings.integrations', label: 'Integrations' },
+      { id: 'settings.engine', label: 'Consultation Engine' },
+    ],
+  },
+  {
     id: 'support',
     label: 'Support & Help Desk',
     actions: [

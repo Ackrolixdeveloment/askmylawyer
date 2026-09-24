@@ -2,78 +2,125 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../home/home_screen.dart';
 import 'consult_draft.dart';
+import 'consultation_repository.dart';
 import 'lawyer_ready_screen.dart';
 import 'no_lawyers_screen.dart';
 
-/// Searches for an available lawyer, counting down while it waits.
+/// Waits while the backend rings lawyers, counting down as it goes.
+///
+/// The clock belongs to the backend — `searchEndsAt` on the consultation —
+/// so a phone that sleeps or loses the network still shows the real time
+/// left when it comes back.
 class FindingLawyerScreen extends StatefulWidget {
   const FindingLawyerScreen({
     super.key,
     required this.draft,
-    this.searchSeconds = 45,
-    this.outcome,
+    required this.consultation,
   });
 
   final ConsultDraft draft;
 
-  /// How long to look before giving up.
-  final int searchSeconds;
-
-  /// Forces the result instead of waiting out the clock. Only for tests and
-  /// previews — in the app the backend decides.
-  final bool? outcome;
+  /// The consultation as it was created, already searching.
+  final Consultation consultation;
 
   @override
   State<FindingLawyerScreen> createState() => _FindingLawyerScreenState();
 }
 
 class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
+  static const _pollEvery = Duration(seconds: 2);
+
+  final _consultations = ConsultationRepository.instance;
+
   Timer? _ticker;
-  late int _remaining = widget.searchSeconds;
+  Timer? _poll;
+  late Consultation _consultation = widget.consultation;
+
+  /// The whole window, so the ring empties in proportion.
+  late int _total = _consultation.secondsLeft;
+  late int _remaining = _consultation.secondsLeft;
+
+  bool _leaving = false;
+  String? _problem;
 
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _poll = Timer.periodic(_pollEvery, (_) => _refresh());
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _poll?.cancel();
     super.dispose();
   }
 
-  void _startCountdown() {
-    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-
-      setState(() => _remaining--);
-
-      if (_remaining <= 0) {
-        timer.cancel();
-        _finish();
-      }
-    });
+  /// Runs the visible clock down between polls, so it never looks stuck.
+  void _tick() {
+    if (!mounted) return;
+    setState(() => _remaining = _consultation.secondsLeft);
   }
 
-  /// TODO: the backend decides this once matching is live. Until then the
-  /// search always times out, unless a caller forces the outcome.
-  void _finish() {
-    final matched = widget.outcome ?? false;
+  Future<void> _refresh() async {
+    if (_leaving) return;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => matched
-            ? LawyerReadyScreen(draft: widget.draft)
-            : NoLawyersScreen(
-                draft: widget.draft,
-                searchedSeconds: widget.searchSeconds,
-              ),
-      ),
-    );
+    try {
+      final consultation = await _consultations.detail(_consultation.id);
+      if (!mounted || _leaving) return;
+
+      setState(() {
+        _consultation = consultation;
+        _remaining = consultation.secondsLeft;
+        // The search window only grows when a retry restarts it.
+        if (_remaining > _total) _total = _remaining;
+        _problem = null;
+      });
+
+      _handle(consultation);
+    } on ApiException catch (error) {
+      // A dropped poll is not worth ending the search over; say so quietly
+      // and try again on the next tick.
+      if (mounted) setState(() => _problem = error.message);
+    }
+  }
+
+  /// Moves on as soon as the backend has an answer.
+  void _handle(Consultation consultation) {
+    if (consultation.isMatched) {
+      _leave(
+        LawyerReadyScreen(draft: widget.draft, consultation: consultation),
+      );
+      return;
+    }
+
+    if (consultation.noLawyerFound) {
+      _leave(
+        NoLawyersScreen(draft: widget.draft, consultation: consultation),
+      );
+      return;
+    }
+
+    // Cancelled from somewhere else, or refunded: back to the home shell.
+    if (!consultation.isSearching) {
+      _leaving = true;
+      HomeScreen.openTab(context, 0);
+    }
+  }
+
+  void _leave(Widget screen) {
+    _leaving = true;
+    _ticker?.cancel();
+    _poll?.cancel();
+
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   /// Backs out of the search, refunding what was paid.
@@ -82,70 +129,106 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
       context,
       draft: widget.draft,
     );
+    if (confirmed != true || !mounted) return;
 
-    if (confirmed == true && mounted) {
+    try {
+      await _consultations.cancel(_consultation.id);
+    } on ApiException catch (error) {
+      // Most likely a lawyer accepted while the sheet was open; the next
+      // poll will move on to them.
+      if (mounted) setState(() => _problem = error.message);
+      return;
+    }
+
+    if (mounted) {
+      _leaving = true;
       HomeScreen.openTab(context, 0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-                children: [
-                  const _SearchingAvatars(),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Finding your lawyer',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Usually takes 20-45 seconds during business hours',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: AppColors.inkSubtle,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+    final notified = _consultation.lawyersNotified;
 
-                  Center(
-                    child: _CountdownRing(
-                      remaining: _remaining,
-                      total: widget.searchSeconds,
+    return PopScope(
+      // Leaving by the back gesture would abandon a paid search without
+      // cancelling it; the button below does it properly.
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+                  children: [
+                    const _SearchingAvatars(),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Finding your lawyer',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 6),
+                    Text(
+                      notified == null || notified == 0
+                          ? 'Usually takes 20-45 seconds during business hours'
+                          : '$notified ${notified == 1 ? 'lawyer has' : 'lawyers have'} '
+                                'been notified',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: AppColors.inkSubtle,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
-                  _RefundNotice(amount: widget.draft.price),
-                ],
+                    Center(
+                      child: _CountdownRing(
+                        remaining: _remaining,
+                        total: _total,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    _RefundNotice(amount: widget.draft.price),
+
+                    if (_problem != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _problem!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.inkSubtle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
 
-            TextButton.icon(
-              onPressed: _cancel,
-              icon: const Icon(Icons.cancel_outlined, size: 18),
-              label: const Text(
-                'Cancel Request',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-            ),
-            const SizedBox(height: 8),
-          ],
+              if (_consultation.canCancel)
+                TextButton.icon(
+                  onPressed: _cancel,
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text(
+                    'Cancel Request',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.negative,
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -209,7 +292,7 @@ class _CountdownRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final seconds = remaining.clamp(0, total);
+    final seconds = remaining.clamp(0, total == 0 ? remaining : total);
 
     return SizedBox(
       width: 132,
@@ -232,7 +315,8 @@ class _CountdownRing extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '00:${seconds.toString().padLeft(2, '0')}',
+                  '${(seconds ~/ 60).toString().padLeft(2, '0')}:'
+                  '${(seconds % 60).toString().padLeft(2, '0')}',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,

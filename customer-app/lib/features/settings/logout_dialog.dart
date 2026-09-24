@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../auth/customer_session.dart';
 import 'sheet_shell.dart';
 
 /// Confirms signing out, showing which account is being left.
@@ -11,6 +12,28 @@ class LogoutDialog extends StatelessWidget {
     this.initials = 'SS',
     this.detail = 'singhsanjana21@gmail.com',
   });
+
+  /// Built from whoever is signed in; the defaults above are only for the
+  /// design previews and tests.
+  factory LogoutDialog.forSignedIn() {
+    final customer = CustomerSession.instance.customer;
+    if (customer == null) return const LogoutDialog();
+
+    final name = customer.fullName?.trim();
+    final words = (name == null || name.isEmpty ? 'AML' : name)
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+
+    return LogoutDialog(
+      name: name == null || name.isEmpty ? 'Your account' : name,
+      initials: (words.length > 1
+              ? words.first[0] + words.last[0]
+              : words.first.padRight(2)[0])
+          .toUpperCase(),
+      detail: customer.email ?? customer.mobile,
+    );
+  }
 
   final String name;
   final String initials;
@@ -23,7 +46,7 @@ class LogoutDialog extends StatelessWidget {
       backgroundColor: Colors.transparent,
       // The close button sits above the sheet, so it must not be clipped.
       clipBehavior: Clip.none,
-      builder: (_) => const LogoutDialog(),
+      builder: (_) => LogoutDialog.forSignedIn(),
     );
     return confirmed ?? false;
   }

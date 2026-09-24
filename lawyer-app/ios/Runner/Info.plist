@@ -75,6 +75,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used to send you consultation requests from customers nearby while you are online.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Your microphone is used for voice and video consultations.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Your camera is used for video consultations.</string>
+
 	<!-- Lets a notification wake the app to fetch what it refers to. -->
 	<key>UIBackgroundModes</key>
 	<array>

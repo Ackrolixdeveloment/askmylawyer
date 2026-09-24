@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_navigator.dart';
 import '../../core/theme/app_colors.dart';
+import '../auth/customer_session.dart';
+import '../auth/get_started_screen.dart';
 import '../coupons/coupons_screen.dart';
 import '../profile/profile_screen.dart';
 import '../support/support_screen.dart';
@@ -178,8 +181,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.logout,
                   title: 'Logout',
                   subtitle: 'Log out of Ask My Lawyer',
-                  // TODO: clear the session once auth is wired up.
-                  onTap: () => LogoutDialog.show(context),
+                  onTap: () => _logout(context),
                 ),
               ],
             ),
@@ -188,6 +190,19 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Confirms, ends the session, and drops back to the sign-in screen.
+Future<void> _logout(BuildContext context) async {
+  if (!await LogoutDialog.show(context)) return;
+
+  await CustomerSession.instance.signOut();
+
+  // From the root navigator, so the whole signed-in shell goes with it.
+  appNavigatorKey.currentState?.pushAndRemoveUntil(
+    MaterialPageRoute<void>(builder: (_) => const GetStartedScreen()),
+    (route) => false,
+  );
 }
 
 class _SectionLabel extends StatelessWidget {

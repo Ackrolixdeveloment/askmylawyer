@@ -6,6 +6,7 @@ import {
   Gift,
   Headset,
   LayoutGrid,
+  Settings,
   User,
   Users,
   UsersRound,
@@ -111,6 +112,16 @@ export const navSections: NavSection[] = [
           { label: "History", href: "/notifications/history" },
           { label: "Templates", href: "/notifications/templates" },
           { label: "Scheduled", href: "/notifications/scheduled" },
+        ],
+      },
+      {
+        label: "Settings",
+        href: "/settings",
+        icon: Settings,
+        children: [
+          { label: "App Setting", href: "/settings/app" },
+          { label: "Consultation Engine", href: "/settings/engine" },
+          { label: "Integrations", href: "/settings/integrations" },
         ],
       },
       {

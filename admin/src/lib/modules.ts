@@ -40,6 +40,11 @@ const SCREEN_KEYS: { prefix: string; key: string }[] = [
   { prefix: "/notifications/scheduled", key: "notifications.scheduled" },
   { prefix: "/notifications", key: "notifications" },
 
+  { prefix: "/settings/app", key: "settings.app" },
+  { prefix: "/settings/engine", key: "settings.engine" },
+  { prefix: "/settings/integrations", key: "settings.integrations" },
+  { prefix: "/settings", key: "settings" },
+
   { prefix: "/support/new", key: "support.new" },
   { prefix: "/support/in-progress", key: "support.in-progress" },
   { prefix: "/support/resolved", key: "support.resolved" },
@@ -56,6 +61,7 @@ const MODULE_HOME: Record<string, string> = {
   notifications: "/notifications/send",
   support: "/support/new",
   users: "/users",
+  settings: "/settings/app",
 };
 
 /**

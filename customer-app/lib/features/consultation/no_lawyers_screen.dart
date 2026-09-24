@@ -1,106 +1,180 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../home/home_screen.dart';
 import 'choose_time_screen.dart';
 import 'consult_draft.dart';
+import 'consultation_repository.dart';
 import 'finding_lawyer_screen.dart';
 
 /// Nobody picked the case up in time: offer to reschedule, retry, or refund.
-class NoLawyersScreen extends StatelessWidget {
+class NoLawyersScreen extends StatefulWidget {
   const NoLawyersScreen({
     super.key,
     required this.draft,
-    required this.searchedSeconds,
+    required this.consultation,
   });
 
   final ConsultDraft draft;
-  final int searchedSeconds;
+
+  /// The consultation the search gave up on. It stays open until one of
+  /// these buttons resolves it, so the backend knows what was decided.
+  final Consultation consultation;
+
+  @override
+  State<NoLawyersScreen> createState() => _NoLawyersScreenState();
+}
+
+class _NoLawyersScreenState extends State<NoLawyersScreen> {
+  final _consultations = ConsultationRepository.instance;
+
+  bool _busy = false;
+  String? _problem;
+
+  /// Sends the decision, and hands back the consultation it produced.
+  Future<Consultation?> _resolve(String choice) async {
+    setState(() {
+      _busy = true;
+      _problem = null;
+    });
+
+    try {
+      return await _consultations.resolve(
+        widget.consultation.id,
+        choice: choice,
+      );
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _problem = error.message);
+      return null;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Searches again on the same consultation, so nothing is paid twice.
+  Future<void> _tryAgain() async {
+    final consultation = await _resolve('reschedule');
+    if (consultation == null || !mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => FindingLawyerScreen(
+          draft: widget.draft,
+          consultation: consultation,
+        ),
+      ),
+    );
+  }
+
+  /// Takes the money back, then picks a slot. Scheduled bookings are not on
+  /// the backend yet, so this leaves off at the slot picker.
+  Future<void> _reschedule() async {
+    final consultation = await _resolve('refund');
+    if (consultation == null || !mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => const ChooseTimeScreen()),
+    );
+  }
+
+  Future<void> _refund() async {
+    final confirmed = await showCancelRequestSheet(
+      context,
+      draft: widget.draft,
+    );
+    if (confirmed != true || !mounted) return;
+
+    final consultation = await _resolve('refund');
+    if (consultation == null || !mounted) return;
+
+    // Back to the shell, not out of the app: this flow sits on the root
+    // navigator, above the signed-in shell.
+    HomeScreen.openTab(context, 0);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 26, 16, 16),
-                children: [
-                  const _DimmedAvatars(),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'All lawyers are on call\nright now',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      height: 1.3,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'We tried for $searchedSeconds seconds. Try again '
-                    'shortly, pick a scheduled time, or cancel with '
-                    'instant refund.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: AppColors.inkSubtle,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  _ConsultationSummary(draft: draft),
-                  const SizedBox(height: 16),
-
-                  _PrimaryAction(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Reschedule for later',
-                    onTap: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ChooseTimeScreen(),
+    return PopScope(
+      // The consultation is still open until one of these is chosen.
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 26, 16, 16),
+                  children: [
+                    const _DimmedAvatars(),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'All lawyers are on call\nright now',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        height: 1.3,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  _SecondaryAction(
-                    icon: Icons.refresh,
-                    label: 'Try again now',
-                    onTap: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) => FindingLawyerScreen(draft: draft),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Nobody was free to take it. Try again shortly, pick a '
+                      'scheduled time, or cancel with instant refund.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.45,
+                        color: AppColors.inkSubtle,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(height: 20),
 
-            TextButton(
-              onPressed: () async {
-                final confirmed = await showCancelRequestSheet(
-                  context,
-                  draft: draft,
-                );
+                    _ConsultationSummary(draft: widget.draft),
+                    const SizedBox(height: 16),
 
-                if (confirmed == true && context.mounted) {
-                  // Back to the shell, not out of the app: this flow sits on
-                  // the root navigator, above the signed-in shell.
-                  HomeScreen.openTab(context, 0);
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-              child: const Text(
-                'Cancel request & get instant refund',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    _PrimaryAction(
+                      icon: Icons.calendar_today_outlined,
+                      label: 'Reschedule for later',
+                      onTap: _busy ? null : _reschedule,
+                    ),
+                    const SizedBox(height: 10),
+                    _SecondaryAction(
+                      icon: Icons.refresh,
+                      label: 'Try again now',
+                      onTap: _busy ? null : _tryAgain,
+                    ),
+
+                    if (_problem != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _problem!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.negative,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
+
+              TextButton(
+                onPressed: _busy ? null : _refund,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.negative,
+                ),
+                child: const Text(
+                  'Cancel request & get instant refund',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -265,7 +339,9 @@ class _PrimaryAction extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+
+  /// Null while a decision is being sent, which also greys the button.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +384,9 @@ class _SecondaryAction extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+
+  /// Null while a decision is being sent, which also greys the button.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

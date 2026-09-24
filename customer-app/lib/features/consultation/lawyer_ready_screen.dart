@@ -1,22 +1,53 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../home/home_screen.dart';
+import 'call_screen.dart';
 import 'consult_draft.dart';
+import 'consultation_repository.dart';
 
 /// A lawyer accepted: introduce them and get the client into the call.
 class LawyerReadyScreen extends StatelessWidget {
-  const LawyerReadyScreen({super.key, required this.draft});
+  const LawyerReadyScreen({
+    super.key,
+    required this.draft,
+    required this.consultation,
+  });
 
   final ConsultDraft draft;
 
-  /// Stand-in until matching returns a real profile.
-  static const _lawyer = (
-    initials: 'RS',
-    name: 'Adv. Rahul Sharma',
-    practice: 'Family Law . Property Disputes',
-    court: 'Delhi High Court',
-    languages: 'Hindi, English',
-  );
+  /// The consultation, now with the lawyer who took it.
+  final Consultation consultation;
+
+  /// Two initials from the lawyer's name for the avatar.
+  String get _initials {
+    final parts = (consultation.lawyerName ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
+  /// Opens the call, and comes back here when it ends.
+  Future<void> _join(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CallScreen(
+          consultationId: consultation.id,
+          title: consultation.lawyerName ?? 'Your lawyer',
+          planName: consultation.planName,
+        ),
+      ),
+    );
+
+    // The consultation is over once the call ends; there is nothing left on
+    // this screen to come back to.
+    if (context.mounted) HomeScreen.openTab(context, 0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +73,16 @@ class LawyerReadyScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
 
-                  const _LawyerCard(lawyer: _lawyer),
+                  _LawyerCard(
+                    initials: _initials,
+                    name: consultation.lawyerName ?? 'Your lawyer',
+                    practice: consultation.lawyerHeadline?.isNotEmpty == true
+                        ? consultation.lawyerHeadline!
+                        : consultation.category ?? 'Legal advice',
+                    plan:
+                        '${consultation.planName} · '
+                        '${consultation.durationMinutes} min',
+                  ),
                   const SizedBox(height: 12),
                   const _BeforeYouJoin(),
                 ],
@@ -53,8 +93,7 @@ class LawyerReadyScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: _JoinButton(
                 channel: draft.channelLabel,
-                // TODO: open the call once the video SDK is wired up.
-                onTap: () {},
+                onTap: () => _join(context),
               ),
             ),
           ],
@@ -85,16 +124,21 @@ class _SuccessTick extends StatelessWidget {
 
 /// Who the client has been matched with.
 class _LawyerCard extends StatelessWidget {
-  const _LawyerCard({required this.lawyer});
+  const _LawyerCard({
+    required this.initials,
+    required this.name,
+    required this.practice,
+    required this.plan,
+  });
 
-  final ({
-    String initials,
-    String name,
-    String practice,
-    String court,
-    String languages,
-  })
-  lawyer;
+  final String initials;
+  final String name;
+
+  /// What they practise, as far as their profile says.
+  final String practice;
+
+  /// The plan and how long it runs for.
+  final String plan;
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +154,7 @@ class _LawyerCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Avatar(initials: lawyer.initials),
+              _Avatar(initials: initials),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -124,7 +168,7 @@ class _LawyerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      lawyer.name,
+                      name,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -133,7 +177,7 @@ class _LawyerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      lawyer.practice,
+                      practice,
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.inkSubtle,
@@ -157,14 +201,9 @@ class _LawyerCard extends StatelessWidget {
                 foreground: Color(0xFF1B8A4B),
               ),
               _Pill(
-                label: '⌂ ${lawyer.court}',
+                label: '⌂ $plan',
                 background: const Color(0xFFEAF1FE),
                 foreground: AppColors.brand,
-              ),
-              _Pill(
-                label: '⚖ ${lawyer.languages}',
-                background: const Color(0xFFF1ECFE),
-                foreground: const Color(0xFF7C4DFF),
               ),
             ],
           ),

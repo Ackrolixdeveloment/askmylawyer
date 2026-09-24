@@ -29,6 +29,54 @@ enum DevicePlatform {
   ios
 }
 
+/// Where a consultation request has got to.
+enum ConsultationStatus {
+  /// Waiting on payment, when payment is not being skipped.
+  pending_payment
+  /// Ringing lawyers.
+  searching
+  /// A lawyer accepted; the session is set up.
+  assigned
+  /// The two are connected.
+  active
+  completed
+  cancelled
+  /// Nobody accepted in time; the customer chooses refund or reschedule.
+  no_lawyer
+  refunded
+}
+
+/// What one lawyer did with one offer.
+enum OfferOutcome {
+  ringing
+  accepted
+  declined
+  /// The window closed without an answer.
+  expired
+  /// Someone else took it first.
+  cancelled
+}
+
+/// How a consultation request is offered to lawyers.
+enum DispatchMode {
+  /// Every eligible lawyer is rung at once; first to accept wins.
+  broadcast
+  /// One lawyer at a time, best first, each with their own window.
+  sequential
+}
+
+/// Which set of payment gateway keys the platform is using.
+enum GatewayEnvironment {
+  sandbox
+  production
+}
+
+/// How the platform's cut of a consultation is worked out.
+enum CommissionMode {
+  percent
+  flat
+}
+
 /// Where a scheduled broadcast has got to.
 enum ScheduledStatus {
   scheduled
@@ -66,36 +114,40 @@ enum AuthProvider {
 }
 
 model User {
-  id                 String                  @id @default(uuid()) @db.Uuid
-  role               AppRole
+  id                  String                  @id @default(uuid()) @db.Uuid
+  role                AppRole
   /// E.164, e.g. +919876543210. Empty for accounts created via email/Google/Apple.
-  phone              String?                 @db.VarChar(15)
+  phone               String?                 @db.VarChar(15)
   /// Always stored lowercase.
-  email              String?                 @db.VarChar(255)
-  emailVerifiedAt    DateTime?               @map("email_verified_at") @db.Timestamptz(6)
-  fullName           String?                 @map("full_name") @db.VarChar(150)
+  email               String?                 @db.VarChar(255)
+  emailVerifiedAt     DateTime?               @map("email_verified_at") @db.Timestamptz(6)
+  fullName            String?                 @map("full_name") @db.VarChar(150)
   /// Sequential, lawyers only — shown as "LAW0001". See lawyer_number_seq.
-  lawyerNumber       Int?                    @unique @map("lawyer_number")
-  status             UserStatus              @default(active)
-  suspendedAt        DateTime?               @map("suspended_at") @db.Timestamptz(6)
+  lawyerNumber        Int?                    @unique @map("lawyer_number")
+  status              UserStatus              @default(active)
+  suspendedAt         DateTime?               @map("suspended_at") @db.Timestamptz(6)
   /// Shown to the lawyer when the app signs them out.
-  suspensionReason   String?                 @map("suspension_reason") @db.VarChar(500)
-  lastLoginAt        DateTime?               @map("last_login_at") @db.Timestamptz(6)
-  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt          DateTime?               @map("deleted_at") @db.Timestamptz(6)
-  lawyerProfile      LawyerProfile?
-  bankAccount        LawyerBankAccount?
-  documents          LawyerDocument[]
-  sessions           UserSession[]
-  identities         AuthIdentity[]
-  editRequests       LawyerEditRequest[]
-  deviceTokens       DeviceToken[]
-  inbox              UserNotification[]
-  adminNotifications AdminNotification[]
-  alerts             AdminAlert[]
-  scheduled          ScheduledNotification[]
-  pushTokens         AdminPushToken[]
+  suspensionReason    String?                 @map("suspension_reason") @db.VarChar(500)
+  lastLoginAt         DateTime?               @map("last_login_at") @db.Timestamptz(6)
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?               @map("deleted_at") @db.Timestamptz(6)
+  lawyerProfile       LawyerProfile?
+  bankAccount         LawyerBankAccount?
+  documents           LawyerDocument[]
+  sessions            UserSession[]
+  identities          AuthIdentity[]
+  editRequests        LawyerEditRequest[]
+  deviceTokens        DeviceToken[]
+  inbox               UserNotification[]
+  presence            LawyerPresence?
+  consultations       ConsultationRequest[]   @relation("CustomerConsultations")
+  lawyerConsultations ConsultationRequest[]   @relation("LawyerConsultations")
+  consultationOffers  ConsultationOffer[]
+  adminNotifications  AdminNotification[]
+  alerts              AdminAlert[]
+  scheduled           ScheduledNotification[]
+  pushTokens          AdminPushToken[]
 
   /// The same phone/email may hold one account per role (see ALLOW_MULTI_ROLE_PHONE).
   @@unique([phone, role])
@@ -369,6 +421,8 @@ model AdminUser {
   adminAlerts            AdminAlert[]
   adminPushTokens        AdminPushToken[]
   scheduledNotifications ScheduledNotification[]
+  consultationSettings   ConsultationSettings[]
+  settingsAudits         SettingsAudit[]
 
   @@index([roleId])
   @@map("admin_users")
@@ -507,4 +561,230 @@ model ScheduledNotification {
 
   @@index([status, scheduledFor])
   @@map("scheduled_notifications")
+}
+
+/// A consultation plan the customer can book: chat, audio or video.
+///
+/// Priced by the admin team in Settings, and read by both apps — the lawyer
+/// picks which of these they take, and the customer picks one to book.
+model ServicePlan {
+  id               String         @id @default(uuid()) @db.Uuid
+  /// Stable key the apps refer to: "audio", "video", "chat".
+  code             String         @unique @db.VarChar(30)
+  /// What the customer sees, e.g. "Audio Call".
+  type             String         @db.VarChar(60)
+  /// What the customer pays for the consultation, in rupees.
+  amount           Int
+  commissionMode   CommissionMode @default(percent) @map("commission_mode")
+  /// A percentage (0-100) or a flat fee in rupees, per commissionMode.
+  commissionValue  Int            @map("commission_value")
+  /// Minutes included before the consultation runs out.
+  durationMinutes  Int            @map("duration_minutes")
+  /// Length of one paid extension, and what it costs.
+  extensionMinutes Int            @map("extension_minutes")
+  extensionAmount  Int            @map("extension_amount")
+  /// Off hides the plan from the apps without losing its pricing.
+  enabled          Boolean        @default(true)
+  sortOrder        Int            @default(0) @map("sort_order")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("service_plans")
+}
+
+/// One row, holding the rates that apply to every plan.
+model PlatformSettings {
+  id         Int                @id @default(1)
+  /// Which Cashfree keys the apps are charging through.
+  gateway    GatewayEnvironment @default(sandbox)
+  /// Added on top of every consultation and extension.
+  gstPercent Int                @default(18) @map("gst_percent")
+  /// Withheld from the lawyer's earnings and paid to the tax department.
+  tdsPercent Int                @default(10) @map("tds_percent")
+  updatedAt  DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_settings")
+}
+
+/// Cashfree credentials, one row per environment.
+///
+/// Both sets are kept so switching between test and live never loses the
+/// other one. Secrets are encrypted at rest and never leave the server: the
+/// admin panel only ever sees the last four characters.
+model PaymentGateway {
+  environment      GatewayEnvironment @id
+  appId            String?            @map("app_id") @db.VarChar(120)
+  secretKeyEnc     String?            @map("secret_key_enc")
+  secretKeyLast4   String?            @map("secret_key_last4") @db.VarChar(4)
+  webhookSecretEnc String?            @map("webhook_secret_enc")
+  webhookLast4     String?            @map("webhook_last4") @db.VarChar(4)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("payment_gateways")
+}
+
+/// How the consultation engine behaves: who gets rung, for how long, and
+/// what the apps show while it happens.
+///
+/// One row, read by the engine on every request, so a change here applies to
+/// the next consultation without a restart.
+model ConsultationSettings {
+  id Int @id @default(1)
+
+  /// The whole demo profile in one switch. Shown as a banner in the panel.
+  demoMode Boolean @default(false) @map("demo_mode")
+
+  // ---- Matching ----
+  dispatchMode             DispatchMode @default(sequential) @map("dispatch_mode")
+  /// Demo only: ring every lawyer, whatever their status or preferences.
+  ignoreLawyerFilters      Boolean      @default(false) @map("ignore_lawyer_filters")
+  /// How long one offer stays on a lawyer's screen.
+  ringWindowSeconds        Int          @default(25) @map("ring_window_seconds")
+  /// How long to keep searching before giving up.
+  searchLimitSeconds       Int          @default(300) @map("search_limit_seconds")
+  /// Widening rings, in kilometres.
+  radiusStepsKm            Int[]        @default([3, 10, 25]) @map("radius_steps_km")
+  /// After this many refusals, ring a few at once. 0 turns it off.
+  escalateAfterAttempts    Int          @default(0) @map("escalate_after_attempts")
+  /// Breathing space after a consultation before the next offer.
+  wrapUpCooldownMinutes    Int          @default(2) @map("wrap_up_cooldown_minutes")
+  /// A lawyer is left alone this long before a booked consultation.
+  scheduledBufferMinutes   Int          @default(15) @map("scheduled_buffer_minutes")
+  /// A position older than this counts as unavailable.
+  locationFreshnessMinutes Int          @default(2) @map("location_freshness_minutes")
+
+  // ---- Availability ----
+  heartbeatSeconds   Int @default(45) @map("heartbeat_seconds")
+  maxConcurrentChat  Int @default(3) @map("max_concurrent_chat")
+  maxConcurrentVoice Int @default(1) @map("max_concurrent_voice")
+  maxConcurrentVideo Int @default(1) @map("max_concurrent_video")
+
+  // ---- Payments ----
+  /// Demo only: connect without taking payment.
+  skipPayment     Boolean @default(false) @map("skip_payment")
+  /// Refunded automatically if the customer never answers the popup.
+  autoRefundHours Int     @default(24) @map("auto_refund_hours")
+
+  // ---- What the customer sees while waiting ----
+  showNotifiedCount       Boolean @default(true) @map("show_notified_count")
+  allowCancelDuringSearch Boolean @default(true) @map("allow_cancel_during_search")
+
+  // ---- Session ----
+  /// How long a call token stays valid past the plan's duration.
+  tokenGraceMinutes Int @default(10) @map("token_grace_minutes")
+  /// A dropped call is closed after this long without a reconnect.
+  callGraceSeconds  Int @default(60) @map("call_grace_seconds")
+
+  updatedById String?    @map("updated_by_id") @db.Uuid
+  updatedBy   AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("consultation_settings")
+}
+
+/// Who changed a setting, and what they changed.
+model SettingsAudit {
+  id        String     @id @default(uuid()) @db.Uuid
+  /// Which screen it came from, e.g. "consultation-engine".
+  area      String     @db.VarChar(40)
+  /// { field: { from, to } } for everything that actually changed.
+  changes   Json
+  actorId   String?    @map("actor_id") @db.Uuid
+  actor     AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([area, createdAt])
+  @@map("settings_audit")
+}
+
+/// Where a lawyer is, and whether they are taking consultations.
+///
+/// One row per lawyer, rewritten by their heartbeat. The engine reads it to
+/// decide who can be rung.
+model LawyerPresence {
+  userId         String    @id @map("user_id") @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isOnline       Boolean   @default(false) @map("is_online")
+  latitude       Float?
+  longitude      Float?
+  /// Metres, as reported by the phone.
+  accuracy       Float?
+  /// Consultations in progress, so their limit can be respected.
+  activeSessions Int       @default(0) @map("active_sessions")
+  /// Set after a consultation ends, so they get a moment before the next.
+  busyUntil      DateTime? @map("busy_until") @db.Timestamptz(6)
+  lastHeartbeat  DateTime? @map("last_heartbeat_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([isOnline, lastHeartbeat])
+  @@map("lawyer_presence")
+}
+
+/// One customer asking for a consultation, and how the search went.
+model ConsultationRequest {
+  id              String               @id @default(uuid()) @db.Uuid
+  customerId      String               @map("customer_id") @db.Uuid
+  customer        User                 @relation("CustomerConsultations", fields: [customerId], references: [id], onDelete: Cascade)
+  planCode        String               @map("plan_code") @db.VarChar(30)
+  /// What the plan cost when it was booked; prices change, records should not.
+  planName        String               @map("plan_name") @db.VarChar(60)
+  amount          Int
+  durationMinutes Int                  @map("duration_minutes")
+  /// What the customer says the matter is about.
+  category        String?              @db.VarChar(120)
+  description     String?              @db.VarChar(1000)
+  /// Where the customer was, for distance-based matching later.
+  latitude        Float?
+  longitude       Float?
+  status          ConsultationStatus   @default(searching)
+  /// The lawyer who accepted.
+  lawyerId        String?              @map("lawyer_id") @db.Uuid
+  lawyer          User?                @relation("LawyerConsultations", fields: [lawyerId], references: [id], onDelete: SetNull)
+  /// When the search gives up.
+  searchEndsAt    DateTime?            @map("search_ends_at") @db.Timestamptz(6)
+  assignedAt      DateTime?            @map("assigned_at") @db.Timestamptz(6)
+  /// For a booked consultation, when it should start.
+  scheduledFor    DateTime?            @map("scheduled_for") @db.Timestamptz(6)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  offers          ConsultationOffer[]
+  session         ConsultationSession?
+
+  @@index([status, searchEndsAt])
+  @@index([customerId, createdAt])
+  @@map("consultation_requests")
+}
+
+/// One lawyer's phone ringing for one request.
+model ConsultationOffer {
+  id         String              @id @default(uuid()) @db.Uuid
+  requestId  String              @map("request_id") @db.Uuid
+  request    ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  lawyerId   String              @map("lawyer_id") @db.Uuid
+  lawyer     User                @relation(fields: [lawyerId], references: [id], onDelete: Cascade)
+  outcome    OfferOutcome        @default(ringing)
+  expiresAt  DateTime            @map("expires_at") @db.Timestamptz(6)
+  answeredAt DateTime?           @map("answered_at") @db.Timestamptz(6)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([requestId, lawyerId])
+  @@index([outcome, expiresAt])
+  @@index([lawyerId, outcome])
+  @@map("consultation_offers")
+}
+
+/// The call or chat itself.
+model ConsultationSession {
+  id        String              @id @default(uuid()) @db.Uuid
+  requestId String              @unique @map("request_id") @db.Uuid
+  request   ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// The Agora channel both sides join; the request id, so it is unique.
+  channel   String              @db.VarChar(64)
+  startedAt DateTime?           @map("started_at") @db.Timestamptz(6)
+  endedAt   DateTime?           @map("ended_at") @db.Timestamptz(6)
+  /// Who hung up: "customer", "lawyer" or "system".
+  endedBy   String?             @map("ended_by") @db.VarChar(20)
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("consultation_sessions")
 }

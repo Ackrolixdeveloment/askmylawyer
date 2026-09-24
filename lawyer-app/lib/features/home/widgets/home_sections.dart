@@ -137,56 +137,123 @@ class EmptySection extends StatelessWidget {
 
 /// Online switch — the lawyer only receives instant requests while this is on.
 class OnlineCard extends StatelessWidget {
-  const OnlineCard({super.key, required this.online, required this.onChanged});
+  const OnlineCard({
+    super.key,
+    required this.online,
+    required this.onChanged,
+    this.busy = false,
+    this.notice,
+    this.onFixLocation,
+  });
 
   final bool online;
   final ValueChanged<bool> onChanged;
 
+  /// True while the change is being sent.
+  final bool busy;
+
+  /// Why going online did not work, if it did not.
+  final String? notice;
+
+  /// Opens the phone's settings, when permission was refused for good.
+  final VoidCallback? onFixLocation;
+
   @override
   Widget build(BuildContext context) {
     return SectionCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: online ? AppColors.positive : AppColors.inkSubtle,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  online ? 'You are Online' : 'You are Offline',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: online ? AppColors.positive : AppColors.inkSubtle,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  online
-                      ? 'You are available to receive consultation'
-                      : 'You will only receive scheduled bookings',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSubtle,
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      online ? 'You are Online' : 'You are Offline',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      online
+                          ? 'You are available to receive consultation'
+                          : 'You will only receive scheduled bookings',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.inkSubtle,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+              if (busy)
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Switch(
+                  value: online,
+                  onChanged: onChanged,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: AppColors.positive,
+                ),
+            ],
+          ),
+
+          // Going online needs a location; this says so when it is missing.
+          if (notice != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notice!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1.45,
+                      color: Color(0xFFC2410C),
+                    ),
+                  ),
+                  if (onFixLocation != null) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: onFixLocation,
+                      child: const Text(
+                        'Open settings',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFC2410C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          Switch(
-            value: online,
-            onChanged: onChanged,
-            activeThumbColor: Colors.white,
-            activeTrackColor: AppColors.positive,
-          ),
+          ],
         ],
       ),
     );

@@ -74,6 +74,16 @@ const schema = z.object({
     // Env files keep the key on one line with \n in place of the breaks.
     .transform((value) => value?.replace(/\\n/g, '\n') || undefined),
 
+  /** Agora voice and video. The certificate signs per-call tokens. */
+  AGORA_APP_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  AGORA_APP_CERTIFICATE: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./storage'),
   S3_BUCKET: z.string().optional(),

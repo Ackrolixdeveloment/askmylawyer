@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/form_fields.dart';
 import '../../core/widgets/upload_field.dart';
 import 'consult_draft.dart';
 import 'consult_preview_screen.dart';
+import 'consultation_repository.dart';
 import 'consultation_header.dart';
 import 'consultation_screen.dart';
 
@@ -42,6 +44,36 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
   String? _caseTag;
   PickedDocument? _document;
 
+  /// The price list, keyed by plan code. Empty until it has loaded.
+  Map<String, ServicePlan> _plans = const {};
+  String? _plansProblem;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlans();
+  }
+
+  Future<void> _loadPlans() async {
+    try {
+      final plans = await ConsultationRepository.instance.plans();
+      if (!mounted) return;
+
+      setState(() {
+        _plans = {for (final plan in plans) plan.code: plan};
+        _plansProblem = null;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _plansProblem = error.message);
+    }
+  }
+
+  ServicePlan? _planFor(CallChannel channel) => _plans[switch (channel) {
+    CallChannel.audio => 'audio',
+    CallChannel.video => 'video',
+    CallChannel.chat => 'chat',
+  }];
+
   /// Stand-ins until the API supplies the real lists.
   static const _locations = [
     'Delhi',
@@ -64,8 +96,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
   ];
 
   /// Location and case tag are both required before a lawyer can be matched;
-  /// the document is optional.
-  bool get _canContinue => _location != null && _caseTag != null;
+  /// the document is optional. The chosen channel also has to be on sale —
+  /// the admin team can switch any of the three off.
+  bool get _canContinue =>
+      _location != null && _caseTag != null && _planFor(_channel) != null;
 
   /// Hands everything gathered so far to the preview.
   void _openPreview() {
@@ -77,6 +111,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
             channel: _channel,
             location: _location!,
             caseTag: _caseTag!,
+            plan: _planFor(_channel),
             slot: widget.slot,
             document: _document,
           ),
@@ -117,6 +152,9 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
                             CallChannel.video => 'Video',
                             CallChannel.chat => 'Chat',
                           },
+                          // Blank while the price list loads, rather than a
+                          // figure that might be about to change.
+                          price: _planFor(channel)?.payable,
                           selected: _channel == channel,
                           onTap: () => setState(() => _channel = channel),
                         ),
@@ -126,6 +164,16 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
                     ],
                   ],
                 ),
+                if (_plansProblem != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _plansProblem!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.negative,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
 
                 AppSelectField(
@@ -208,9 +256,13 @@ class _ChannelChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.price,
   });
 
   final String label;
+
+  /// What this channel costs, all in. Null while the price list loads.
+  final int? price;
   final bool selected;
   final VoidCallback onTap;
 
@@ -233,15 +285,31 @@ class _ChannelChip extends StatelessWidget {
             const SizedBox(width: 7),
             // Ellipsises rather than pushing past the chip's share of the row.
             Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  if (price != null)
+                    Text(
+                      '₹$price',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSubtle,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

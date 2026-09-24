@@ -8,6 +8,11 @@ void main() {
 
     // The splash holds before handing over to onboarding.
     expect(find.text('LEGAL HELP, ON DEMAND'), findsOneWidget);
+
+    // Let the hold and the stored-session lookup run out, so neither is
+    // left pending when the test ends.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('splash hands over to onboarding', (WidgetTester tester) async {

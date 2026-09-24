@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
+import 'customer_session.dart';
 import 'email_verification_screen.dart';
 import 'otp_screen.dart';
 
@@ -19,11 +21,21 @@ class GetStartedScreen extends StatefulWidget {
 
 class _GetStartedScreenState extends State<GetStartedScreen> {
   final _mobile = TextEditingController();
+  final _session = CustomerSession.instance;
+
+  bool _sending = false;
+
+  /// Either the last sign-in ending (suspended, say) or a failed send.
+  String? _notice;
 
   @override
   void initState() {
     super.initState();
     _mobile.addListener(() => setState(() {}));
+
+    // If the session was ended from under them, say why — once.
+    _notice = _session.endedMessage;
+    _session.endedMessage = null;
   }
 
   @override
@@ -38,15 +50,28 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
 
   /// Indian mobile numbers are ten digits starting 6-9.
   String? get _mobileError => Validators.mobile(_mobile.text);
-  bool get _canContinue => _mobileError == null;
+  bool get _canContinue => _mobileError == null && !_sending;
 
-  void _continue() {
-    // TODO: request the OTP from the backend before opening this screen.
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => OtpScreen(mobile: _mobile.text.trim()),
-      ),
-    );
+  Future<void> _continue() async {
+    final mobile = _mobile.text.trim();
+
+    setState(() {
+      _sending = true;
+      _notice = null;
+    });
+
+    try {
+      await _session.sendOtp(mobile);
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => OtpScreen(mobile: mobile)),
+      );
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _notice = error.message);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   void _continueWithEmail() {
@@ -112,9 +137,20 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
               ],
               const SizedBox(height: 16),
 
+              if (_notice != null) ...[
+                Text(
+                  _notice!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.negative,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
               FilledButton(
                 onPressed: _canContinue ? _continue : null,
-                child: const Text('Continue'),
+                child: Text(_sending ? 'Sending code…' : 'Continue'),
               ),
               const SizedBox(height: 24),
 

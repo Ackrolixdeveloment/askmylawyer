@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/otp_input.dart';
+import '../home/home_screen.dart';
 import '../profile/complete_profile_screen.dart';
+import 'customer_session.dart';
 
 /// Verifies the code sent to the customer's mobile number.
 class OtpScreen extends StatefulWidget {
@@ -32,13 +35,15 @@ class OtpScreen extends StatefulWidget {
 class _OtpScreenState extends State<OtpScreen> {
   static const _resendSeconds = 24;
 
-  /// Stand-in until the backend verifies codes for real.
-  static const _validCode = '123456';
+  final _session = CustomerSession.instance;
 
   Timer? _timer;
   int _secondsLeft = _resendSeconds;
   String _code = '';
-  bool _wrongCode = false;
+  bool _checking = false;
+
+  /// Whatever the backend said about the code they typed.
+  String? _problem;
 
   /// Bumped on a wrong code to rebuild [OtpInput] from scratch: it owns its
   /// controllers, so a new key is what empties the boxes for another try.
@@ -75,7 +80,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() {
       _code = code;
       // Clear the previous complaint while they are correcting it.
-      if (code.length < 6) _wrongCode = false;
+      if (code.length < 6) _problem = null;
     });
 
     if (code.length != 6) return;
@@ -87,34 +92,54 @@ class _OtpScreenState extends State<OtpScreen> {
     });
   }
 
-  void _submit() {
-    if (_code != _validCode) {
+  Future<void> _submit() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+
+    final bool isNewUser;
+    try {
+      isNewUser = await _session.verifyOtp(widget.mobile, _code);
+    } on ApiException catch (error) {
       // Clear the boxes too, so there is always a way to try again now that
       // there is no button to press.
-      setState(() {
-        _wrongCode = true;
-        _code = '';
-        _attempt += 1;
-      });
+      if (mounted) {
+        setState(() {
+          _problem = error.message;
+          _checking = false;
+          _code = '';
+          _attempt += 1;
+        });
+      }
       return;
     }
 
-    // TODO: verify the code with the backend before moving on.
+    if (!mounted) return;
+
+    // Changing a number supplies its own next step; signing in does not.
     final onVerified = widget.onVerified;
     if (onVerified != null) {
       onVerified();
       return;
     }
 
+    // A number we have not seen before still needs a name and a city.
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const CompleteProfileScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            isNewUser ? const CompleteProfileScreen() : const HomeScreen(),
+      ),
     );
   }
 
-  void _resend() {
-    // TODO: request a fresh code.
-    setState(() => _wrongCode = false);
+  Future<void> _resend() async {
+    setState(() => _problem = null);
     _startCountdown();
+
+    try {
+      await _session.sendOtp(widget.mobile);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _problem = error.message);
+    }
   }
 
   @override
@@ -169,11 +194,21 @@ class _OtpScreenState extends State<OtpScreen> {
 
               OtpInput(key: ValueKey(_attempt), onChanged: _handleCode),
 
-              if (_wrongCode) ...[
+              if (_problem != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _problem!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.negative,
+                  ),
+                ),
+              ],
+              if (_checking) ...[
                 const SizedBox(height: 10),
                 const Text(
-                  'That code is incorrect. Please check and try again.',
-                  style: TextStyle(fontSize: 12, color: AppColors.negative),
+                  'Checking the code…',
+                  style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
                 ),
               ],
               const SizedBox(height: 20),

@@ -8,6 +8,7 @@ import 'package:customer_app/features/consultation/case_details_screen.dart';
 import 'package:customer_app/features/consultation/booking_confirmed_screen.dart';
 import 'package:customer_app/features/consultation/choose_time_screen.dart';
 import 'package:customer_app/features/consultation/consult_draft.dart';
+import 'package:customer_app/features/consultation/consultation_repository.dart';
 import 'package:customer_app/features/consultation/consult_preview_screen.dart';
 import 'package:customer_app/features/consultation/consultation_screen.dart';
 import 'package:customer_app/features/consultation/finding_lawyer_screen.dart';
@@ -98,7 +99,10 @@ void main() {
   testWidgets('finding a lawyer lays out at the maximum text scale', (
     tester,
   ) async {
-    await _pumpAtMaxScale(tester, FindingLawyerScreen(draft: _draft));
+    await _pumpAtMaxScale(
+      tester,
+      FindingLawyerScreen(draft: _draft, consultation: _searching),
+    );
     // The countdown runs on a timer; stop it before the test ends.
     await tester.pumpWidget(const SizedBox());
   });
@@ -106,13 +110,16 @@ void main() {
   testWidgets('lawyer ready lays out at the maximum text scale', (
     tester,
   ) async {
-    await _pumpAtMaxScale(tester, LawyerReadyScreen(draft: _draft));
+    await _pumpAtMaxScale(
+      tester,
+      LawyerReadyScreen(draft: _draft, consultation: _matched),
+    );
   });
 
   testWidgets('no lawyers lays out at the maximum text scale', (tester) async {
     await _pumpAtMaxScale(
       tester,
-      NoLawyersScreen(draft: _draft, searchedSeconds: 45),
+      NoLawyersScreen(draft: _draft, consultation: _gaveUp),
     );
   });
 
@@ -149,5 +156,34 @@ final _draft = ConsultDraft(
   channel: CallChannel.audio,
   location: 'Gurugram, Haryana',
   caseTag: 'Family Law',
+  plan: const ServicePlan(
+    code: 'audio',
+    type: 'Audio Call',
+    amount: 499,
+    gst: 90,
+    payable: 589,
+    durationMinutes: 15,
+  ),
   document: const PickedDocument(name: 'Legal Notice .pdf', bytes: 2516582),
 );
+
+/// The same consultation at each of the three points these screens show.
+Consultation _consultation(String status, {String? lawyerName}) => Consultation(
+  id: '7b5c1e9e-0000-4000-8000-000000000001',
+  planCode: 'audio',
+  planName: 'Audio Call',
+  amount: 499,
+  durationMinutes: 15,
+  status: status,
+  canCancel: true,
+  category: 'Family Law',
+  searchEndsAt: DateTime.now().add(const Duration(seconds: 45)),
+  lawyerName: lawyerName,
+  lawyerHeadline: 'Family Law, Property',
+  lawyersNotified: 3,
+  sessionReady: lawyerName != null,
+);
+
+final _searching = _consultation('searching');
+final _matched = _consultation('assigned', lawyerName: 'Adv. Rahul Sharma');
+final _gaveUp = _consultation('no_lawyer');

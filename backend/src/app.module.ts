@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { env } from './config/env';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { AgoraModule } from './infrastructure/agora/agora.module';
 import { PushModule } from './infrastructure/push/push.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { LawyerRegistrationModule } from './modules/lawyer-registration/lawyer-registration.module';
@@ -15,10 +16,13 @@ import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminEditRequestsModule } from './modules/admin-edit-requests/admin-edit-requests.module';
 import { AdminLawyersModule } from './modules/admin-lawyers/admin-lawyers.module';
 import { AdminNotificationsModule } from './modules/admin-notifications/admin-notifications.module';
+import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { UserNotificationsModule } from './modules/lawyer-notifications/user-notifications.module';
 import { LawyerAccountModule } from './modules/lawyer-account/lawyer-account.module';
+import { ConsultationsModule } from './modules/consultations/consultations.module';
+import { CustomerAuthModule } from './modules/customer-auth/customer-auth.module';
 import { LawyerAuthModule } from './modules/lawyer-auth/lawyer-auth.module';
 import { LawyerProfileModule } from './modules/lawyer-profile/lawyer-profile.module';
 
@@ -50,6 +54,8 @@ class HealthController {
           'req.body.aadhaarNumber',
           'req.body.accountNumber',
           'req.body.confirmAccountNumber',
+          'req.body.secretKey',
+          'req.body.webhookSecret',
         ],
       },
     }),
@@ -60,6 +66,7 @@ class HealthController {
     MailModule,
     StorageModule,
     PushModule,
+    AgoraModule,
     NotificationsModule,
     AdminAuthModule,
     AdminAlertsModule,
@@ -67,9 +74,12 @@ class HealthController {
     AdminEditRequestsModule,
     AdminNotificationsModule,
     AdminUsersModule,
+    AdminSettingsModule,
     DevicesModule,
     UserNotificationsModule,
     LawyerAuthModule,
+    CustomerAuthModule,
+    ConsultationsModule,
     LawyerAccountModule,
     LawyerProfileModule,
     LawyerRegistrationModule,

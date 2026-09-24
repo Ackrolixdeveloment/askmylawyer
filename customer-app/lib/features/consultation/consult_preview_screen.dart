@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import 'booking_confirmed_screen.dart';
 import 'consult_draft.dart';
+import 'consultation_repository.dart';
 import 'consultation_screen.dart';
 import 'finding_lawyer_screen.dart';
 
@@ -93,23 +95,7 @@ class ConsultPreviewScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          _PayButton(
-            // TODO: take the payment first, once the gateway is wired up.
-            // A scheduled booking is simply confirmed for its slot; an
-            // instant one starts hunting for a lawyer straight away.
-            onTap: () => switch (draft.mode) {
-              ConsultMode.scheduled => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => BookingConfirmedScreen(draft: draft),
-                ),
-              ),
-              ConsultMode.now => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => FindingLawyerScreen(draft: draft),
-                ),
-              ),
-            },
-          ),
+          _PayAction(draft: draft),
         ],
       ),
     );
@@ -269,10 +255,95 @@ class _DetailPanel extends StatelessWidget {
   }
 }
 
-class _PayButton extends StatelessWidget {
-  const _PayButton({required this.onTap});
+/// Takes the payment and starts the search.
+///
+/// The gateway is skipped while the consultation engine is in demo mode; the
+/// backend decides that, and answers with a consultation that is already
+/// searching.
+class _PayAction extends StatefulWidget {
+  const _PayAction({required this.draft});
 
-  final VoidCallback onTap;
+  final ConsultDraft draft;
+
+  @override
+  State<_PayAction> createState() => _PayActionState();
+}
+
+class _PayActionState extends State<_PayAction> {
+  bool _busy = false;
+  String? _problem;
+
+  Future<void> _pay() async {
+    // A scheduled booking is simply confirmed for its slot; only an instant
+    // consult goes looking for a lawyer now.
+    if (widget.draft.mode == ConsultMode.scheduled) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BookingConfirmedScreen(draft: widget.draft),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _problem = null;
+    });
+
+    try {
+      final consultation = await ConsultationRepository.instance.create(
+        planCode: widget.draft.planCode,
+        category: widget.draft.caseTag,
+      );
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => FindingLawyerScreen(
+            draft: widget.draft,
+            consultation: consultation,
+          ),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _problem = error.message;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PayButton(
+          label: _busy ? 'Starting…' : 'Proceed to Payment',
+          onTap: _busy ? null : _pay,
+        ),
+        if (_problem != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _problem!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: AppColors.negative),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PayButton extends StatelessWidget {
+  const _PayButton({required this.label, required this.onTap});
+
+  final String label;
+
+  /// Null while the request is in flight, which also greys the button.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -283,22 +354,22 @@ class _PayButton extends StatelessWidget {
         height: 48,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: AppColors.ink,
+          color: onTap == null ? AppColors.inkSubtle : AppColors.ink,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Proceed to Payment',
-              style: TextStyle(
+              label,
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
             ),
-            SizedBox(width: 7),
-            Icon(Icons.chevron_right, size: 18, color: Colors.white),
+            const SizedBox(width: 7),
+            const Icon(Icons.chevron_right, size: 18, color: Colors.white),
           ],
         ),
       ),

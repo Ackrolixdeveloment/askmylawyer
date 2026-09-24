@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/form_fields.dart';
 import '../../core/widgets/multi_select_field.dart';
+import '../auth/customer_session.dart';
 import '../home/home_screen.dart';
 import 'location_permission_dialog.dart';
 
@@ -139,8 +141,22 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     setState(() => _stateCity = 'Detecting…');
   }
 
-  void _submit() {
-    // TODO: save the profile to the backend before moving on.
+  Future<void> _submit() async {
+    // Only the name and email have a home on the backend so far; the rest of
+    // this form is kept for when the customer profile grows to hold it.
+    final email = _email.text.trim();
+
+    try {
+      await CustomerSession.instance.updateProfile(
+        fullName: _name.text.trim(),
+        email: email.isEmpty ? null : email,
+      );
+    } on ApiException {
+      // Not worth blocking the first run over: the profile screen can save
+      // it again later.
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
     );

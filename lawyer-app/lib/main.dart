@@ -5,6 +5,7 @@ import 'core/push/device_repository.dart';
 import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/account_suspended.dart';
+import 'features/consultations/offer_watcher.dart';
 import 'features/notifications/notification_poller.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/splash/splash_screen.dart';
@@ -19,7 +20,11 @@ void main() {
 
   // A push that does arrive just brings the next check forward; the banner
   // itself comes from the poller, so it shows even where push cannot reach.
-  PushService.instance.onMessage = NotificationPoller.instance.checkNow;
+  PushService.instance.onMessage = () {
+    // A consultation offer has seconds to live, so look straight away.
+    OfferWatcher.instance.checkNow();
+    NotificationPoller.instance.checkNow();
+  };
   PushService.instance.onOpened = (_) {
     appNavigatorKey.currentState?.push(
       MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
