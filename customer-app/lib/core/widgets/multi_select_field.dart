@@ -27,6 +27,9 @@ class MultiSelectField extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
+      // Opened from inside a tab's navigator this would otherwise paint under
+      // the bottom nav and the consult button.
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

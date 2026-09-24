@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../home/home_screen.dart';
 import 'choose_time_screen.dart';
 import 'consult_draft.dart';
 import 'finding_lawyer_screen.dart';
@@ -87,7 +88,9 @@ class NoLawyersScreen extends StatelessWidget {
                 );
 
                 if (confirmed == true && context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  // Back to the shell, not out of the app: this flow sits on
+                  // the root navigator, above the signed-in shell.
+                  HomeScreen.openTab(context, 0);
                 }
               },
               style: TextButton.styleFrom(foregroundColor: AppColors.negative),

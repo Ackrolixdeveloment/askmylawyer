@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../coupons/coupons_screen.dart';
+import '../profile/profile_screen.dart';
+import '../support/support_screen.dart';
+import 'change_mobile_screen.dart';
 import '../referral/referral_screen.dart';
 import 'logout_dialog.dart';
 
@@ -68,17 +71,32 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             const _SectionLabel('Account Setting'),
-            const _Group(
+            _Group(
               rows: [
                 _Row(
                   icon: Icons.person_outline,
                   title: 'Edit Profile',
                   subtitle: 'Edit Profile information',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (routeContext) => ProfileScreen(
+                        onClose: () => Navigator.of(routeContext).pop(),
+                      ),
+                    ),
+                  ),
                 ),
                 _Row(
                   icon: Icons.smartphone_outlined,
                   title: 'Change Mobile Number',
                   subtitle: 'OTP verification on old + new number',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      // TODO: use the signed-in customer's number.
+                      builder: (_) => const ChangeMobileScreen(
+                        currentMobile: '1234567890',
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -117,29 +135,34 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             const _SectionLabel('Support & Information'),
-            const _Group(
+            _Group(
               rows: [
                 _Row(
                   icon: Icons.help_outline,
                   title: 'Help / FAQ',
                   subtitle: 'Find answers to common questions',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SupportScreen(),
+                    ),
+                  ),
                 ),
-                _Row(
+                const _Row(
                   icon: Icons.description_outlined,
                   title: 'Terms of Service',
                   subtitle: 'Read our terms and conditions',
                 ),
-                _Row(
+                const _Row(
                   icon: Icons.shield_outlined,
                   title: 'Privacy Policy',
                   subtitle: 'Learn how we protect your data',
                 ),
-                _Row(
+                const _Row(
                   icon: Icons.currency_rupee,
                   title: 'Refund Policy',
                   subtitle: 'Understand refund eligibility and timelines',
                 ),
-                _Row(
+                const _Row(
                   icon: Icons.info_outline,
                   title: 'About Ask My Lawyer',
                   subtitle: 'App version, company information & licenses',

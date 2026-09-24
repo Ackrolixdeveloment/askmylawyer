@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../home/home_screen.dart';
 import 'consult_draft.dart';
 import 'lawyer_ready_screen.dart';
 import 'no_lawyers_screen.dart';
@@ -83,8 +84,7 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
     );
 
     if (confirmed == true && mounted) {
-      // Unwinds the whole flow, back to wherever it was entered from.
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      HomeScreen.openTab(context, 0);
     }
   }
 

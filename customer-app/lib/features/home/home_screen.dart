@@ -4,9 +4,23 @@ import '../../core/theme/app_colors.dart';
 import '../bookings/bookings_screen.dart';
 import '../consultation/consultation_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../profile/profile_screen.dart';
 import '../settings/settings_screen.dart';
 import '../upcoming/upcoming_screen.dart';
 import 'home_data.dart';
+
+/// Height of the shell's solid bottom bar, including the device's own bottom
+/// inset.
+///
+/// The bar is drawn over each tab rather than beside it, so a route pushed
+/// inside a tab reserves this much room for anything pinned to its foot.
+/// Deliberately excludes the 38 the shell adds above the bar for the consult
+/// button to rise into: that strip is transparent, so content may sit under
+/// it and only the button itself overlaps.
+double shellNavHeight(BuildContext context) {
+  final media = MediaQuery.of(context);
+  return 76 * media.textScaler.scale(1).clamp(1.0, 1.4) + media.padding.bottom;
+}
 
 /// Shell holding the four bottom-nav destinations.
 class HomeScreen extends StatefulWidget {
@@ -14,12 +28,46 @@ class HomeScreen extends StatefulWidget {
 
   final HomeData data;
 
+  /// Index of the Upcoming destination, for flows that finish by sending the
+  /// client there.
+  static const upcomingTab = 2;
+
+  /// Closes whatever was pushed over the shell and shows [index]. Popping to
+  /// the first route instead would unwind past the shell and sign the client
+  /// out, since the flow is pushed on the root navigator.
+  static void openTab(BuildContext context, int index) {
+    final state = context.findAncestorStateOfType<_HomeScreenState>();
+
+    if (state == null) {
+      // Not inside the shell after all; just close what is on top.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+
+    final shellRoute = state._shellRoute;
+    Navigator.of(context)
+        .popUntil((route) => route == shellRoute || route.isFirst);
+    state._showTab(index);
+  }
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+
+  /// The shell's own route, so a flow pushed over it knows how far to
+  /// unwind: popping to `isFirst` would tear the whole app down instead.
+  ModalRoute<Object?>? _shellRoute;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _shellRoute = ModalRoute.of(context);
+  }
+
+  void _showTab(int index) => setState(() => _tab = index);
 
   /// Four destinations; the consult button sits between the second and
   /// third rather than being a tab of its own.
@@ -102,9 +150,11 @@ class _HomeScreenState extends State<HomeScreen> {
             2,
             const SafeArea(bottom: false, child: UpcomingScreen()),
           ),
+          // The cross has no route to pop from a tab root, so it returns to
+          // Home the same way the system back gesture does.
           _ => _tabNavigator(
             3,
-            const _PlaceholderTab(icon: Icons.person_outline, title: 'Profile'),
+            ProfileScreen(onClose: () => setState(() => _tab = 0)),
           ),
         },
         // Built by hand rather than with NavigationBar, which imposes its own
@@ -172,8 +222,9 @@ class _BottomNav extends StatelessWidget {
     final media = MediaQuery.of(context);
     final bottomInset = media.padding.bottom;
     // Grow with the reader's text setting: at larger scales the icon and
-    // label no longer fit a fixed 76.
-    final barHeight = 76 * media.textScaler.scale(1).clamp(1.0, 1.4);
+    // label no longer fit a fixed 76. Kept in step with shellNavHeight,
+    // which routes use to reserve room for this bar.
+    final barHeight = shellNavHeight(context) - bottomInset;
 
     return SizedBox(
       // Room above the bar for the button to rise into: it overhangs by 31,
@@ -338,37 +389,6 @@ class _NavItem extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Stand-in until each destination is built.
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.icon, required this.title});
-
-  final IconData icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 30, color: AppColors.inkSubtle),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.inkMuted,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -8,13 +8,22 @@ import '../profile/complete_profile_screen.dart';
 
 /// Verifies the code sent to the customer's mobile number.
 class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key, required this.mobile, this.name});
+  const OtpScreen({
+    super.key,
+    required this.mobile,
+    this.name,
+    this.onVerified,
+  });
 
   /// Ten digit number, shown back with the country code.
   final String mobile;
 
   /// Greeting name, once we know it. Falls back to a neutral title.
   final String? name;
+
+  /// What a correct code leads to. Null means signing in, which continues to
+  /// the profile; changing a number supplies its own step instead.
+  final VoidCallback? onVerified;
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -91,6 +100,12 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     // TODO: verify the code with the backend before moving on.
+    final onVerified = widget.onVerified;
+    if (onVerified != null) {
+      onVerified();
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const CompleteProfileScreen()),
     );

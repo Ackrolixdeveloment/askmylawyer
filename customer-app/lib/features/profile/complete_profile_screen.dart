@@ -72,6 +72,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _address = TextEditingController();
+  final _referralCode = TextEditingController();
 
   /// Typed into the segmented boxes rather than a controller-backed field.
   String _pincode = '';
@@ -95,7 +96,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   @override
   void initState() {
     super.initState();
-    for (final controller in [_name, _email, _address]) {
+    for (final controller in [_name, _email, _address, _referralCode]) {
       controller.addListener(() => setState(() {}));
     }
   }
@@ -105,6 +106,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     _name.dispose();
     _email.dispose();
     _address.dispose();
+    _referralCode.dispose();
     super.dispose();
   }
 
@@ -114,12 +116,19 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   /// Location is answered either by the device or by a typed pincode.
   bool get _locationKnown => _stateCity != null || _pincodeValid;
 
+  /// A referral code is optional, but a half-typed one should not be sent.
+  bool get _referralValid {
+    final code = _referralCode.text.trim();
+    return code.isEmpty || code.length >= 4;
+  }
+
   /// Email is optional, so it only blocks Continue when it is filled in badly.
   bool get _canContinue =>
       Validators.name(_name.text) == null &&
       (_email.text.trim().isEmpty || Validators.email(_email.text) == null) &&
       _gender != null &&
-      _locationKnown;
+      _locationKnown &&
+      _referralValid;
 
   Future<void> _useCurrentLocation() async {
     final allowed = await showLocationPermissionDialog(context);
@@ -275,6 +284,35 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                           value: _maritalStatus,
                           onChanged: (value) =>
                               setState(() => _maritalStatus = value),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      _FieldCard(
+                        child: AppTextField(
+                          label: 'Referral Code',
+                          hint: 'Enter referral code',
+                          controller: _referralCode,
+                          optionalNote: '(Optional)',
+                          helper: 'Have a code from a friend? Enter it to '
+                              'claim your reward.',
+                          textCapitalization: TextCapitalization.characters,
+                          // Codes are issued as letters and digits, so keep
+                          // stray punctuation out rather than failing later.
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[A-Za-z0-9]'),
+                            ),
+                          ],
+                          maxLength: 12,
+                          // Optional, so only complain once something is typed.
+                          validator: (value) {
+                            final code = value.trim();
+                            if (code.isEmpty) return null;
+                            return code.length < 4
+                                ? 'Enter a valid referral code'
+                                : null;
+                          },
                         ),
                       ),
                     ],
