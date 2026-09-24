@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   DataTable,
@@ -10,24 +10,38 @@ import {
   TextField,
   type Column,
 } from "@/components/ui";
-import { statusOptions } from "@/data/mock-users";
+import { ScreenState } from "@/components/common/screen-state";
+import { ApiError } from "@/lib/api";
+import {
+  createDepartment,
+  deleteDepartment,
+  fetchDepartments,
+  updateDepartment,
+} from "@/lib/admin-users";
+import { useApiData } from "@/lib/use-api-data";
 import type { Department } from "@/types/department";
 import type { UserStatus } from "@/types/user";
 import { IconButton, outlineAction, solidAction } from "./admin-table-chrome";
 
-interface DepartmentsViewProps {
-  departments: Department[];
-}
-
 type Mode = "create" | "edit" | "view";
 
-export function DepartmentsView({ departments }: DepartmentsViewProps) {
-  const [rows, setRows] = useState(departments);
+/** Status is the same choice everywhere in this module. */
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+export function DepartmentsView() {
+  const { data, loading, error, retry } = useApiData(fetchDepartments);
+  const rows = data?.data ?? [];
+
   const [mode, setMode] = useState<Mode | null>(null);
   const [active, setActive] = useState<Department | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   function open(next: Mode, department: Department | null) {
     setActive(department);
+    setFailure(null);
     setMode(next);
   }
 
@@ -36,22 +50,42 @@ export function DepartmentsView({ departments }: DepartmentsViewProps) {
     setActive(null);
   }
 
-  function save(department: Department) {
-    setRows((prev) =>
-      // A created department has no row yet; an edited one replaces itself.
-      prev.some((row) => row.id === department.id)
-        ? prev.map((row) => (row.id === department.id ? department : row))
-        : [...prev, department],
-    );
-    close();
+  /** The modal hands back a whole row; the id tells us which call to make. */
+  async function save(department: Department) {
+    const input = {
+      name: department.name,
+      code: department.code,
+      description: department.description,
+      status: department.status,
+    };
+
+    try {
+      if (active) await updateDepartment(active.id, input);
+      else await createDepartment(input);
+      close();
+      retry();
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not save this department.",
+      );
+    }
   }
 
-  function remove(id: string) {
-    setRows((prev) => prev.filter((row) => row.id !== id));
+  async function remove(id: string) {
+    setFailure(null);
+
+    try {
+      await deleteDepartment(id);
+      retry();
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not delete this department.",
+      );
+    }
   }
 
-  const columns = useMemo<Column<Department>[]>(
-    () => [
+  // Rebuilt per render: the row actions close over the latest state.
+  const columns: Column<Department>[] = [
       {
         key: "name",
         header: "Name",
@@ -107,9 +141,7 @@ export function DepartmentsView({ departments }: DepartmentsViewProps) {
           </div>
         ),
       },
-    ],
-    [],
-  );
+  ];
 
   return (
     <div className="space-y-4">
@@ -117,8 +149,7 @@ export function DepartmentsView({ departments }: DepartmentsViewProps) {
         <h1 className="text-2xl leading-8 font-bold text-ink">Department</h1>
 
         <div className="flex flex-wrap gap-3">
-          {/* TODO: refetch from the API once it exists. */}
-          <button type="button" className={outlineAction}>
+          <button type="button" onClick={retry} className={outlineAction}>
             <RefreshCw className="size-4" aria-hidden />
             Refresh
           </button>
@@ -133,14 +164,23 @@ export function DepartmentsView({ departments }: DepartmentsViewProps) {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        minWidth={820}
-        defaultSort={{ key: "name" }}
-        emptyMessage="No departments yet."
-      />
+      {failure ? <p className="text-sm text-negative">{failure}</p> : null}
+
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={retry}
+        loadingLabel="Loading departments…"
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.id}
+          minWidth={820}
+          defaultSort={{ key: "name" }}
+          emptyMessage="No departments yet."
+        />
+      </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
       <DepartmentModal
@@ -216,7 +256,6 @@ function DepartmentModal({
             {readOnly ? "Close" : "Cancel"}
           </button>
           {readOnly ? null : (
-            // TODO: persist through the admin API.
             <button
               type="button"
               onClick={handleSave}

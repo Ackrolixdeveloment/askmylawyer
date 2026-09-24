@@ -23,7 +23,9 @@ import {
   Modal,
   type BadgeTone,
 } from "@/components/ui";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
+import { canChange } from "@/lib/auth";
 import {
   approveEditRequest,
   editRequestProofUrl,
@@ -71,6 +73,7 @@ export function EditRequestDetail({
   const [error, setError] = useState("");
 
   const pending = request.status === "pending";
+  const canDecide = canChange(useAdmin(), "lawyers");
 
   /** Saves the decision, then moves to the list it now belongs to. */
   async function decide(action: () => Promise<unknown>, destination: string) {
@@ -130,8 +133,8 @@ export function EditRequestDetail({
             </p>
           ) : null}
 
-          {/* Actions disappear once the request has been decided. */}
-          {pending ? (
+          {/* Actions disappear once decided, or without full access. */}
+          {pending && canDecide ? (
             <>
               <Button
                 onClick={approve}

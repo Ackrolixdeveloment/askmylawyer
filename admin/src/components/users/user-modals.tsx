@@ -2,39 +2,92 @@
 
 import { useState } from "react";
 import { FilterSelect, Modal, TextField } from "@/components/ui";
-import { roles, statusFilterOptions } from "@/data/mock-users";
-import type { AdminUser } from "@/types/user";
-
-const statusChoices = statusFilterOptions.filter(
-  (option) => option.value !== "all",
-);
-
-/** Roles are picked by name — that is what the row stores. */
-const roleChoices = roles.map((role) => ({
-  value: role.name,
-  label: role.name,
-}));
+import { ApiError } from "@/lib/api";
+import { updateAdminUser } from "@/lib/admin-users";
+import type { AdminUser, Role } from "@/types/user";
 
 interface UserModalProps {
   user: AdminUser | null;
   onClose: () => void;
 }
 
-/**
- * Edit dialog. Fields are local state only — there is no users API yet, so
- * "Save Changes" just closes the dialog.
- */
-export function EditUserModal({ user, onClose }: UserModalProps) {
-  return user ? <EditUserForm user={user} onClose={onClose} /> : null;
+interface EditUserModalProps extends UserModalProps {
+  roles: Role[];
+  /** Reloads the table once the change is saved. */
+  onSaved: () => void;
+}
+
+const statusChoices = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+export function EditUserModal({ user, roles, onClose, onSaved }: EditUserModalProps) {
+  return user ? (
+    <EditUserForm user={user} roles={roles} onClose={onClose} onSaved={onSaved} />
+  ) : null;
 }
 
 /** Keyed by user id from the caller, so each row opens a fresh form. */
-function EditUserForm({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+function EditUserForm({
+  user,
+  roles,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUser;
+  roles: Role[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
-  const [role, setRole] = useState(user.role);
+  const [roleId, setRoleId] = useState(user.roleId);
   const [status, setStatus] = useState(user.status);
+  /** Left blank unless the admin is setting a new one. */
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Built-in roles are not on offer: only one person can be Super Admin.
+  const roleOptions = roles
+    .filter((item) => !item.isSystem)
+    .map((item) => ({ value: item.id, label: item.name }));
+
+  async function save() {
+    if (password && password.length < 8) {
+      setError("The new password needs at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Both passwords must match.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      await updateAdminUser(user.id, {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        // Left out for a Super Admin — theirs is fixed.
+        ...(user.isSystemRole ? {} : { roleId }),
+        // Only sent when a new one was typed; otherwise it stays as it is.
+        ...(password ? { password } : {}),
+        status,
+      });
+      onSaved();
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "Could not save this user.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Modal
@@ -51,13 +104,13 @@ function EditUserForm({ user, onClose }: { user: AdminUser; onClose: () => void 
           >
             Cancel
           </button>
-          {/* TODO: persist via the users API once it exists. */}
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex min-w-40 items-center justify-center rounded-lg bg-sidebar-active px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sidebar-active/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+            onClick={save}
+            disabled={saving}
+            className="inline-flex min-w-40 items-center justify-center rounded-lg bg-sidebar-active px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sidebar-active/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:opacity-60"
           >
-            Save Changes
+            {saving ? "Saving…" : "Save Changes"}
           </button>
         </>
       }
@@ -81,14 +134,41 @@ function EditUserForm({ user, onClose }: { user: AdminUser; onClose: () => void 
         />
         <div>
           <span className="mb-1.5 block text-sm font-medium text-ink">Role</span>
-          <FilterSelect
-            options={roleChoices}
-            value={role}
-            onChange={setRole}
-            aria-label="Role"
-            size="sm"
-          />
+          {user.isSystemRole ? (
+            <p className="rounded-lg border border-line bg-slate-50 px-3.5 py-2.5 text-sm text-ink-muted">
+              {user.role} — this role cannot be changed
+            </p>
+          ) : (
+            <FilterSelect
+              options={roleOptions}
+              value={roleId}
+              onChange={setRoleId}
+              aria-label="Role"
+              size="sm"
+            />
+          )}
         </div>
+        <TextField
+          label="New Password"
+          type="password"
+          value={password}
+          autoComplete="new-password"
+          placeholder="Leave blank to keep the current one"
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <TextField
+          label="Confirm New Password"
+          type="password"
+          value={confirm}
+          autoComplete="new-password"
+          placeholder="Repeat the new password"
+          onChange={(event) => setConfirm(event.target.value)}
+        />
+
+        {error ? (
+          <p className="text-sm text-negative sm:col-span-2">{error}</p>
+        ) : null}
+
         {/* Audit dates are set by the backend. */}
         <TextField label="Created At" value={user.createdAt} readOnly />
         <TextField label="Last Updated" value={user.lastUpdated} readOnly />

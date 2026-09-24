@@ -95,6 +95,15 @@ export class AdminNotificationsService {
 
   /** Sends now and records what went out. */
   async send(adminId: string, dto: SendNotificationDto) {
+    return this.deliver(adminId, dto);
+  }
+
+  /**
+   * Fans a notification out to its audience: an inbox row each, a push to
+   * every phone, and a record of how it went. Used by "send now" and by the
+   * worker that fires scheduled broadcasts.
+   */
+  async deliver(adminId: string | null, dto: SendNotificationDto) {
     const role = AUDIENCE_ROLE[dto.audience];
     let target: { id: string; fullName: string | null } | null = null;
 

@@ -4,29 +4,72 @@ import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card } from "@/components/ui";
+import { ApiError } from "@/lib/api";
 import {
-  accessLevels,
-  defaultPermissions,
-  permissionModules,
+  saveUserPermissions,
   type AccessLevel,
-} from "@/data/mock-permissions";
+  type PermissionModule,
+  type PermissionSet,
+} from "@/lib/admin-users";
 import { cn } from "@/lib/utils";
 import type { AdminUser } from "@/types/user";
 
+const levelLabels: Record<AccessLevel, string> = {
+  none: "No Access",
+  read: "Read Only",
+  full: "Full Access",
+};
+
 interface PermissionMatrixProps {
   user: AdminUser;
+  /** Modules and actions, as the backend defines them. */
+  modules: PermissionModule[];
+  levels: AccessLevel[];
+  /** What this person can reach today. */
+  permissions: PermissionSet;
 }
 
-export function PermissionMatrix({ user }: PermissionMatrixProps) {
+export function PermissionMatrix({
+  user,
+  modules: permissionModules,
+  levels: accessLevelValues,
+  permissions,
+}: PermissionMatrixProps) {
   const router = useRouter();
-  const [levels, setLevels] = useState<Record<string, AccessLevel>>(
-    defaultPermissions,
-  );
+  const [levels, setLevels] = useState<PermissionSet>(permissions);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const accessLevels = accessLevelValues.map((value) => ({
+    value,
+    label: levelLabels[value],
+  }));
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+
+    try {
+      await saveUserPermissions(user.id, levels);
+      setSaved(true);
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not save these permissions.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   /** A module level cascades to the actions nested under it. */
   function setModuleLevel(moduleId: string, level: AccessLevel) {
     const group = permissionModules.find((item) => item.id === moduleId);
+    setSaved(false);
 
     setLevels((prev) => {
       const next = { ...prev, [moduleId]: level };
@@ -91,6 +134,7 @@ export function PermissionMatrix({ user }: PermissionMatrixProps) {
 
                   <LevelPicker
                     label={group.label}
+                    accessLevels={accessLevels}
                     value={levels[group.id] ?? "none"}
                     onChange={(level) => setModuleLevel(group.id, level)}
                   />
@@ -107,10 +151,12 @@ export function PermissionMatrix({ user }: PermissionMatrixProps) {
                       </span>
                       <LevelPicker
                         label={action.label}
+                        accessLevels={accessLevels}
                         value={levels[action.id] ?? "none"}
-                        onChange={(level) =>
-                          setLevels((prev) => ({ ...prev, [action.id]: level }))
-                        }
+                        onChange={(level) => {
+                          setSaved(false);
+                          setLevels((prev) => ({ ...prev, [action.id]: level }));
+                        }}
                       />
                     </div>
                   ))}
@@ -120,6 +166,13 @@ export function PermissionMatrix({ user }: PermissionMatrixProps) {
         </div>
       </Card>
 
+      {error ? <p className="text-right text-sm text-negative">{error}</p> : null}
+      {saved ? (
+        <p className="text-right text-sm text-positive">
+          Saved. {user.name} sees this the next time they sign in.
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap justify-end gap-3">
         <button
           type="button"
@@ -128,12 +181,13 @@ export function PermissionMatrix({ user }: PermissionMatrixProps) {
         >
           Cancel
         </button>
-        {/* TODO: persist the matrix once the permissions API exists. */}
         <button
           type="button"
-          className="inline-flex items-center rounded-lg bg-sidebar-active px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sidebar-active/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center rounded-lg bg-sidebar-active px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sidebar-active/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:opacity-60"
         >
-          Save Permission
+          {saving ? "Saving…" : "Save Permission"}
         </button>
       </div>
     </div>
@@ -143,10 +197,12 @@ export function PermissionMatrix({ user }: PermissionMatrixProps) {
 function LevelPicker({
   label,
   value,
+  accessLevels,
   onChange,
 }: {
   label: string;
   value: AccessLevel;
+  accessLevels: { value: AccessLevel; label: string }[];
   onChange: (level: AccessLevel) => void;
 }) {
   return (

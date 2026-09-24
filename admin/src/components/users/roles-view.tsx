@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   DataTable,
@@ -10,25 +10,49 @@ import {
   TextField,
   type Column,
 } from "@/components/ui";
-import { departmentOptions } from "@/data/mock-categories";
-import { statusOptions } from "@/data/mock-users";
-import type { AdminRole } from "@/types/category";
+import { ScreenState } from "@/components/common/screen-state";
+import { ApiError } from "@/lib/api";
+import {
+  createRole,
+  deleteRole,
+  fetchDepartments,
+  fetchRoles,
+  updateRole,
+} from "@/lib/admin-users";
+import { useApiData } from "@/lib/use-api-data";
+import type { Role } from "@/types/user";
 import type { UserStatus } from "@/types/user";
 import { IconButton, outlineAction, solidAction } from "./admin-table-chrome";
 
-interface RolesViewProps {
-  roles: AdminRole[];
-}
-
 type Mode = "create" | "edit" | "view";
 
-export function RolesView({ roles }: RolesViewProps) {
-  const [rows, setRows] = useState(roles);
-  const [mode, setMode] = useState<Mode | null>(null);
-  const [active, setActive] = useState<AdminRole | null>(null);
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
 
-  function open(next: Mode, role: AdminRole | null) {
+export function RolesView() {
+  const { data, loading, error, retry } = useApiData(() =>
+    Promise.all([fetchRoles(), fetchDepartments()]),
+  );
+  const [roles, departments] = data ?? [];
+  const rows = roles?.data ?? [];
+
+  const departmentOptions = [
+    { value: "", label: "Select" },
+    ...(departments?.data ?? []).map((department) => ({
+      value: department.id,
+      label: department.name,
+    })),
+  ];
+
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [active, setActive] = useState<Role | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  function open(next: Mode, role: Role | null) {
     setActive(role);
+    setFailure(null);
     setMode(next);
   }
 
@@ -37,17 +61,38 @@ export function RolesView({ roles }: RolesViewProps) {
     setActive(null);
   }
 
-  function save(role: AdminRole) {
-    setRows((prev) =>
-      prev.some((row) => row.id === role.id)
-        ? prev.map((row) => (row.id === role.id ? role : row))
-        : [...prev, role],
-    );
-    close();
+  async function remove(id: string) {
+    setFailure(null);
+
+    try {
+      await deleteRole(id);
+      retry();
+    } catch (cause) {
+      setFailure(cause instanceof ApiError ? cause.message : "Could not delete this role.");
+    }
   }
 
-  const columns = useMemo<Column<AdminRole>[]>(
-    () => [
+  async function save(role: Role) {
+    const input = {
+      name: role.name,
+      departmentId: role.departmentId ?? undefined,
+      description: role.description,
+      status: role.status,
+    };
+
+    try {
+      if (active) await updateRole(active.id, input);
+      else await createRole(input);
+      close();
+      retry();
+    } catch (cause) {
+      setFailure(cause instanceof ApiError ? cause.message : "Could not save this role.");
+    }
+  }
+
+
+  // Rebuilt per render: the row actions close over the latest state.
+  const columns: Column<Role>[] = [
       {
         key: "name",
         header: "Role",
@@ -65,13 +110,11 @@ export function RolesView({ roles }: RolesViewProps) {
         ),
       },
       {
-        key: "permissions",
-        header: "Permission",
+        key: "users",
+        header: "Users",
         align: "left",
-        sortValue: (row) => row.permissions,
-        cell: (row) => (
-          <span className="text-ink-muted">{row.permissions}</span>
-        ),
+        sortValue: (row) => row.users,
+        cell: (row) => <span className="text-ink-muted">{row.users}</span>,
       },
       {
         key: "status",
@@ -97,28 +140,32 @@ export function RolesView({ roles }: RolesViewProps) {
             >
               <Eye className="size-4" aria-hidden />
             </IconButton>
-            <IconButton
-              label={`Edit ${row.name}`}
-              tone="brand"
-              onClick={() => open("edit", row)}
-            >
-              <SquarePen className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton
-              label={`Delete ${row.name}`}
-              tone="danger"
-              onClick={() =>
-                setRows((prev) => prev.filter((item) => item.id !== row.id))
-              }
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </IconButton>
+            {/*
+              Super Admin is what keeps the panel running: it is read-only,
+              and the backend refuses to change or remove it either.
+            */}
+            {row.isSystem ? null : (
+              <>
+                <IconButton
+                  label={`Edit ${row.name}`}
+                  tone="brand"
+                  onClick={() => open("edit", row)}
+                >
+                  <SquarePen className="size-4" aria-hidden />
+                </IconButton>
+                <IconButton
+                  label={`Delete ${row.name}`}
+                  tone="danger"
+                  onClick={() => remove(row.id)}
+                >
+                  <Trash2 className="size-4" aria-hidden />
+                </IconButton>
+              </>
+            )}
           </div>
         ),
       },
-    ],
-    [],
-  );
+  ];
 
   return (
     <div className="space-y-4">
@@ -126,8 +173,7 @@ export function RolesView({ roles }: RolesViewProps) {
         <h1 className="text-2xl leading-8 font-bold text-ink">Role</h1>
 
         <div className="flex flex-wrap gap-3">
-          {/* TODO: refetch from the API once it exists. */}
-          <button type="button" className={outlineAction}>
+          <button type="button" onClick={retry} className={outlineAction}>
             <RefreshCw className="size-4" aria-hidden />
             Refresh
           </button>
@@ -142,17 +188,27 @@ export function RolesView({ roles }: RolesViewProps) {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        minWidth={900}
-        emptyMessage="No roles yet."
-      />
+      {failure ? <p className="text-sm text-negative">{failure}</p> : null}
+
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={retry}
+        loadingLabel="Loading roles…"
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.id}
+          minWidth={900}
+          emptyMessage="No roles yet."
+        />
+      </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
       <RoleModal
         key={`${mode}-${active?.id ?? "new"}`}
+        departmentOptions={departmentOptions}
         mode={mode}
         role={active}
         onSave={save}
@@ -165,16 +221,18 @@ export function RolesView({ roles }: RolesViewProps) {
 function RoleModal({
   mode,
   role,
+  departmentOptions,
   onSave,
   onClose,
 }: {
   mode: Mode | null;
-  role: AdminRole | null;
-  onSave: (role: AdminRole) => void;
+  role: Role | null;
+  departmentOptions: { value: string; label: string }[];
+  onSave: (role: Role) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(role?.name ?? "");
-  const [department, setDepartment] = useState(role?.department ?? "");
+  const [departmentId, setDepartmentId] = useState(role?.departmentId ?? "");
   const [description, setDescription] = useState(role?.description ?? "");
   const [status, setStatus] = useState<UserStatus>(role?.status ?? "active");
   const [error, setError] = useState("");
@@ -184,19 +242,21 @@ function RoleModal({
   const readOnly = mode === "view";
 
   function handleSave() {
-    if (!name.trim() || !department) {
+    if (!name.trim() || !departmentId) {
       setError("Role name and department are both required.");
       return;
     }
 
     setError("");
     onSave({
-      id: role?.id ?? `role-${Date.now()}`,
+      id: role?.id ?? "",
       name: name.trim(),
-      department,
+      departmentId,
+      department: role?.department ?? "",
       description: description.trim(),
-      permissions: role?.permissions ?? 0,
+      users: role?.users ?? 0,
       status,
+      isSystem: role?.isSystem ?? false,
     });
   }
 
@@ -236,13 +296,13 @@ function RoleModal({
             </span>
             {readOnly ? (
               <p className="rounded-lg border border-line bg-slate-50 px-3.5 py-2.5 text-sm text-ink-muted">
-                {department || "—"}
+                {role?.department || "—"}
               </p>
             ) : (
               <FilterSelect
                 options={departmentOptions}
-                value={department}
-                onChange={setDepartment}
+                value={departmentId}
+                onChange={setDepartmentId}
                 aria-label="Select department"
                 size="sm"
               />

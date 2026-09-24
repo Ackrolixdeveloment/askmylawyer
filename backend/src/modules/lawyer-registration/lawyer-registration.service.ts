@@ -5,6 +5,7 @@ import { AppException } from '../../common/app-exception';
 import { encryptField } from '../../common/field-encryption';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { AdminAlertsService } from '../admin-alerts/admin-alerts.service';
 import type { BankDto, KycDto, PersonalDto, ProfessionalDto, ProfileDto } from './dto/registration.dto';
 import { checkFile, EXTENSIONS, FILE_RULES, type FileRule } from './file-rules';
 
@@ -51,6 +52,7 @@ export class LawyerRegistrationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly alerts: AdminAlertsService,
   ) {}
 
   /** Everything saved so far, for resuming the flow on any device. */
@@ -401,6 +403,21 @@ export class LawyerRegistrationService {
       },
     });
     if (count === 0) throw applicationLocked();
+
+    // The review team sees it on their bell straight away.
+    const lawyer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true },
+    });
+    const resubmission = profile.onboardingStatus === 'correction_requested';
+    await this.alerts.notify({
+      module: 'lawyers',
+      title: resubmission ? 'Application resubmitted' : 'New lawyer application',
+      body: `${lawyer?.fullName || 'A lawyer'} sent their application for review.`,
+      link: resubmission
+        ? '/lawyers/onboarding/resubmission'
+        : '/lawyers/onboarding/new',
+    });
 
     return this.get(userId);
   }

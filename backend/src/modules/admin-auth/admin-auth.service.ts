@@ -18,6 +18,7 @@ const adminSelect = {
   phone: true,
   status: true,
   lastLoginAt: true,
+  permissions: true,
   role: { select: { id: true, name: true, isSystem: true } },
 } satisfies Prisma.AdminUserSelect;
 

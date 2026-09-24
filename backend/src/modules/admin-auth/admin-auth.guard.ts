@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { AppException } from '../../common/app-exception';
 import { AdminAuthService, type AccessPayload, type AdminProfile } from './admin-auth.service';
 import { ACCESS_COOKIE } from './cookies';
+import { requirementFor, satisfies } from './route-permissions';
 
 export interface AdminRequest extends Request {
   admin: AdminProfile;
@@ -11,6 +12,13 @@ export interface AdminRequest extends Request {
 
 const unauthorized = () =>
   new AppException(HttpStatus.UNAUTHORIZED, 'UNAUTHORIZED', 'Please sign in.');
+
+const forbidden = () =>
+  new AppException(
+    HttpStatus.FORBIDDEN,
+    'NO_ACCESS',
+    'You do not have access to this part of the panel.',
+  );
 
 /** Accepts the access token from the httpOnly cookie, or a Bearer header for API tools. */
 @Injectable()
@@ -41,6 +49,13 @@ export class AdminAuthGuard implements CanActivate {
     if (!admin) throw unauthorized();
 
     request.admin = admin;
+
+    // The Super Admin runs the panel; everyone else is held to their matrix.
+    if (admin.role.isSystem) return true;
+
+    const requirement = requirementFor(request.method, request.originalUrl ?? request.url);
+    if (requirement && !satisfies(admin.permissions, requirement)) throw forbidden();
+
     return true;
   }
 }

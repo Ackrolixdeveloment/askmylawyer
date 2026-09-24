@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DateRangePicker, SegmentedControl } from "@/components/ui";
 import { formatDateRange } from "@/lib/format";
 import type { DateRange, DateRangeValue } from "@/types/dashboard";
+import { NotificationBell } from "./notification-bell";
 import { useSidebar } from "./sidebar-context";
 
 export function Topbar({ title }: { title: string }) {
@@ -75,6 +76,8 @@ export function Topbar({ title }: { title: string }) {
           onDismiss={() => setPickerOpen(false)}
         />
       </div>
+
+      <NotificationBell />
     </header>
   );
 }

@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton } from "@/components/ui";
-import { PermissionMatrix } from "@/components/users/permission-matrix";
-import { adminUsers } from "@/data/mock-users";
+import { PermissionsView } from "@/components/users/permissions-view";
 
 export const metadata: Metadata = {
   title: "Manage Permission",
@@ -13,9 +11,6 @@ export default async function ManagePermissionPage({
   params,
 }: PageProps<"/users/[id]/permissions">) {
   const { id } = await params;
-  const user = adminUsers.find((item) => item.id === id);
-
-  if (!user) notFound();
 
   return (
     <>
@@ -29,7 +24,7 @@ export default async function ManagePermissionPage({
         </h1>
 
         <div className="mt-6">
-          <PermissionMatrix user={user} />
+          <PermissionsView id={id} />
         </div>
       </main>
     </>

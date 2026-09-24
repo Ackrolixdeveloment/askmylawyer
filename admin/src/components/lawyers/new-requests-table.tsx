@@ -17,6 +17,8 @@ import {
   lawyerIdColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 import type { LawyerRequest } from "@/types/lawyer";
 
 const identity = (row: LawyerRequest, basePath: string): LawyerIdentity => ({
@@ -33,10 +35,19 @@ export function placeOf(row: LawyerRequest) {
 }
 
 /** Built per-render so the row menu can navigate. */
+/** Only offered to admins with full access to Lawyer Management. */
+const DELETE_ACTION = {
+  label: "Delete",
+  icon: Trash2,
+  onSelect: () => {},
+  destructive: true,
+};
+
 function buildColumns(
   onView: (row: LawyerRequest) => void,
   dateHeader: string,
   viewBasePath: string,
+  canChangeLawyers: boolean,
 ): Column<LawyerRequest>[] {
   return [
   lawyerIdColumn((row: LawyerRequest) => identity(row, viewBasePath)),
@@ -77,7 +88,7 @@ function buildColumns(
         label={`Actions for ${row.name}`}
         actions={[
           { label: "View", icon: Eye, onSelect: () => onView(row) },
-          { label: "Delete", icon: Trash2, onSelect: () => {}, destructive: true },
+          ...(canChangeLawyers ? [DELETE_ACTION] : []),
           // { label: "Edit", icon: SquarePen, onSelect: () => {} },
         ]}
       />
@@ -107,6 +118,7 @@ export function NewRequestsTable({
 }: NewRequestsTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const canChangeLawyers = canChange(useAdmin(), "lawyers");
   const [state, setState] = useState("all");
   const [experience, setExperience] = useState("all");
 
@@ -116,8 +128,9 @@ export function NewRequestsTable({
         (row) => router.push(`${viewBasePath}/${row.id}`),
         dateHeader,
         viewBasePath,
+        canChangeLawyers,
       ),
-    [router, dateHeader, viewBasePath],
+    [router, dateHeader, viewBasePath, canChangeLawyers],
   );
 
   const rows = useMemo(() => {

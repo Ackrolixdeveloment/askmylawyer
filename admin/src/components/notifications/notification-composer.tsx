@@ -12,13 +12,21 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Modal } from "@/components/ui";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
-import { searchRecipients, sendNotification } from "@/lib/notifications";
+import { canChange } from "@/lib/auth";
+import {
+  scheduleNotification,
+  searchRecipients,
+  sendNotification,
+  updateScheduled,
+} from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import type {
   AudienceReach,
   NotificationAudience,
   NotificationRecipient,
+  ScheduledBroadcast,
   SentNotification,
 } from "@/types/notification";
 
@@ -35,20 +43,46 @@ const isDirect = (audience: NotificationAudience) =>
 const roleOf = (audience: NotificationAudience) =>
   audience === "all_lawyers" || audience === "lawyer" ? "lawyer" : "customer";
 
+/** A datetime-local value ("2026-09-24T18:30") for a given moment. */
+function toLocalInput(date: Date) {
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
 export function NotificationComposer({
   reach,
   initialTitle = "",
   initialBody = "",
+  editing,
+  onSaved,
 }: {
   reach: AudienceReach;
   /** Seeded when the composer is opened from a template. */
   initialTitle?: string;
   initialBody?: string;
+  /** Set when an existing scheduled broadcast is being changed. */
+  editing?: ScheduledBroadcast;
+  onSaved?: () => void;
 }) {
-  const [audience, setAudience] = useState<NotificationAudience>("all_lawyers");
+  // Read-only access can look at the composer, not send from it.
+  const canSend = canChange(useAdmin(), "notifications.send");
+
+  const [audience, setAudience] = useState<NotificationAudience>(
+    editing?.audience ?? "all_lawyers",
+  );
   const [recipient, setRecipient] = useState<NotificationRecipient | null>(null);
-  const [title, setTitle] = useState(initialTitle);
-  const [body, setBody] = useState(initialBody);
+  const [title, setTitle] = useState(editing?.title ?? initialTitle);
+  const [body, setBody] = useState(editing?.body ?? initialBody);
+
+  /** "now" sends straight away; "later" queues it for the worker. */
+  const [timing, setTiming] = useState<"now" | "later">(editing ? "later" : "now");
+
+  // Read the clock once, when the form first appears — never on a re-render.
+  const [sendAt, setSendAt] = useState(() =>
+    toLocalInput(
+      editing ? new Date(editing.scheduledFor) : new Date(Date.now() + 60 * 60_000),
+    ),
+  );
 
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
@@ -58,7 +92,8 @@ export function NotificationComposer({
   const ready =
     title.trim().length >= 3 &&
     body.trim().length >= 3 &&
-    (!isDirect(audience) || recipient !== null);
+    (!isDirect(audience) || recipient !== null || Boolean(editing?.userId)) &&
+    (timing === "now" || sendAt !== "");
 
   const audienceReach = roleOf(audience) === "lawyer" ? reach.lawyers : reach.customers;
   const devices = isDirect(audience) ? (recipient?.devices ?? 0) : audienceReach.devices;
@@ -67,13 +102,28 @@ export function NotificationComposer({
     setSending(true);
     setError(null);
 
+    const payload = {
+      title: title.trim(),
+      body: body.trim(),
+      audience,
+      userId: isDirect(audience)
+        ? (recipient?.id ?? editing?.userId ?? undefined)
+        : undefined,
+    };
+
     try {
-      const result = await sendNotification({
-        title: title.trim(),
-        body: body.trim(),
-        audience,
-        userId: isDirect(audience) ? recipient?.id : undefined,
-      });
+      if (timing === "later") {
+        // Sent by the backend worker when the time comes.
+        const when = new Date(sendAt).toISOString();
+        if (editing) await updateScheduled(editing.id, { ...payload, scheduledFor: when });
+        else await scheduleNotification({ ...payload, scheduledFor: when });
+
+        setConfirming(false);
+        onSaved?.();
+        return;
+      }
+
+      const result = await sendNotification(payload);
 
       setSent(result);
       setConfirming(false);
@@ -94,6 +144,16 @@ export function NotificationComposer({
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
       <div className="space-y-4">
+        {canSend ? null : (
+          <Card className="flex items-start gap-3 border-line bg-canvas p-4">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-ink-subtle" aria-hidden />
+            <p className="text-sm text-ink-muted">
+              You have read-only access here: you can see who a notification
+              would reach, but not send one.
+            </p>
+          </Card>
+        )}
+
         {!reach.pushConfigured ? (
           <Card className="flex items-start gap-3 border-amber-200 bg-amber-50 p-4">
             <CircleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
@@ -130,6 +190,7 @@ export function NotificationComposer({
               label="All lawyers"
               detail={`${reach.lawyers.people} lawyers · ${reach.lawyers.devices} phones`}
               selected={audience === "all_lawyers"}
+              disabled={!canSend}
               onSelect={() => setAudience("all_lawyers")}
             />
             <AudienceOption
@@ -137,6 +198,7 @@ export function NotificationComposer({
               label="All customers"
               detail={`${reach.customers.people} customers · ${reach.customers.devices} phones`}
               selected={audience === "all_customers"}
+              disabled={!canSend}
               onSelect={() => setAudience("all_customers")}
             />
             <AudienceOption
@@ -144,6 +206,7 @@ export function NotificationComposer({
               label="A specific lawyer"
               detail="Search by name, mobile or email"
               selected={audience === "lawyer"}
+              disabled={!canSend}
               onSelect={() => setAudience("lawyer")}
             />
             <AudienceOption
@@ -151,6 +214,7 @@ export function NotificationComposer({
               label="A specific customer"
               detail="Search by name, mobile or email"
               selected={audience === "customer"}
+              disabled={!canSend}
               onSelect={() => setAudience("customer")}
             />
           </div>
@@ -160,10 +224,58 @@ export function NotificationComposer({
               <RecipientPicker
                 role={roleOf(audience)}
                 selected={recipient}
+                disabled={!canSend}
                 onSelect={setRecipient}
               />
             </div>
           ) : null}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-base font-semibold text-ink">When</h2>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setTiming("now")}
+              disabled={!canSend || Boolean(editing)}
+              aria-pressed={timing === "now"}
+              className={cn(
+                "rounded-lg border px-4 py-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                timing === "now"
+                  ? "border-brand bg-brand-soft font-medium text-ink"
+                  : "border-line bg-surface text-ink-muted hover:border-brand/40",
+              )}
+            >
+              Send now
+            </button>
+            <button
+              type="button"
+              onClick={() => setTiming("later")}
+              disabled={!canSend}
+              aria-pressed={timing === "later"}
+              className={cn(
+                "rounded-lg border px-4 py-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                timing === "later"
+                  ? "border-brand bg-brand-soft font-medium text-ink"
+                  : "border-line bg-surface text-ink-muted hover:border-brand/40",
+              )}
+            >
+              Schedule for later
+            </button>
+
+            {timing === "later" ? (
+              <input
+                type="datetime-local"
+                value={sendAt}
+                min={editing ? undefined : sendAt}
+                disabled={!canSend}
+                onChange={(event) => setSendAt(event.target.value)}
+                aria-label="Send at"
+                className={cn(inputClasses, "w-auto")}
+              />
+            ) : null}
+          </div>
         </Card>
 
         <Card className="p-5">
@@ -175,6 +287,7 @@ export function NotificationComposer({
                 id="notification-title"
                 value={title}
                 maxLength={TITLE_LIMIT}
+                disabled={!canSend}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder="Eg. Scheduled maintenance tonight"
                 className={inputClasses}
@@ -187,6 +300,7 @@ export function NotificationComposer({
                 rows={4}
                 value={body}
                 maxLength={BODY_LIMIT}
+                disabled={!canSend}
                 onChange={(event) => setBody(event.target.value)}
                 placeholder="What do you want them to know?"
                 className={cn(inputClasses, "resize-y")}
@@ -198,16 +312,26 @@ export function NotificationComposer({
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-muted">
-              {devices === 0
-                ? "No phones to deliver to yet."
-                : `Goes to ${devices} phone${devices === 1 ? "" : "s"}.`}
+              {timing === "later"
+                ? `Goes out on ${new Date(sendAt).toLocaleString("en-IN")}.`
+                : devices === 0
+                  ? "No phones to deliver to yet."
+                  : `Goes to ${devices} phone${devices === 1 ? "" : "s"}.`}
             </p>
             <Button
-              onClick={() => (isDirect(audience) ? send() : setConfirming(true))}
-              disabled={!ready || sending}
+              onClick={() =>
+                isDirect(audience) || timing === "later" ? send() : setConfirming(true)
+              }
+              disabled={!canSend || !ready || sending}
             >
               <Send className="size-4" aria-hidden />
-              {sending ? "Sending…" : "Send notification"}
+              {sending
+                ? "Saving…"
+                : timing === "later"
+                  ? editing
+                    ? "Save changes"
+                    : "Schedule notification"
+                  : "Send notification"}
             </Button>
           </div>
         </Card>
@@ -249,18 +373,21 @@ function AudienceOption({
   label,
   detail,
   selected,
+  disabled,
   onSelect,
 }: {
   icon: typeof Users;
   label: string;
   detail: string;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       aria-pressed={selected}
       className={cn(
         "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
@@ -268,6 +395,7 @@ function AudienceOption({
         selected
           ? "border-brand bg-brand-soft"
           : "border-line bg-surface hover:border-brand/40",
+        disabled ? "cursor-not-allowed opacity-60 hover:border-line" : null,
       )}
     >
       <span
@@ -291,10 +419,12 @@ function AudienceOption({
 function RecipientPicker({
   role,
   selected,
+  disabled,
   onSelect,
 }: {
   role: "lawyer" | "customer";
   selected: NotificationRecipient | null;
+  disabled?: boolean;
   onSelect: (recipient: NotificationRecipient | null) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -350,7 +480,7 @@ function RecipientPicker({
               : `${selected.devices} phone${selected.devices === 1 ? "" : "s"} signed in`}
           </p>
         </div>
-        <Button variant="outline" onClick={() => onSelect(null)}>
+        <Button variant="outline" onClick={() => onSelect(null)} disabled={disabled}>
           Change
         </Button>
       </div>
@@ -366,6 +496,7 @@ function RecipientPicker({
         />
         <input
           value={query}
+          disabled={disabled}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={`Search ${role}s by name, mobile or email…`}
           aria-label={`Search ${role}s`}
@@ -386,7 +517,8 @@ function RecipientPicker({
               <button
                 type="button"
                 onClick={() => onSelect(person)}
-                className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-canvas focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+                disabled={disabled}
+                className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-canvas focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-ink">

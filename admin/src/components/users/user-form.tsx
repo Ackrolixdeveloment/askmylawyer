@@ -9,10 +9,14 @@ import {
   TextField,
   type SelectOption,
 } from "@/components/ui";
+import { ApiError } from "@/lib/api";
+import { createAdminUser } from "@/lib/admin-users";
 
 interface UserFormProps {
   roleOptions: SelectOption[];
   statusOptions: SelectOption[];
+  /** Reloads the list once the account exists. */
+  onCreated?: () => void;
   /**
    * Supplied when the form is shown in a dialog: the surrounding Card is
    * dropped and this runs instead of navigating away.
@@ -20,8 +24,14 @@ interface UserFormProps {
   onDone?: () => void;
 }
 
-export function UserForm({ roleOptions, statusOptions, onDone }: UserFormProps) {
+export function UserForm({
+  roleOptions,
+  statusOptions,
+  onCreated,
+  onDone,
+}: UserFormProps) {
   const router = useRouter();
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -31,7 +41,7 @@ export function UserForm({ roleOptions, statusOptions, onDone }: UserFormProps) 
   const [status, setStatus] = useState("active");
   const [error, setError] = useState("");
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
     if (!name.trim() || !email.trim() || !phone.trim() || !role) {
@@ -48,7 +58,28 @@ export function UserForm({ roleOptions, statusOptions, onDone }: UserFormProps) 
     }
 
     setError("");
-    // TODO: create the user through the admin API.
+    setSaving(true);
+
+    try {
+      await createAdminUser({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        roleId: role,
+        password,
+        status: status as "active" | "inactive",
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError ? cause.message : "Could not create this user.",
+      );
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
+    onCreated?.();
+
     if (onDone) {
       onDone();
       return;
@@ -130,9 +161,10 @@ export function UserForm({ roleOptions, statusOptions, onDone }: UserFormProps) 
           </Button>
           <Button
             type="submit"
+            disabled={saving}
             className="bg-sidebar-active hover:bg-sidebar-active/90"
           >
-            Create User
+            {saving ? "Creating…" : "Create User"}
           </Button>
         </div>
       </form>

@@ -15,7 +15,9 @@ import {
   type SelectOption,
 } from "@/components/ui";
 import { ScreenState } from "@/components/common/screen-state";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
+import { canChange } from "@/lib/auth";
 import { approveEditRequest, fetchEditRequests } from "@/lib/edit-requests";
 import { useApiData } from "@/lib/use-api-data";
 import {
@@ -45,6 +47,7 @@ function buildColumns(
   listPath: string,
   onOpen: (row: EditRequest) => void,
   onApprove: (row: EditRequest) => void,
+  canDecide: boolean,
 ): Column<EditRequest>[] {
   const identity = (row: EditRequest): LawyerIdentity => ({
     lawyerId: row.lawyerId,
@@ -62,7 +65,7 @@ function buildColumns(
         { label: "View", icon: Eye, onSelect: () => onOpen(row) },
       ];
 
-      if (status === "pending") {
+      if (status === "pending" && canDecide) {
         actions.push(
           { label: "Approve", icon: CircleCheck, onSelect: () => onApprove(row) },
           // Rejecting needs a reason, so it happens on the detail screen.
@@ -155,6 +158,8 @@ const periodOptions: SelectOption[] = [
 
 export function EditRequestsTable({ status }: { status: EditRequestStatus }) {
   const router = useRouter();
+  // Deciding a request changes a lawyer's record, so it needs full access.
+  const canDecide = canChange(useAdmin(), "lawyers");
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("all");
   const [actionError, setActionError] = useState("");
@@ -189,10 +194,11 @@ export function EditRequestsTable({ status }: { status: EditRequestStatus }) {
         listPath,
         (row) => router.push(`${listPath}/${row.id}`),
         (row) => void approve(row.id),
+        canDecide,
       ),
     // `approve` is rebuilt each render; the columns only need the route.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [status, listPath, router],
+    [status, listPath, router, canDecide],
   );
 
   const rows = useMemo(() => {

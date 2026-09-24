@@ -2,11 +2,7 @@
  * Placeholder audience segments — replace with the admin API.
  * Shapes live in `src/types/notification.ts`.
  */
-import type {
-  AudienceSegment,
-  NotificationTemplate,
-  ScheduledBroadcast,
-} from "@/types/notification";
+import type { AudienceSegment, NotificationTemplate } from "@/types/notification";
 
 export const audienceSegments: AudienceSegment[] = [
   { value: "all-customers", label: "All customers", reach: 18245 },
@@ -63,17 +59,3 @@ export const notificationTemplates: NotificationTemplate[] = [
   },
 ];
 
-export const scheduledBroadcasts: ScheduledBroadcast[] = Array.from(
-  { length: 14 },
-  (_, index) => ({
-    id: `broadcast-${index + 1}`,
-    title: "We miss you - come back with 25% off",
-    body: "It has been a while. Come back and get 25% off your next legal consultation. Offer valid for a limited time.",
-    audience: "Inactive 30+d",
-    segmentValue: "inactive-30",
-    channels: "Push + SMS",
-    scheduledFor: "2026-08-15T00:00",
-    estimatedReach: 18245,
-    createdBy: "Admin",
-  }),
-);

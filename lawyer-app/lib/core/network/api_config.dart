@@ -11,8 +11,12 @@ class ApiConfig {
   static const _devTunnel = 'https://f194n1ll-4000.inc1.devtunnels.ms';
 
   static String get baseUrl {
-    if (_fromBuild.isNotEmpty) return _fromBuild;
-    return _devTunnel;
+    final value = _fromBuild.isNotEmpty ? _fromBuild : _devTunnel;
+    // Every path starts with "/api/v1", and a trailing slash here would make
+    // that "//api/v1" — which the server answers with a 404.
+    return value.endsWith('/')
+        ? value.substring(0, value.length - 1)
+        : value;
   }
 
   static const timeout = Duration(seconds: 20);

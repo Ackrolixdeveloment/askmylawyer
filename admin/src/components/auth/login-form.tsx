@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, TextField } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { signIn } from "@/lib/auth";
+import { canSee, signIn } from "@/lib/auth";
+import { landingPath } from "@/lib/modules";
 
 export function LoginForm() {
   const router = useRouter();
@@ -25,8 +26,9 @@ export function LoginForm() {
 
     setSubmitting(true);
     try {
-      await signIn(email, password);
-      router.replace("/dashboard");
+      const admin = await signIn(email, password);
+      // Someone without the dashboard lands on the first module they hold.
+      router.replace(landingPath((moduleId) => canSee(admin, moduleId)));
     } catch (caught) {
       setSubmitting(false);
       if (caught instanceof ApiError) {

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { SignedOutOnly } from "@/components/auth/signed-out-only";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
@@ -18,7 +19,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
           </span>
         </div>
 
-        {children}
+        <SignedOutOnly>{children}</SignedOutOnly>
       </div>
     </div>
   );

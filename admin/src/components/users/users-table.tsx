@@ -11,17 +11,31 @@ import {
   SearchInput,
   type Column,
 } from "@/components/ui";
-import {
-  dateFilterOptions,
-  roleFilterOptions,
-  statusFilterOptions,
-} from "@/data/mock-users";
-import type { AdminUser } from "@/types/user";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { ApiError } from "@/lib/api";
+import { deleteAdminUser } from "@/lib/admin-users";
+import type { AdminUser, Role } from "@/types/user";
 import { EditUserModal, ViewUserModal } from "./user-modals";
 
 interface UsersTableProps {
   users: AdminUser[];
+  roles: Role[];
+  /** Reloads the list after an edit or a delete. */
+  onChanged: () => void;
 }
+
+const statusFilterOptions = [
+  { value: "all", label: "Status" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+const dateFilterOptions = [
+  { value: "all", label: "Last active" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "week", label: "This week" },
+];
 
 /** "Last active" is a phrase, so the date filter matches on the phrase. */
 function matchesDate(lastActive: string, filter: string) {
@@ -39,16 +53,36 @@ function matchesDate(lastActive: string, filter: string) {
   }
 }
 
-export function UsersTable({ users }: UsersTableProps) {
+export function UsersTable({ users, roles, onChanged }: UsersTableProps) {
+  const admin = useAdmin();
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [date, setDate] = useState("all");
   const [viewUser, setViewUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
-  const columns = useMemo<Column<AdminUser>[]>(
-    () => [
+  const roleFilterOptions = [
+    { value: "all", label: "Role" },
+    ...roles.map((item) => ({ value: item.name, label: item.name })),
+  ];
+
+  async function remove(user: AdminUser) {
+    setFailure(null);
+
+    try {
+      await deleteAdminUser(user.id);
+      onChanged();
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not delete this user.",
+      );
+    }
+  }
+
+  // Rebuilt per render: the row actions close over the latest state.
+  const columns: Column<AdminUser>[] = [
       {
         key: "name",
         header: "Name",
@@ -123,15 +157,24 @@ export function UsersTable({ users }: UsersTableProps) {
             >
               <SquarePen className="size-4" aria-hidden />
             </IconButton>
-            <IconButton label={`Delete ${row.name}`} tone="danger">
-              <Trash2 className="size-4" aria-hidden />
-            </IconButton>
+            {/*
+              A Super Admin keeps the panel running, and nobody deletes the
+              account they are signed in with. Both are refused server-side
+              too; the button is simply not offered.
+            */}
+            {row.isSystemRole || row.id === admin.id ? null : (
+              <IconButton
+                label={`Delete ${row.name}`}
+                tone="danger"
+                onClick={() => remove(row)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </IconButton>
+            )}
           </div>
         ),
       },
-    ],
-    [],
-  );
+  ];
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -154,6 +197,7 @@ export function UsersTable({ users }: UsersTableProps) {
 
   return (
     <div className="space-y-4">
+      {failure ? <p className="text-sm text-negative">{failure}</p> : null}
       <Card className="p-4">
         <div className="flex flex-col gap-3 lg:flex-row">
           <div className="min-w-0 flex-1">
@@ -206,7 +250,9 @@ export function UsersTable({ users }: UsersTableProps) {
       <EditUserModal
         key={editUser?.id}
         user={editUser}
+        roles={roles}
         onClose={() => setEditUser(null)}
+        onSaved={onChanged}
       />
     </div>
   );

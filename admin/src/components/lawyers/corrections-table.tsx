@@ -19,6 +19,8 @@ import {
   lawyerIdColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 import type { CorrectionRequest } from "@/types/lawyer";
 
 const identity = (row: CorrectionRequest, basePath: string): LawyerIdentity => ({
@@ -37,10 +39,19 @@ const sectionTone: Record<string, BadgeTone> = {
   "Professional Profile": "success",
 };
 
+/** Only offered to admins with full access to Lawyer Management. */
+const DELETE_ACTION = {
+  label: "Delete",
+  icon: Trash2,
+  onSelect: () => {},
+  destructive: true,
+};
+
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
   onOpen: (row: CorrectionRequest) => void,
   basePath: string,
+  canChangeLawyers: boolean,
 ): Column<CorrectionRequest>[] {
   return [
     lawyerIdColumn((row: CorrectionRequest) => identity(row, basePath)),
@@ -80,12 +91,7 @@ function buildColumns(
           label={`Actions for ${row.name}`}
           actions={[
             { label: "View", icon: Eye, onSelect: () => onOpen(row) },
-            {
-              label: "Delete",
-              icon: Trash2,
-              onSelect: () => {},
-              destructive: true,
-            },
+            ...(canChangeLawyers ? [DELETE_ACTION] : []),
           ]}
         />
       ),
@@ -111,14 +117,19 @@ export function CorrectionsTable({
 }: CorrectionsTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const canChangeLawyers = canChange(useAdmin(), "lawyers");
   const [type, setType] = useState("all");
   const [state, setState] = useState("all");
   const [days, setDays] = useState("all");
 
   const columns = useMemo(
     () =>
-      buildColumns((row) => router.push(`${basePath}/${row.id}`), basePath),
-    [router, basePath],
+      buildColumns(
+        (row) => router.push(`${basePath}/${row.id}`),
+        basePath,
+        canChangeLawyers,
+      ),
+    [router, basePath, canChangeLawyers],
   );
 
   const rows = useMemo(() => {

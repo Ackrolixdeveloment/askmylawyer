@@ -56,7 +56,13 @@ class LawyerApp extends StatelessWidget {
               maxScaleFactor: 1.15,
             ),
           ),
-          child: child!,
+          // A tap on anything that is not a field puts the keyboard away.
+          // iOS has no back gesture for that, so every screen needs it.
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: child!,
+          ),
         );
       },
       home: const SplashScreen(),

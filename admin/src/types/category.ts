@@ -1,19 +1,13 @@
 import type { UserStatus } from "./user";
 
+/** What a support ticket or complaint is about, e.g. "Payment failed". */
 export interface Category {
   id: string;
   name: string;
-  /** Department this category belongs to. */
+  departmentId: string;
+  /** Department name, for the table. */
   department: string;
   status: UserStatus;
 }
 
-export interface AdminRole {
-  id: string;
-  name: string;
-  department: string;
-  description: string;
-  /** How many permissions this role grants. */
-  permissions: number;
-  status: UserStatus;
-}
+

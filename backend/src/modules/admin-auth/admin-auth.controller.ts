@@ -4,7 +4,19 @@ import type { Request, Response } from 'express';
 import { AdminAuthGuard, type AdminRequest } from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
 import { clearAuthCookies, REFRESH_COOKIE, setAuthCookies } from './cookies';
+import { normalisePermissions } from '../admin-users/permission-catalogue';
+import { type AdminProfile } from './admin-auth.service';
 import { LoginDto } from './dto/login.dto';
+
+/**
+ * What the panel needs about whoever is signed in: their details and the
+ * modules they may open. The Super Admin reaches everything.
+ */
+const session = (admin: AdminProfile) => ({
+  ...admin,
+  isSuperAdmin: admin.role.isSystem,
+  permissions: normalisePermissions(admin.permissions),
+});
 
 const clientInfo = (request: Request) => ({
   ip: request.ip,
@@ -25,7 +37,7 @@ export class AdminAuthController {
   ) {
     const { admin, tokens } = await this.auth.login(dto.email, dto.password, clientInfo(request));
     setAuthCookies(response, tokens);
-    return { admin, accessTokenExpiresAt: tokens.accessExpiresAt };
+    return { admin: session(admin), accessTokenExpiresAt: tokens.accessExpiresAt };
   }
 
   @Post('refresh')
@@ -52,6 +64,6 @@ export class AdminAuthController {
   @Get('me')
   @UseGuards(AdminAuthGuard)
   me(@Req() request: AdminRequest) {
-    return { admin: request.admin };
+    return { admin: session(request.admin) };
   }
 }

@@ -4,6 +4,7 @@ import { AppException } from '../../common/app-exception';
 import { lawyerCode } from '../../common/lawyer-code';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { AdminAlertsService } from '../admin-alerts/admin-alerts.service';
 import { encryptField } from '../../common/field-encryption';
 import { checkFile, EXTENSIONS, FILE_RULES } from '../lawyer-registration/file-rules';
 import type { UpdateBankDto, UpdateProfileDto } from './dto/update-profile.dto';
@@ -17,6 +18,7 @@ export class LawyerProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly alerts: AdminAlertsService,
   ) {}
 
   /** Saves whichever sections the app sent. */
@@ -100,6 +102,17 @@ export class LawyerProfileService {
         proofMime: mimeType,
         proofSize: proof.size,
       },
+    });
+
+    const lawyer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true },
+    });
+    await this.alerts.notify({
+      module: 'lawyers',
+      title: 'Bank change awaiting approval',
+      body: `${lawyer?.fullName || 'A lawyer'} asked to change their bank account.`,
+      link: '/lawyers/edit-approvals/pending',
     });
 
     return this.get(userId);

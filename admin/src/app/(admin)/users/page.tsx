@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { UserHeaderActions } from "@/components/users/user-header-actions";
-import { UsersTable } from "@/components/users/users-table";
-import { adminUsers, roleOptions, statusOptions } from "@/data/mock-users";
+import { UsersView } from "@/components/users/users-view";
 
 export const metadata: Metadata = {
   title: "User Management",
@@ -21,17 +19,7 @@ export default function UserManagementPage() {
           Manage admin users, roles and access permissions.
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-ink">Users</h2>
-          <UserHeaderActions
-            roleOptions={roleOptions}
-            statusOptions={statusOptions}
-          />
-        </div>
-
-        <div className="mt-4">
-          <UsersTable users={adminUsers} />
-        </div>
+        <UsersView />
       </main>
     </>
   );

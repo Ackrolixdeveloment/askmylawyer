@@ -2,6 +2,10 @@ export type UserStatus = "active" | "inactive";
 
 export interface AdminUser {
   id: string;
+  /** Which role the person holds; the id drives the form's select. */
+  roleId: string;
+  /** Built-in roles (Super Admin) cannot be deleted. */
+  isSystemRole: boolean;
   /** Shown under the name, e.g. "EMP - 0001". */
   employeeCode: string;
   name: string;
@@ -17,11 +21,17 @@ export interface AdminUser {
   status: UserStatus;
 }
 
+/** A job title. Module access is set per user, not on the role. */
 export interface Role {
   id: string;
   name: string;
-  /** Null for top-level roles. */
-  parentId: string | null;
-  /** Built-in roles cannot be deleted. */
-  system?: boolean;
+  /** Empty when the role is not tied to a department. */
+  departmentId: string | null;
+  department: string;
+  description: string;
+  /** How many admin users hold it. */
+  users: number;
+  status: UserStatus;
+  /** Built-in roles (Super Admin) cannot be deleted. */
+  isSystem: boolean;
 }

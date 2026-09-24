@@ -24,7 +24,7 @@ void openPostLoginScreen(
     _ => const ApplicationSubmittedScreen(),
   };
 
-  Navigator.of(context).pushAndRemoveUntil(
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
     MaterialPageRoute<void>(builder: (_) => next),
     (_) => false,
   );

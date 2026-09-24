@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeft, X } from "lucide-react";
 import { useState } from "react";
-import { collectHrefs, navSections } from "@/lib/nav";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canSee } from "@/lib/auth";
+import { keyForPath } from "@/lib/modules";
+import { collectHrefs, isNavGroup, navSections, type NavChild } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { SidebarNavItem } from "./sidebar-nav-item";
 import { UserMenu } from "./user-menu";
@@ -27,12 +30,47 @@ export function Sidebar({
   onExpand,
 }: SidebarProps) {
   const pathname = usePathname();
+  const admin = useAdmin();
+
+  /**
+   * Anything this admin was not granted is left out — a whole module, or a
+   * single screen inside one. A group with nothing left disappears with it.
+   */
+  const allowed = (href: string) => {
+    const required = keyForPath(href);
+    return !required || canSee(admin, required);
+  };
+
+  const visibleSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .map((item) => {
+          if (!item.children) return item;
+
+          const children: NavChild[] = item.children
+            .map((child) =>
+              isNavGroup(child)
+                ? { ...child, children: child.children.filter((leaf) => allowed(leaf.href)) }
+                : child,
+            )
+            .filter((child) =>
+              isNavGroup(child) ? child.children.length > 0 : allowed(child.href),
+            );
+
+          return { ...item, children };
+        })
+        .filter((item) =>
+          item.children ? item.children.length > 0 : allowed(item.href),
+        ),
+    }))
+    .filter((section) => section.items.length > 0);
 
   const isBranchActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
   const activeItem =
-    navSections
+    visibleSections
       .flatMap((section) => section.items)
       .find((item) => collectHrefs(item).some(isBranchActive))?.href ?? null;
 
@@ -109,7 +147,7 @@ export function Sidebar({
           collapsed ? "px-2" : "px-3 sm:px-4",
         )}
       >
-        {navSections.map((section, index) => (
+        {visibleSections.map((section, index) => (
           <div key={section.label ?? `section-${index}`} className="mb-2">
             {section.label && !collapsed ? (
               <p className="px-4 pt-3 pb-2 text-xs font-semibold tracking-wider text-ink-subtle uppercase">

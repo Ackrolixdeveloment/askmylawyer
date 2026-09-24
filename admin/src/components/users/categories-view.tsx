@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   DataTable,
@@ -10,25 +10,50 @@ import {
   TextField,
   type Column,
 } from "@/components/ui";
-import { departmentOptions } from "@/data/mock-categories";
-import { statusOptions } from "@/data/mock-users";
+import { ScreenState } from "@/components/common/screen-state";
+import { ApiError } from "@/lib/api";
+import {
+  createCategory,
+  deleteCategory,
+  fetchCategories,
+  fetchDepartments,
+  updateCategory,
+} from "@/lib/admin-users";
+import { useApiData } from "@/lib/use-api-data";
 import type { Category } from "@/types/category";
 import type { UserStatus } from "@/types/user";
 import { IconButton, outlineAction, solidAction } from "./admin-table-chrome";
 
-interface CategoriesViewProps {
-  categories: Category[];
-}
-
 type Mode = "create" | "edit" | "view";
 
-export function CategoriesView({ categories }: CategoriesViewProps) {
-  const [rows, setRows] = useState(categories);
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+export function CategoriesView() {
+  const { data, loading, error, retry } = useApiData(() =>
+    Promise.all([fetchCategories(), fetchDepartments()]),
+  );
+  const [categories, departments] = data ?? [];
+  const rows = categories?.data ?? [];
+
+  // A category always belongs to a department, so the picker lists them.
+  const departmentOptions = [
+    { value: "", label: "Select" },
+    ...(departments?.data ?? []).map((department) => ({
+      value: department.id,
+      label: department.name,
+    })),
+  ];
+
   const [mode, setMode] = useState<Mode | null>(null);
   const [active, setActive] = useState<Category | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   function open(next: Mode, category: Category | null) {
     setActive(category);
+    setFailure(null);
     setMode(next);
   }
 
@@ -37,17 +62,40 @@ export function CategoriesView({ categories }: CategoriesViewProps) {
     setActive(null);
   }
 
-  function save(category: Category) {
-    setRows((prev) =>
-      prev.some((row) => row.id === category.id)
-        ? prev.map((row) => (row.id === category.id ? category : row))
-        : [...prev, category],
-    );
-    close();
+  async function save(category: Category) {
+    const input = {
+      name: category.name,
+      departmentId: category.departmentId,
+      status: category.status,
+    };
+
+    try {
+      if (active) await updateCategory(active.id, input);
+      else await createCategory(input);
+      close();
+      retry();
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not save this category.",
+      );
+    }
   }
 
-  const columns = useMemo<Column<Category>[]>(
-    () => [
+  async function remove(id: string) {
+    setFailure(null);
+
+    try {
+      await deleteCategory(id);
+      retry();
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not delete this category.",
+      );
+    }
+  }
+
+  // Rebuilt per render: the row actions close over the latest state.
+  const columns: Column<Category>[] = [
       {
         key: "name",
         header: "Category",
@@ -98,18 +146,14 @@ export function CategoriesView({ categories }: CategoriesViewProps) {
             <IconButton
               label={`Delete ${row.name}`}
               tone="danger"
-              onClick={() =>
-                setRows((prev) => prev.filter((item) => item.id !== row.id))
-              }
+              onClick={() => remove(row.id)}
             >
               <Trash2 className="size-4" aria-hidden />
             </IconButton>
           </div>
         ),
       },
-    ],
-    [],
-  );
+  ];
 
   return (
     <div className="space-y-4">
@@ -117,8 +161,7 @@ export function CategoriesView({ categories }: CategoriesViewProps) {
         <h1 className="text-2xl leading-8 font-bold text-ink">Category</h1>
 
         <div className="flex flex-wrap gap-3">
-          {/* TODO: refetch from the API once it exists. */}
-          <button type="button" className={outlineAction}>
+          <button type="button" onClick={retry} className={outlineAction}>
             <RefreshCw className="size-4" aria-hidden />
             Refresh
           </button>
@@ -133,19 +176,29 @@ export function CategoriesView({ categories }: CategoriesViewProps) {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        minWidth={820}
-        emptyMessage="No categories yet."
-      />
+      {failure ? <p className="text-sm text-negative">{failure}</p> : null}
+
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={retry}
+        loadingLabel="Loading categories…"
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.id}
+          minWidth={820}
+          emptyMessage="No categories yet."
+        />
+      </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
       <CategoryModal
         key={`${mode}-${active?.id ?? "new"}`}
         mode={mode}
         category={active}
+        departmentOptions={departmentOptions}
         onSave={save}
         onClose={close}
       />
@@ -156,16 +209,18 @@ export function CategoriesView({ categories }: CategoriesViewProps) {
 function CategoryModal({
   mode,
   category,
+  departmentOptions,
   onSave,
   onClose,
 }: {
   mode: Mode | null;
   category: Category | null;
+  departmentOptions: { value: string; label: string }[];
   onSave: (category: Category) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? "");
-  const [department, setDepartment] = useState(category?.department ?? "");
+  const [departmentId, setDepartmentId] = useState(category?.departmentId ?? "");
   const [status, setStatus] = useState<UserStatus>(category?.status ?? "active");
   const [error, setError] = useState("");
 
@@ -180,16 +235,17 @@ function CategoryModal({
         : "View Category";
 
   function handleSave() {
-    if (!name.trim() || !department) {
+    if (!name.trim() || !departmentId) {
       setError("Name and department are both required.");
       return;
     }
 
     setError("");
     onSave({
-      id: category?.id ?? `category-${Date.now()}`,
+      id: category?.id ?? "",
       name: name.trim(),
-      department,
+      departmentId,
+      department: category?.department ?? "",
       status,
     });
   }
@@ -238,13 +294,13 @@ function CategoryModal({
             </span>
             {readOnly ? (
               <p className="rounded-lg border border-line bg-slate-50 px-3.5 py-2.5 text-sm text-ink-muted">
-                {department || "—"}
+                {category?.department || "—"}
               </p>
             ) : (
               <FilterSelect
                 options={departmentOptions}
-                value={department}
-                onChange={setDepartment}
+                value={departmentId}
+                onChange={setDepartmentId}
                 aria-label="Select department"
                 size="sm"
               />

@@ -248,7 +248,10 @@ Future<void> _logout(BuildContext context, LawyerProfile? profile) async {
   await AuthRepository.instance.logout();
   if (!context.mounted) return;
 
-  Navigator.of(context).pushAndRemoveUntil(
+  // Settings sits inside the home shell's tab navigator, so this has to
+  // clear the root stack — otherwise sign-in appears with the bottom bar
+  // still around it.
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
     MaterialPageRoute<void>(builder: (_) => const GetStartedScreen()),
     (_) => false,
   );

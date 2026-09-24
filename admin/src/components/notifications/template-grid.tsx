@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { Card } from "@/components/ui";
+import { canChange } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import type { NotificationTemplate, TemplateTone } from "@/types/notification";
 
@@ -17,6 +19,8 @@ export function TemplateGrid({
   templates: NotificationTemplate[];
 }) {
   const router = useRouter();
+  // Using a template carries it into the composer, which is a send action.
+  const canSend = canChange(useAdmin(), "notifications.send");
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -38,16 +42,18 @@ export function TemplateGrid({
                 {template.body}
               </p>
 
-              <button
-                type="button"
-                // Carries the template into the composer.
-                onClick={() =>
-                  router.push(`/notifications/send?template=${template.id}`)
-                }
-                className="mt-4 w-full rounded-lg border border-line px-4 py-2.5 text-sm text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-              >
-                Use template
-              </button>
+              {canSend ? (
+                <button
+                  type="button"
+                  // Carries the template into the composer.
+                  onClick={() =>
+                    router.push(`/notifications/send?template=${template.id}`)
+                  }
+                  className="mt-4 w-full rounded-lg border border-line px-4 py-2.5 text-sm text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+                >
+                  Use template
+                </button>
+              ) : null}
             </div>
           </Card>
         );

@@ -9,30 +9,50 @@ import {
   DataTable,
   DropdownMenu,
   Modal,
+  type BadgeTone,
   type Column,
 } from "@/components/ui";
-import { formatNumber } from "@/lib/format";
-import type { ScheduledBroadcast } from "@/types/notification";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 
-/** "2026-08-15T00:00" -> "15 Aug 2026 , 12:00 AM" */
+import type { ScheduledBroadcast, ScheduledStatus } from "@/types/notification";
+
+/** "15 Aug 2026, 12:00 AM" in the admin team's own time. */
 function formatSchedule(value: string) {
-  const [date, time] = value.split("T");
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
-
-  const monthName = new Date(year, month - 1, day).toLocaleString("en-IN", {
+  const at = new Date(value);
+  const date = at.toLocaleDateString("en-IN", {
+    day: "2-digit",
     month: "short",
+    year: "numeric",
   });
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const time = at
+    .toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+    .toUpperCase();
 
-  return `${day} ${monthName} ${year} , ${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+  return `${date}, ${time}`;
 }
+
+const statusLabel: Record<ScheduledStatus, string> = {
+  scheduled: "Scheduled",
+  sent: "Sent",
+  cancelled: "Cancelled",
+  failed: "Failed",
+};
+
+const statusTone: Record<ScheduledStatus, BadgeTone> = {
+  scheduled: "info",
+  sent: "success",
+  cancelled: "neutral",
+  failed: "danger",
+};
 
 /** Built per-render so the row menu can open the dialog or navigate. */
 function buildColumns(
   onView: (row: ScheduledBroadcast) => void,
   onEdit: (row: ScheduledBroadcast) => void,
+  onCancel: (row: ScheduledBroadcast) => void,
+  /** Read-only access gets View and nothing that changes a broadcast. */
+  canChangeScheduled: boolean,
 ): Column<ScheduledBroadcast>[] {
   return [
     {
@@ -45,13 +65,7 @@ function buildColumns(
       key: "audience",
       header: "Audience",
       sortValue: (row) => row.audience,
-      cell: (row) => <Badge tone="refunded">{row.audience}</Badge>,
-    },
-    {
-      key: "channels",
-      header: "Channels",
-      sortValue: (row) => row.channels,
-      cell: (row) => <span className="text-ink-muted">{row.channels}</span>,
+      cell: (row) => <Badge tone="refunded">{row.audienceLabel}</Badge>,
     },
     {
       key: "scheduledFor",
@@ -62,18 +76,31 @@ function buildColumns(
       ),
     },
     {
-      key: "estimatedReach",
-      header: "Est Reach",
-      sortValue: (row) => row.estimatedReach,
+      key: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
       cell: (row) => (
-        <span className="text-ink">{formatNumber(row.estimatedReach)}</span>
+        <Badge tone={statusTone[row.status]}>{statusLabel[row.status]}</Badge>
       ),
+    },
+    {
+      key: "delivery",
+      header: "Delivery",
+      sortValue: (row) => row.delivered,
+      cell: (row) =>
+        row.status === "sent" ? (
+          <span className="text-ink">
+            {row.delivered} of {row.recipients}
+          </span>
+        ) : (
+          <span className="text-ink-subtle">—</span>
+        ),
     },
     {
       key: "createdBy",
       header: "Created by",
-      sortValue: (row) => row.createdBy,
-      cell: (row) => <span className="text-ink-muted">{row.createdBy}</span>,
+      sortValue: (row) => row.createdBy ?? "",
+      cell: (row) => <span className="text-ink-muted">{row.createdBy ?? "—"}</span>,
     },
     {
       key: "action",
@@ -83,13 +110,17 @@ function buildColumns(
           label={`Actions for ${row.title}`}
           actions={[
             { label: "View", icon: Eye, onSelect: () => onView(row) },
-            { label: "Edit", icon: SquarePen, onSelect: () => onEdit(row) },
-            {
-              label: "Cancel",
-              icon: Trash2,
-              onSelect: () => {},
-              destructive: true,
-            },
+            ...(canChangeScheduled && row.status === "scheduled"
+              ? [
+                  { label: "Edit", icon: SquarePen, onSelect: () => onEdit(row) },
+                  {
+                    label: "Cancel",
+                    icon: Trash2,
+                    onSelect: () => onCancel(row),
+                    destructive: true,
+                  },
+                ]
+              : []),
           ]}
         />
       ),
@@ -99,18 +130,25 @@ function buildColumns(
 
 export function ScheduledTable({
   broadcasts,
+  onCancel,
 }: {
   broadcasts: ScheduledBroadcast[];
+  /** Calls the broadcast off; the list reloads afterwards. */
+  onCancel: (row: ScheduledBroadcast) => void;
 }) {
   const router = useRouter();
+  const canChangeScheduled = canChange(useAdmin(), "notifications.scheduled");
   const [viewing, setViewing] = useState<ScheduledBroadcast | null>(null);
 
   const columns = useMemo(
     () =>
-      buildColumns(setViewing, (row) =>
-        router.push(`/notifications/send?broadcast=${row.id}`),
+      buildColumns(
+        setViewing,
+        (row) => router.push(`/notifications/send?scheduled=${row.id}`),
+        onCancel,
+        canChangeScheduled,
       ),
-    [router],
+    [router, onCancel, canChangeScheduled],
   );
 
   return (
@@ -134,28 +172,36 @@ export function ScheduledTable({
             <Button variant="outline" onClick={() => setViewing(null)}>
               Close
             </Button>
-            <Button
-              onClick={() => {
-                if (viewing) {
-                  router.push(`/notifications/send?broadcast=${viewing.id}`);
-                }
-              }}
-            >
-              Edit broadcast
-            </Button>
+            {canChangeScheduled ? (
+              <Button
+                onClick={() => {
+                  if (viewing) {
+                    router.push(`/notifications/send?scheduled=${viewing.id}`);
+                  }
+                }}
+                disabled={viewing?.status !== "scheduled"}
+              >
+                Edit broadcast
+              </Button>
+            ) : null}
           </>
         }
       >
         {viewing ? (
           <dl className="space-y-3">
             <Row label="Message">{viewing.body}</Row>
-            <Row label="Audience">{viewing.audience}</Row>
-            <Row label="Channels">{viewing.channels}</Row>
+            <Row label="Audience">{viewing.audienceLabel}</Row>
             <Row label="Scheduled for">{formatSchedule(viewing.scheduledFor)}</Row>
-            <Row label="Estimated reach">
-              {formatNumber(viewing.estimatedReach)}
-            </Row>
-            <Row label="Created by">{viewing.createdBy}</Row>
+            <Row label="Status">{statusLabel[viewing.status]}</Row>
+            {viewing.status === "sent" ? (
+              <Row label="Delivered">
+                {viewing.delivered} of {viewing.recipients} device
+                {viewing.recipients === 1 ? "" : "s"}
+                {viewing.failed > 0 ? ` · ${viewing.failed} failed` : ""}
+              </Row>
+            ) : null}
+            {viewing.error ? <Row label="Problem">{viewing.error}</Row> : null}
+            <Row label="Created by">{viewing.createdBy ?? "—"}</Row>
           </dl>
         ) : null}
       </Modal>

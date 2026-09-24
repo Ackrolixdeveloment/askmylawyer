@@ -19,7 +19,9 @@ import {
   lawyerIdColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
+import { canChange } from "@/lib/auth";
 import { deleteDraftLawyer } from "@/lib/lawyers";
 import { formatDdMmYyyy } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -61,6 +63,7 @@ function StoppedAt({ row }: { row: DraftProfile }) {
 function buildColumns(
   onView: (row: DraftProfile) => void,
   onDelete: (row: DraftProfile) => void,
+  canChangeLawyers: boolean,
 ): Column<DraftProfile>[] {
   return [
     lawyerIdColumn((row: DraftProfile) => identity(row)),
@@ -105,12 +108,16 @@ function buildColumns(
           label={`Actions for ${row.name}`}
           actions={[
             { label: "View", icon: Eye, onSelect: () => onView(row) },
-            {
-              label: "Delete",
-              icon: Trash2,
-              onSelect: () => onDelete(row),
-              destructive: true,
-            },
+            ...(canChangeLawyers
+              ? [
+                  {
+                    label: "Delete",
+                    icon: Trash2,
+                    onSelect: () => onDelete(row),
+                    destructive: true,
+                  },
+                ]
+              : []),
           ]}
         />
       ),
@@ -133,6 +140,7 @@ export function DraftsTable({
   onChanged,
 }: DraftsTableProps) {
   const router = useRouter();
+  const canChangeLawyers = canChange(useAdmin(), "lawyers");
   const [query, setQuery] = useState("");
   const [practiceType, setPracticeType] = useState("all");
   const [period, setPeriod] = useState("all");
@@ -150,8 +158,9 @@ export function DraftsTable({
           setTarget(row);
           setError(null);
         },
+        canChangeLawyers,
       ),
-    [router],
+    [router, canChangeLawyers],
   );
 
   async function confirmDelete() {

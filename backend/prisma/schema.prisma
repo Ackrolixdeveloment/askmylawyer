@@ -29,6 +29,14 @@ enum DevicePlatform {
   ios
 }
 
+/// Where a scheduled broadcast has got to.
+enum ScheduledStatus {
+  scheduled
+  sent
+  cancelled
+  failed
+}
+
 /// Who a broadcast went to.
 enum NotificationAudience {
   all_lawyers
@@ -58,24 +66,24 @@ enum AuthProvider {
 }
 
 model User {
-  id                 String              @id @default(uuid()) @db.Uuid
+  id                 String                  @id @default(uuid()) @db.Uuid
   role               AppRole
   /// E.164, e.g. +919876543210. Empty for accounts created via email/Google/Apple.
-  phone              String?             @db.VarChar(15)
+  phone              String?                 @db.VarChar(15)
   /// Always stored lowercase.
-  email              String?             @db.VarChar(255)
-  emailVerifiedAt    DateTime?           @map("email_verified_at") @db.Timestamptz(6)
-  fullName           String?             @map("full_name") @db.VarChar(150)
+  email              String?                 @db.VarChar(255)
+  emailVerifiedAt    DateTime?               @map("email_verified_at") @db.Timestamptz(6)
+  fullName           String?                 @map("full_name") @db.VarChar(150)
   /// Sequential, lawyers only — shown as "LAW0001". See lawyer_number_seq.
-  lawyerNumber       Int?                @unique @map("lawyer_number")
-  status             UserStatus          @default(active)
-  suspendedAt        DateTime?           @map("suspended_at") @db.Timestamptz(6)
+  lawyerNumber       Int?                    @unique @map("lawyer_number")
+  status             UserStatus              @default(active)
+  suspendedAt        DateTime?               @map("suspended_at") @db.Timestamptz(6)
   /// Shown to the lawyer when the app signs them out.
-  suspensionReason   String?             @map("suspension_reason") @db.VarChar(500)
-  lastLoginAt        DateTime?           @map("last_login_at") @db.Timestamptz(6)
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt          DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  suspensionReason   String?                 @map("suspension_reason") @db.VarChar(500)
+  lastLoginAt        DateTime?               @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?               @map("deleted_at") @db.Timestamptz(6)
   lawyerProfile      LawyerProfile?
   bankAccount        LawyerBankAccount?
   documents          LawyerDocument[]
@@ -85,6 +93,9 @@ model User {
   deviceTokens       DeviceToken[]
   inbox              UserNotification[]
   adminNotifications AdminNotification[]
+  alerts             AdminAlert[]
+  scheduled          ScheduledNotification[]
+  pushTokens         AdminPushToken[]
 
   /// The same phone/email may hold one account per role (see ALLOW_MULTI_ROLE_PHONE).
   @@unique([phone, role])
@@ -282,39 +293,82 @@ model OtpCode {
   @@map("otp_codes")
 }
 
+/// A job title for admin users. Module access is set per user, not here.
 model Role {
-  id        String      @id @default(uuid()) @db.Uuid
-  name      String      @unique @db.VarChar(100)
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @unique @db.VarChar(100)
+  description  String?     @db.VarChar(300)
+  departmentId String?     @map("department_id") @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  status       AdminStatus @default(active)
   /// Built-in roles (e.g. Super Admin) cannot be deleted.
-  isSystem  Boolean     @default(false) @map("is_system")
-  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
-  admins    AdminUser[]
+  isSystem     Boolean     @default(false) @map("is_system")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  admins       AdminUser[]
 
+  @@index([departmentId])
   @@map("roles")
 }
 
+/// A team inside the company: Support, Finance, Operations.
+model Department {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique @db.VarChar(100)
+  /// Short code shown in the table, e.g. "SUP".
+  code        String           @unique @db.VarChar(20)
+  description String?          @db.VarChar(300)
+  status      AdminStatus      @default(active)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  roles       Role[]
+  categories  TicketCategory[]
+
+  @@map("departments")
+}
+
+/// What a support ticket or complaint is about, e.g. "Payment failed".
+model TicketCategory {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(120)
+  departmentId String      @map("department_id") @db.Uuid
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  status       AdminStatus @default(active)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([name, departmentId])
+  @@index([departmentId])
+  @@map("ticket_categories")
+}
+
 model AdminUser {
-  id                 String              @id @default(uuid()) @db.Uuid
-  employeeCode       String              @unique @map("employee_code") @db.VarChar(20)
-  name               String              @db.VarChar(150)
+  id                     String                  @id @default(uuid()) @db.Uuid
+  employeeCode           String                  @unique @map("employee_code") @db.VarChar(20)
+  name                   String                  @db.VarChar(150)
   /// Always stored lowercase.
-  email              String              @unique @db.VarChar(255)
-  phone              String?             @db.VarChar(15)
-  passwordHash       String              @map("password_hash")
-  roleId             String              @map("role_id") @db.Uuid
-  role               Role                @relation(fields: [roleId], references: [id])
-  status             AdminStatus         @default(active)
-  failedLoginCount   Int                 @default(0) @map("failed_login_count")
-  lockedUntil        DateTime?           @map("locked_until") @db.Timestamptz(6)
-  lastLoginAt        DateTime?           @map("last_login_at") @db.Timestamptz(6)
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt          DateTime?           @map("deleted_at") @db.Timestamptz(6)
-  sessions           AdminSession[]
-  reviewedLawyers    LawyerProfile[]
-  decidedEdits       LawyerEditRequest[]
-  adminNotifications AdminNotification[]
+  email                  String                  @unique @db.VarChar(255)
+  phone                  String?                 @db.VarChar(15)
+  passwordHash           String                  @map("password_hash")
+  roleId                 String                  @map("role_id") @db.Uuid
+  role                   Role                    @relation(fields: [roleId], references: [id])
+  status                 AdminStatus             @default(active)
+  /// Module access for this person: { "lawyers": "full", "lawyers.view": "read" }.
+  /// Set per user, not inherited from the role.
+  permissions            Json?
+  failedLoginCount       Int                     @default(0) @map("failed_login_count")
+  lockedUntil            DateTime?               @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt            DateTime?               @map("last_login_at") @db.Timestamptz(6)
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?               @map("deleted_at") @db.Timestamptz(6)
+  sessions               AdminSession[]
+  reviewedLawyers        LawyerProfile[]
+  decidedEdits           LawyerEditRequest[]
+  adminNotifications     AdminNotification[]
+  adminAlerts            AdminAlert[]
+  adminPushTokens        AdminPushToken[]
+  scheduledNotifications ScheduledNotification[]
 
   @@index([roleId])
   @@map("admin_users")
@@ -387,4 +441,70 @@ model UserNotification {
 
   @@index([userId, createdAt])
   @@map("user_notifications")
+}
+
+/// What the bell in the admin panel shows: something happened that this
+/// admin should look at. One row per recipient, so read state is personal.
+model AdminAlert {
+  id          String    @id @default(uuid()) @db.Uuid
+  adminUserId String    @map("admin_user_id") @db.Uuid
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  title       String    @db.VarChar(150)
+  body        String    @db.VarChar(400)
+  /// The permission module it belongs to, e.g. "lawyers".
+  module      String    @db.VarChar(40)
+  /// Where clicking it goes, e.g. "/lawyers/onboarding/new".
+  link        String?   @db.VarChar(300)
+  readAt      DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      String?   @db.Uuid
+
+  @@index([adminUserId, createdAt])
+  @@map("admin_alerts")
+}
+
+/// A browser an admin is signed in on, so the bell can also arrive as a
+/// desktop notification when the panel is closed.
+model AdminPushToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  adminUserId String    @map("admin_user_id") @db.Uuid
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  /// The FCM registration token for that browser.
+  token       String    @unique @db.VarChar(255)
+  userAgent   String?   @map("user_agent") @db.VarChar(300)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      String?   @db.Uuid
+
+  @@index([adminUserId])
+  @@map("admin_push_tokens")
+}
+
+/// A notification queued for later. A worker sends it when its time comes.
+model ScheduledNotification {
+  id           String               @id @default(uuid()) @db.Uuid
+  title        String               @db.VarChar(120)
+  body         String               @db.VarChar(500)
+  audience     NotificationAudience
+  /// Set when it goes to one person rather than everyone.
+  targetUserId String?              @map("target_user_id") @db.Uuid
+  target       User?                @relation(fields: [targetUserId], references: [id], onDelete: SetNull)
+  scheduledFor DateTime             @map("scheduled_for") @db.Timestamptz(6)
+  status       ScheduledStatus      @default(scheduled)
+  /// Filled in once it has gone out.
+  sentAt       DateTime?            @map("sent_at") @db.Timestamptz(6)
+  recipients   Int                  @default(0)
+  delivered    Int                  @default(0)
+  failed       Int                  @default(0)
+  /// Why it could not be sent, when that happens.
+  error        String?              @db.VarChar(500)
+  createdById  String?              @map("created_by_id") @db.Uuid
+  createdBy    AdminUser?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, scheduledFor])
+  @@map("scheduled_notifications")
 }

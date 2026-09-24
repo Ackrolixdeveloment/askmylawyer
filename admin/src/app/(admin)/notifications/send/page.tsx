@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 export default async function SendNotificationPage({
   searchParams,
 }: PageProps<"/notifications/send">) {
-  const { template: templateId } = await searchParams;
+  const { template: templateId, scheduled } = await searchParams;
+  const scheduledId = typeof scheduled === "string" ? scheduled : undefined;
 
   // Opened from the Templates screen: seed the copy fields.
   const template = notificationTemplates.find((item) => item.id === templateId);
@@ -29,11 +30,15 @@ export default async function SendNotificationPage({
             <Bell className="size-6" />
           </span>
           <div>
-            <h1 className="text-2xl leading-8 font-bold text-ink">Send Notification</h1>
+            <h1 className="text-2xl leading-8 font-bold text-ink">
+              {scheduledId ? "Edit Scheduled Notification" : "Send Notification"}
+            </h1>
             <p className="mt-1 text-sm text-ink-muted">
-              {template
-                ? `Using template — ${template.name}`
-                : "Broadcast to everyone, or message one lawyer or customer"}
+              {scheduledId
+                ? "Change it, or move it to a different time"
+                : template
+                  ? `Using template — ${template.name}`
+                  : "Broadcast to everyone, or message one lawyer or customer"}
             </p>
           </div>
         </div>
@@ -41,9 +46,10 @@ export default async function SendNotificationPage({
         <div className="mt-6">
           {/* Keyed on the template so picking another one resets the copy. */}
           <SendNotificationView
-            key={template?.id ?? "blank"}
+            key={scheduledId ?? template?.id ?? "blank"}
             initialTitle={template?.title}
             initialBody={template?.body}
+            scheduledId={scheduledId}
           />
         </div>
       </main>

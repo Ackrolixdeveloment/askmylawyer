@@ -13,7 +13,9 @@ import {
   type BadgeTone,
   type Column,
 } from "@/components/ui";
+import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
+import { canChange } from "@/lib/auth";
 import { reactivateLawyer, suspendLawyer } from "@/lib/lawyers";
 import {
   lawyerDetailsColumn,
@@ -56,6 +58,8 @@ const statusTone: Record<LawyerStatus, BadgeTone> = {
 function buildColumns(
   onView: (row: Lawyer) => void,
   onToggleStatus: (row: Lawyer) => void,
+  /** Read-only admins get the view action and nothing that changes a lawyer. */
+  canChangeLawyers: boolean,
 ): Column<Lawyer>[] {
   return [
   lawyerIdColumn((row) => identity(row)),
@@ -108,15 +112,28 @@ function buildColumns(
         label={`Actions for ${row.name}`}
         actions={[
           { label: "View", icon: Eye, onSelect: () => onView(row) },
-          { label: "Edit", icon: SquarePen, onSelect: () => {} },
-          row.status === "suspended"
-            ? {
-                label: "Reactivate",
-                icon: CircleCheck,
-                onSelect: () => onToggleStatus(row),
-              }
-            : { label: "Suspend", icon: Ban, onSelect: () => onToggleStatus(row) },
-          { label: "Delete", icon: Trash2, onSelect: () => {}, destructive: true },
+          ...(canChangeLawyers
+            ? [
+                { label: "Edit", icon: SquarePen, onSelect: () => {} },
+                row.status === "suspended"
+                  ? {
+                      label: "Reactivate",
+                      icon: CircleCheck,
+                      onSelect: () => onToggleStatus(row),
+                    }
+                  : {
+                      label: "Suspend",
+                      icon: Ban,
+                      onSelect: () => onToggleStatus(row),
+                    },
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  onSelect: () => {},
+                  destructive: true,
+                },
+              ]
+            : []),
         ]}
       />
     ),
@@ -133,6 +150,8 @@ export function VerifiedLawyersTable({
   onChanged?: () => void;
 }) {
   const router = useRouter();
+  const admin = useAdmin();
+  const canChangeLawyers = canChange(admin, "lawyers");
   const [query, setQuery] = useState("");
 
   /** The lawyer whose suspension is being confirmed. */
@@ -150,8 +169,9 @@ export function VerifiedLawyersTable({
           setReason("");
           setError(null);
         },
+        canChangeLawyers,
       ),
-    [router],
+    [router, canChangeLawyers],
   );
 
   const reactivating = target?.status === "suspended";

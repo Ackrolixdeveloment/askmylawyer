@@ -15,6 +15,8 @@ import {
 } from "./review-steps";
 import { Button, Card, Modal } from "@/components/ui";
 import { ApiError } from "@/lib/api";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 import {
   approveLawyer,
   rejectLawyer,
@@ -114,6 +116,7 @@ type Outcome = keyof typeof destinations;
 
 function ReviewBody({ application }: { application: LawyerApplication }) {
   const router = useRouter();
+  const canDecide = canChange(useAdmin(), "lawyers");
   const { decisions, notes } = useReview();
   const [pending, setPending] = useState<Outcome | null>(null);
   const [actionError, setActionError] = useState("");
@@ -335,7 +338,12 @@ function ReviewBody({ application }: { application: LawyerApplication }) {
         </button>
 
         <div className="flex flex-wrap items-center gap-3">
-          {isLastStep ? (
+          {/* Deciding an application changes the lawyer's record. */}
+          {!canDecide ? (
+            <p className="text-sm text-ink-muted">
+              You have read-only access to Lawyer Management.
+            </p>
+          ) : isLastStep ? (
             <>
               <Button
                 variant="outline"

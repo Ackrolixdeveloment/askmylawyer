@@ -66,17 +66,26 @@ export interface NotificationTemplate {
   tone: TemplateTone;
 }
 
+export type ScheduledStatus = "scheduled" | "sent" | "cancelled" | "failed";
+
+/** A notification queued to go out later. */
 export interface ScheduledBroadcast {
   id: string;
   title: string;
-  /** Message copy, restored when the broadcast is reopened for editing. */
   body: string;
-  audience: string;
-  /** Matching AudienceSegment value. */
-  segmentValue: string;
-  channels: string;
-  /** ISO datetime; rendered as "15 Aug 2026 , 12:00 AM". */
+  audience: NotificationAudience;
+  /** "All lawyers", or "Lawyer — Anubhav Sing Bassi". */
+  audienceLabel: string;
+  /** Set when it goes to one person. */
+  userId: string | null;
+  /** ISO datetime. */
   scheduledFor: string;
-  estimatedReach: number;
-  createdBy: string;
+  status: ScheduledStatus;
+  sentAt: string | null;
+  recipients: number;
+  delivered: number;
+  failed: number;
+  /** Why it could not be sent, when that happens. */
+  error: string | null;
+  createdBy: string | null;
 }

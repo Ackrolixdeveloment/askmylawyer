@@ -9,6 +9,8 @@ import { UserForm } from "./user-form";
 interface UserHeaderActionsProps {
   roleOptions: SelectOption[];
   statusOptions: SelectOption[];
+  /** Reloads the users list once one is created. */
+  onCreated: () => void;
 }
 
 const actionClasses =
@@ -17,6 +19,7 @@ const actionClasses =
 export function UserHeaderActions({
   roleOptions,
   statusOptions,
+  onCreated,
 }: UserHeaderActionsProps) {
   const [open, setOpen] = useState<"user" | null>(null);
 
@@ -50,6 +53,7 @@ export function UserHeaderActions({
           key={open === "user" ? "user-open" : "user-closed"}
           roleOptions={roleOptions}
           statusOptions={statusOptions}
+          onCreated={onCreated}
           onDone={() => setOpen(null)}
         />
       </Modal>
