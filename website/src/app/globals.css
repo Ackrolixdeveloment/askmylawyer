@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* Shared with the admin panel so both surfaces read as one product. */
+@theme inline {
+  --color-canvas: #f2f6fb;
+  --color-surface: #ffffff;
+  --color-line: #e8edf4;
+
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-ink-subtle: #94a3b8;
+
+  /* The dark navy behind the header, hero and footer. */
+  --color-night: #010e23;
+
+  /* The maroon panel that invites lawyers to join, and its gold accent. */
+  --color-maroon: #3d1a1a;
+  --color-maroon-mid: #4a1c1c;
+  --color-maroon-deep: #2b0f0f;
+  --color-gold: #d4a574;
+
+  --color-brand: #2563eb;
+  --color-brand-soft: #eff4ff;
+
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+  --color-accent: #7c5cf5;
+
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /*
+   * One type scale for the whole site, in px so every size is explicit.
+   * Nothing is below 12px: smaller than that is hard to read, and several
+   * labels had dropped to 8–11px.
+   *
+   * The headline sizes use clamp() so they scale with the viewport instead
+   * of jumping at a breakpoint — one definition covers every width.
+   */
+  --text-eyebrow: 12px;
+  --text-eyebrow--line-height: 16px;
+  --text-caption: 13px;
+  --text-caption--line-height: 20px;
+  --text-body: 15px;
+  --text-body--line-height: 24px;
+  --text-lead: 17px;
+  --text-lead--line-height: 27px;
+  --text-title: 18px;
+  --text-title--line-height: 24px;
+  --text-section: clamp(26px, 3.2vw, 34px);
+  --text-section--line-height: 1.25;
+  --text-display: clamp(34px, 5vw, 52px);
+  --text-display--line-height: 1.12;
+}
+
+html,
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* Anchor links land below the sticky header rather than under it. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
