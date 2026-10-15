@@ -39,13 +39,12 @@ class CaseDetailsScreen extends StatefulWidget {
 }
 
 class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
-  CallChannel _channel = CallChannel.audio;
   String? _location;
   String? _caseTag;
   PickedDocument? _document;
 
-  /// The price list, keyed by plan code. Empty until it has loaded.
-  Map<String, ServicePlan> _plans = const {};
+  /// The consultation on sale. Null until it has loaded.
+  ServicePlan? _plan;
   String? _plansProblem;
 
   @override
@@ -60,19 +59,15 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
       if (!mounted) return;
 
       setState(() {
-        _plans = {for (final plan in plans) plan.code: plan};
-        _plansProblem = null;
+        _plan = plans.isEmpty ? null : plans.first;
+        _plansProblem = plans.isEmpty
+            ? 'Consultations are not available right now.'
+            : null;
       });
     } on ApiException catch (error) {
       if (mounted) setState(() => _plansProblem = error.message);
     }
   }
-
-  ServicePlan? _planFor(CallChannel channel) => _plans[switch (channel) {
-    CallChannel.audio => 'audio',
-    CallChannel.video => 'video',
-    CallChannel.chat => 'chat',
-  }];
 
   /// Stand-ins until the API supplies the real lists.
   static const _locations = [
@@ -99,7 +94,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
   /// the document is optional. The chosen channel also has to be on sale —
   /// the admin team can switch any of the three off.
   bool get _canContinue =>
-      _location != null && _caseTag != null && _planFor(_channel) != null;
+      _location != null && _caseTag != null && _plan != null;
 
   /// Hands everything gathered so far to the preview.
   void _openPreview() {
@@ -108,10 +103,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
         builder: (_) => ConsultPreviewScreen(
           draft: ConsultDraft(
             mode: widget.mode,
-            channel: _channel,
+
             location: _location!,
             caseTag: _caseTag!,
-            plan: _planFor(_channel),
+            plan: _plan,
             slot: widget.slot,
             document: _document,
           ),
@@ -138,32 +133,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
               children: [
-                const _FieldLabel('Consultation type'),
-                const SizedBox(height: 7),
-                // The three share the row equally: at a large text scale
-                // their natural widths no longer fit a narrow phone.
-                Row(
-                  children: [
-                    for (final channel in CallChannel.values) ...[
-                      Expanded(
-                        child: _ChannelChip(
-                          label: switch (channel) {
-                            CallChannel.audio => 'Audio',
-                            CallChannel.video => 'Video',
-                            CallChannel.chat => 'Chat',
-                          },
-                          // Blank while the price list loads, rather than a
-                          // figure that might be about to change.
-                          price: _planFor(channel)?.payable,
-                          selected: _channel == channel,
-                          onTap: () => setState(() => _channel = channel),
-                        ),
-                      ),
-                      if (channel != CallChannel.values.last)
-                        const SizedBox(width: 9),
-                    ],
-                  ],
-                ),
+                // There is one consultation, so there is nothing to pick:
+                // video, voice and chat are all available inside the call
+                // itself. This just says what it costs.
+                if (_plan case final plan?) _PlanSummary(plan: plan),
                 if (_plansProblem != null) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -251,108 +224,62 @@ class _FieldLabel extends StatelessWidget {
 }
 
 /// Radio-style pill for picking the call channel.
-class _ChannelChip extends StatelessWidget {
-  const _ChannelChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.price,
-  });
+/// What the consultation costs, now that there is only one of them.
+class _PlanSummary extends StatelessWidget {
+  const _PlanSummary({required this.plan});
 
-  final String label;
-
-  /// What this channel costs, all in. Null while the price list loads.
-  final int? price;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.line),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _RadioDot(selected: selected),
-            const SizedBox(width: 7),
-            // Ellipsises rather than pushing past the chip's share of the row.
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  if (price != null)
-                    Text(
-                      '₹$price',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.inkSubtle,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Hollow ring, filled with a dot once chosen.
-class _RadioDot extends StatelessWidget {
-  const _RadioDot({required this.selected});
-
-  final bool selected;
+  final ServicePlan plan;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 15,
-      height: 15,
-      alignment: Alignment.center,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected ? AppColors.ink : AppColors.inkSubtle,
-          width: 1.4,
-        ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: selected
-          ? Container(
-              width: 7,
-              height: 7,
-              decoration: const BoxDecoration(
-                color: AppColors.ink,
-                shape: BoxShape.circle,
-              ),
-            )
-          : null,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plan.type,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${plan.durationMinutes} minutes · video, voice or chat',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSubtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '₹${plan.payable}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Full-width primary action, greyed until both selects are filled.
 class _ContinueButton extends StatelessWidget {
   const _ContinueButton({required this.enabled, required this.onTap});
 

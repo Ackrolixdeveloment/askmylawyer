@@ -72,5 +72,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<!-- Google sign-in returns to the app through this scheme; it is the
+			     REVERSED_CLIENT_ID from GoogleService-Info.plist. -->
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.11580874309-e15skqhaico708vchqk6ia4tmc32ted4</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -7,9 +7,12 @@ import 'package:flutter/services.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
+import '../home/home_screen.dart';
+import '../profile/complete_profile_screen.dart';
 import 'customer_session.dart';
 import 'email_verification_screen.dart';
 import 'otp_screen.dart';
+import 'social_sign_in.dart';
 
 /// Sign-in entry point: mobile number first, with social options underneath.
 class GetStartedScreen extends StatefulWidget {
@@ -24,6 +27,10 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
   final _session = CustomerSession.instance;
 
   bool _sending = false;
+
+  /// 'google' or 'apple' while that provider's sheet is up, so only the
+  /// button that was tapped shows a spinner.
+  String? _social;
 
   /// Either the last sign-in ending (suspended, say) or a failed send.
   String? _notice;
@@ -50,7 +57,8 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
 
   /// Indian mobile numbers are ten digits starting 6-9.
   String? get _mobileError => Validators.mobile(_mobile.text);
-  bool get _canContinue => _mobileError == null && !_sending;
+  bool get _busy => _sending || _social != null;
+  bool get _canContinue => _mobileError == null && !_busy;
 
   Future<void> _continue() async {
     final mobile = _mobile.text.trim();
@@ -71,6 +79,37 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
       if (mounted) setState(() => _notice = error.message);
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _signInWith(String provider) async {
+    setState(() {
+      _social = provider;
+      _notice = null;
+    });
+
+    try {
+      final isNewUser = provider == 'google'
+          ? await const SocialSignIn().google()
+          : await const SocialSignIn().apple();
+      if (!mounted) return;
+
+      // Same landing as every other way in: the profile form for a new
+      // account, the home shell for a returning one.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              isNewUser ? const CompleteProfileScreen() : const HomeScreen(),
+        ),
+        (route) => false,
+      );
+    } on SocialSignInException catch (error) {
+      // Backing out is not a failure, so it says nothing.
+      if (mounted && !error.cancelled) setState(() => _notice = error.message);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _notice = error.message);
+    } finally {
+      if (mounted) setState(() => _social = null);
     }
   }
 
@@ -157,19 +196,22 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
               const _OrDivider(),
               const SizedBox(height: 20),
 
-              // TODO: wire each provider once the auth backend is ready.
+              // Apple requires its own button wherever Google's is offered,
+              // so the two appear and disappear together on iOS.
               if (_showApple) ...[
                 _SocialButton(
                   icon: const Icon(Icons.apple, size: 20, color: AppColors.ink),
                   label: 'Continue with Apple',
-                  onPressed: () {},
+                  busy: _social == 'apple',
+                  onPressed: _busy ? null : () => _signInWith('apple'),
                 ),
                 const SizedBox(height: 12),
               ],
               _SocialButton(
                 icon: const _GoogleMark(),
                 label: 'Continue with Google',
-                onPressed: () {},
+                busy: _social == 'google',
+                onPressed: _busy ? null : () => _signInWith('google'),
               ),
               const SizedBox(height: 12),
               _SocialButton(
@@ -179,7 +221,7 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
                   color: AppColors.ink,
                 ),
                 label: 'Continue with Email',
-                onPressed: _continueWithEmail,
+                onPressed: _busy ? null : _continueWithEmail,
               ),
               const SizedBox(height: 28),
 
@@ -289,11 +331,15 @@ class _SocialButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.busy = false,
   });
+
+  /// True while this provider's sheet is open.
+  final bool busy;
 
   final Widget icon;
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +347,13 @@ class _SocialButton extends StatelessWidget {
       height: 48,
       child: OutlinedButton.icon(
         onPressed: onPressed,
-        icon: icon,
+        icon: busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : icon,
         label: Text(label),
         style: OutlinedButton.styleFrom(
           backgroundColor: AppColors.canvas,

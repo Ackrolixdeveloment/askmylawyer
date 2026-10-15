@@ -10,6 +10,6 @@ import { ServicePlansController } from './service-plans.controller';
   imports: [AdminAuthModule],
   controllers: [AdminSettingsController, ServicePlansController],
   providers: [AdminSettingsService, PaymentGatewayService, EngineSettingsService],
-  exports: [PaymentGatewayService, EngineSettingsService],
+  exports: [AdminSettingsService, PaymentGatewayService, EngineSettingsService],
 })
 export class AdminSettingsModule {}

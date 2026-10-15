@@ -7,7 +7,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AdminAlertsService } from '../admin-alerts/admin-alerts.service';
 import type { BankDto, KycDto, PersonalDto, ProfessionalDto, ProfileDto } from './dto/registration.dto';
-import { checkFile, EXTENSIONS, FILE_RULES, type FileRule } from './file-rules';
+import { checkFile, EXTENSIONS, FILE_RULES, type FileRule } from '../../common/file-rules';
 
 type UploadedFiles = Partial<Record<string, Express.Multer.File[]>>;
 

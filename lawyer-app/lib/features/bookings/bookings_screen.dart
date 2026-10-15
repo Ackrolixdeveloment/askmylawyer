@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import 'booking_data.dart';
+import 'booking_repository.dart';
 import 'consultation_detail_screen.dart';
+
+/// What the lawyer did with a consultation they were offered.
+enum CallOutcome { accepted, rejected }
 
 /// Past consultation calls, filtered by outcome and mode.
 class BookingsScreen extends StatefulWidget {
-  BookingsScreen({super.key, BookingData? data}) : data = data ?? bookingSample;
+  const BookingsScreen({super.key, this.data});
 
-  final BookingData data;
+  /// Supplied only by tests and previews; otherwise it is fetched.
+  final BookingData? data;
 
   @override
   State<BookingsScreen> createState() => _BookingsScreenState();
@@ -21,10 +26,22 @@ class _BookingsScreenState extends State<BookingsScreen> {
   CallOutcome? _outcome;
   CallMode? _mode;
 
+  BookingData? _data;
+  String? _error;
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+
+    final given = widget.data;
+    if (given != null) {
+      _data = given;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   @override
@@ -33,25 +50,63 @@ class _BookingsScreenState extends State<BookingsScreen> {
     super.dispose();
   }
 
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await BookingRepository.instance.history();
+      if (mounted) setState(() => _data = data);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   List<Booking> get _visible {
     final query = _search.text.trim().toLowerCase();
 
-    return widget.data.calls.where((call) {
+    return (_data?.calls ?? const <Booking>[]).where((call) {
       final matchesQuery =
           query.isEmpty ||
           call.client.toLowerCase().contains(query) ||
-          call.bookingId.toLowerCase().contains(query);
+          call.reference.toLowerCase().contains(query);
+
+      final outcome = call.accepted
+          ? CallOutcome.accepted
+          : CallOutcome.rejected;
 
       return matchesQuery &&
-          (_outcome == null || call.outcome == _outcome) &&
+          (_outcome == null || outcome == _outcome) &&
           (_mode == null || call.mode == _mode);
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
+    final data = _data;
     final visible = _visible;
+
+    if (data == null) {
+      return Center(
+        child: _loading
+            ? const CircularProgressIndicator()
+            : Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error ?? 'No consultations yet.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+              ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
@@ -80,12 +135,12 @@ class _BookingsScreenState extends State<BookingsScreen> {
           child: IntrinsicHeight(
             child: Row(
               children: [
-                _Stat(value: '${data.accepted}', label: 'Accepted'),
+                _Stat(value: '${data.stats.accepted}', label: 'Accepted'),
                 const VerticalDivider(color: Color(0xFF2A3550), width: 1),
-                _Stat(value: '${data.rejected}', label: 'Rejected'),
+                _Stat(value: '${data.stats.declined}', label: 'Rejected'),
                 const VerticalDivider(color: Color(0xFF2A3550), width: 1),
                 _Stat(
-                  value: '₹${_thousands(data.thisMonth)}',
+                  value: '₹${_thousands(data.stats.thisMonth.toDouble())}',
                   label: 'This Month',
                 ),
               ],
@@ -373,7 +428,7 @@ class _CallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accepted = call.outcome == CallOutcome.accepted;
+    final accepted = call.accepted;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -398,7 +453,7 @@ class _CallCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        call.bookingId,
+                        call.reference,
                         style: const TextStyle(
                           fontSize: 10,
                           color: AppColors.inkSubtle,
@@ -419,7 +474,8 @@ class _CallCard extends StatelessWidget {
                 InkWell(
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => ConsultationDetailScreen(booking: call),
+                      builder: (_) =>
+                          ConsultationDetailScreen(consultationId: call.id),
                     ),
                   ),
                   borderRadius: BorderRadius.circular(20),
@@ -450,7 +506,8 @@ class _CallCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        call.practice,
+                        // What the client said it was about, when they said.
+                        call.caseTag ?? 'General',
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.inkSubtle,
@@ -471,7 +528,7 @@ class _CallCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        call.date,
+                        call.dateLabel,
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.inkSubtle,
@@ -479,7 +536,7 @@ class _CallCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      call.time,
+                      call.timeLabel,
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSubtle,

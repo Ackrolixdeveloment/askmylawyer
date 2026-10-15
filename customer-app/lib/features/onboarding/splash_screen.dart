@@ -20,7 +20,8 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // TODO: replace the delay with the real session / bootstrap check.
+    // The stored session is restored in parallel by main.dart; this is just
+    // the brand hold, so the splash does not flash past.
     _timer = Timer(const Duration(seconds: 2), () {
       if (mounted) widget.onDone();
     });

@@ -7,6 +7,7 @@ import 'consult_draft.dart';
 import 'consultation_repository.dart';
 import 'consultation_screen.dart';
 import 'finding_lawyer_screen.dart';
+import 'payment_service.dart';
 
 /// Final check before paying: shows the price, the slot, and everything the
 /// client chose on the way here.
@@ -290,20 +291,13 @@ class _PayActionState extends State<_PayAction> {
       _problem = null;
     });
 
+    // The consultation exists first, unpaid. The gateway order is opened
+    // against it, so a payment can always be traced back to what it bought.
+    final Consultation consultation;
     try {
-      final consultation = await ConsultationRepository.instance.create(
+      consultation = await ConsultationRepository.instance.create(
         planCode: widget.draft.planCode,
         category: widget.draft.caseTag,
-      );
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => FindingLawyerScreen(
-            draft: widget.draft,
-            consultation: consultation,
-          ),
-        ),
       );
     } on ApiException catch (error) {
       if (mounted) {
@@ -312,7 +306,50 @@ class _PayActionState extends State<_PayAction> {
           _busy = false;
         });
       }
+      return;
     }
+
+    if (!mounted) return;
+
+    // The engine can be set to skip payment — a demo, or a free plan — in
+    // which case the search has already started.
+    if (!consultation.needsPayment) {
+      _startSearching(consultation);
+      return;
+    }
+
+    final result = await PaymentService.instance.payFor(consultation);
+    if (!mounted) return;
+
+    if (result.paid) {
+      _startSearching(result.consultation ?? consultation);
+      return;
+    }
+
+    setState(() {
+      _busy = false;
+      _problem = switch (result.outcome) {
+        PaymentOutcome.problem =>
+          result.message ?? 'Something went wrong with the payment.',
+        // Closing the sheet is a normal thing to do, so this is a nudge
+        // rather than an error.
+        _ =>
+          result.message ??
+              'The payment was not completed. Your consultation is saved — '
+                  'tap to pay and we will start looking.',
+      };
+    });
+  }
+
+  void _startSearching(Consultation consultation) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => FindingLawyerScreen(
+          draft: widget.draft,
+          consultation: consultation,
+        ),
+      ),
+    );
   }
 
   @override
@@ -321,7 +358,7 @@ class _PayActionState extends State<_PayAction> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _PayButton(
-          label: _busy ? 'Starting…' : 'Proceed to Payment',
+          label: _busy ? 'Opening payment…' : 'Proceed to Payment',
           onTap: _busy ? null : _pay,
         ),
         if (_problem != null) ...[

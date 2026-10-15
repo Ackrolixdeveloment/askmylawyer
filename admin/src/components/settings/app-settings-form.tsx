@@ -90,6 +90,7 @@ export function AppSettingsForm({
       rate.durationMinutes >= 1 &&
       rate.extensionMinutes >= 1 &&
       rate.extensionAmount >= 0 &&
+      rate.maxExtensions >= 0 &&
       rate.commissionValue >= 0 &&
       (rate.commissionMode === "percent"
         ? rate.commissionValue <= 100
@@ -311,7 +312,11 @@ function RateDetail({
 
   // Lets the admin see what a call that overruns actually costs.
   const [extensions, setExtensions] = useState(0);
-  const split = priceBreakdown(rate, taxes, extensions);
+
+  // Lowering the allowance must not leave the preview showing more than
+  // the plan now permits.
+  const previewed = Math.min(extensions, rate.maxExtensions);
+  const split = priceBreakdown(rate, taxes, previewed);
 
   return (
     <div className="rounded-xl border border-line bg-slate-50/60 p-5">
@@ -444,6 +449,38 @@ function RateDetail({
 
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-ink">
+            Extensions allowed
+          </legend>
+
+          <div className="relative">
+            <input
+              type="number"
+              disabled={!canEdit}
+              min={0}
+              max={10}
+              value={rate.maxExtensions}
+              onChange={(event) =>
+                onChange({ maxExtensions: Number(event.target.value) })
+              }
+              aria-label="Extensions allowed per consultation"
+              className="w-full rounded-lg border border-line bg-surface py-2.5 pr-14 pl-3.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
+            />
+            <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-ink-muted">
+              times
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-ink-subtle">
+            {rate.maxExtensions === 0
+              ? "Extensions are off; a consultation ends when its time is up."
+              : `A consultation can run to at most ${
+                  rate.durationMinutes +
+                  rate.extensionMinutes * rate.maxExtensions
+                } minutes.`}
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-ink">
             Ask My Lawyer commission
           </legend>
 
@@ -510,7 +547,11 @@ function RateDetail({
             <span className="text-xs tracking-wider text-ink-subtle uppercase">
               Breakdown
             </span>
-            <ExtensionStepper value={extensions} onChange={setExtensions} />
+            <ExtensionStepper
+              value={previewed}
+              max={rate.maxExtensions}
+              onChange={setExtensions}
+            />
           </div>
 
           <SplitRow
@@ -523,12 +564,12 @@ function RateDetail({
             value={split.baseGst}
             sign="+"
           />
-          {extensions > 0 ? (
+          {previewed > 0 ? (
             <>
               <SplitRow
-                label={`Extensions × ${extensions}`}
+                label={`Extensions × ${previewed}`}
                 value={split.extensionTotal}
-                note={`+${rate.extensionMinutes * extensions} min`}
+                note={`+${rate.extensionMinutes * previewed} min`}
                 sign="+"
               />
               <SplitRow
@@ -575,7 +616,7 @@ function RateDetail({
             />
 
             {/* Extensions are not commissioned, so they are called out. */}
-            {extensions > 0 ? (
+            {previewed > 0 ? (
               <p className="pt-1 text-xs text-ink-subtle">
                 Earnings: consultation ₹
                 {split.lawyerFromBase.toLocaleString("en-IN")} + extensions ₹
@@ -627,17 +668,28 @@ function RateDetail({
   );
 }
 
-/** Adds imaginary extensions so the admin can preview an overrunning call. */
+/**
+ * Previews what an overrunning call comes to.
+ *
+ * Not a setting — the number of extensions a consultation may have is the
+ * field above. This only asks "and if the customer takes them?", so it
+ * stops at whatever that field allows.
+ */
 function ExtensionStepper({
   value,
+  max,
   onChange,
 }: {
   value: number;
+  max: number;
   onChange: (next: number) => void;
 }) {
+  // Nothing to preview when extensions are switched off.
+  if (max <= 0) return null;
+
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-ink-muted">Extensions</span>
+      <span className="text-xs text-ink-muted">Preview with</span>
       <div className="flex items-center overflow-hidden rounded-lg border border-line bg-surface">
         <button
           type="button"
@@ -653,9 +705,10 @@ function ExtensionStepper({
         </span>
         <button
           type="button"
-          onClick={() => onChange(value + 1)}
+          onClick={() => onChange(Math.min(max, value + 1))}
+          disabled={value >= max}
           aria-label="One more extension"
-          className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink"
+          className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <Plus className="size-3.5" aria-hidden />
         </button>

@@ -1,5 +1,4 @@
 import '../../core/widgets/upload_field.dart';
-import 'case_details_screen.dart';
 import 'consultation_repository.dart';
 import 'consultation_screen.dart';
 
@@ -8,7 +7,6 @@ import 'consultation_screen.dart';
 class ConsultDraft {
   const ConsultDraft({
     required this.mode,
-    required this.channel,
     required this.location,
     required this.caseTag,
     this.plan,
@@ -17,7 +15,6 @@ class ConsultDraft {
   });
 
   final ConsultMode mode;
-  final CallChannel channel;
   final String location;
   final String caseTag;
 
@@ -32,19 +29,13 @@ class ConsultDraft {
   /// Optional supporting file.
   final PickedDocument? document;
 
-  String get channelLabel => switch (channel) {
-    CallChannel.audio => 'Audio',
-    CallChannel.video => 'Video',
-    CallChannel.chat => 'Chat',
-  };
+  /// What the consultation is called, from the plan the admin team set up.
+  String get channelLabel => plan?.type ?? 'Consultation';
 
   /// What the consult costs, in rupees — the plan's amount plus GST.
   double get price => (plan?.payable ?? 0).toDouble();
 
-  /// The code the backend prices this consultation by.
-  String get planCode => switch (channel) {
-    CallChannel.audio => 'audio',
-    CallChannel.video => 'video',
-    CallChannel.chat => 'chat',
-  };
+  /// The code the backend prices this consultation by. Null leaves the
+  /// choice to the backend, which has one consultation on sale.
+  String? get planCode => plan?.code;
 }

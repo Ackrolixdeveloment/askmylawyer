@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/push/ringtone.dart';
 import '../../core/theme/app_colors.dart';
 import 'call_screen.dart';
 import 'consultation_repository.dart';
@@ -33,6 +34,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   void initState() {
     super.initState();
 
+    // Rings until this screen goes away — answered, declined, taken by
+    // someone else, or simply run out. `dispose` is the one place that
+    // stops it, so no exit can leave the phone ringing.
+    Ringtone.start();
+
     _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _secondsLeft = widget.offer.secondsLeft);
@@ -45,6 +51,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   @override
   void dispose() {
+    Ringtone.stop();
     _countdown?.cancel();
     _watch?.cancel();
     super.dispose();

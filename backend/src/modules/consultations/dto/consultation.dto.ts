@@ -34,10 +34,16 @@ export class HeartbeatDto {
 
 /** What the customer is asking for. */
 export class CreateConsultationDto {
-  /** "audio", "video" or "chat" — from GET /plans. */
+  /**
+   * Which plan to book. Optional, and normally left out: the customer no
+   * longer chooses between audio, video and chat, so the backend uses
+   * whichever consultation is on sale. Kept for older app builds.
+   */
+  @IsOptional()
   @Transform(trim)
+  @IsString()
   @Length(2, 30)
-  planCode: string;
+  planCode?: string;
 
   @IsOptional()
   @Transform(trim)

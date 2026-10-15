@@ -2,17 +2,42 @@ import 'package:flutter/material.dart';
 
 import 'core/app_navigator.dart';
 import 'core/network/api_client.dart';
+import 'core/push/device_repository.dart';
+import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/customer_session.dart';
 import 'features/auth/get_started_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/notifications/notifications_screen.dart';
 import 'features/onboarding/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   _endSessionOnServerSayingSo();
+  _startNotifications();
   runApp(const CustomerApp());
+}
+
+/// Push, so a customer hears that their report is ready without opening the
+/// app to find out.
+void _startNotifications() {
+  // The backend needs the device token to reach this phone. A token that
+  // arrives before sign-in is registered again once the session exists.
+  PushService.instance.onToken = DeviceRepository.instance.register;
+
+  // Tapping a notification opens the list it came from.
+  PushService.instance.onOpened = (_) {
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+  };
+
+  // Notifications must not hold up the first frame; if Firebase is missing
+  // its config the app still runs, just without push.
+  PushService.instance.start().catchError((Object error) {
+    debugPrint('[push] not started: $error');
+  });
 }
 
 /// If the backend says the session is over — suspended, or signed in on

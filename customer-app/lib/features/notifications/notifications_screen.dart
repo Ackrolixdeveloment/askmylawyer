@@ -1,74 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-
-enum NotificationKind { consultation, report, system }
-
-class AppNotification {
-  const AppNotification({
-    required this.title,
-    required this.body,
-    required this.time,
-    required this.kind,
-    required this.isToday,
-    this.unread = false,
-  });
-
-  final String title;
-  final String body;
-  final String time;
-  final NotificationKind kind;
-
-  /// Groups the list into Today / Yesterday.
-  final bool isToday;
-  final bool unread;
-}
-
-const _sample = <AppNotification>[
-  AppNotification(
-    title: 'Consultation Request Accepted',
-    body:
-        'Your consultation has been confirmed.\n'
-        'Adv. Priyanshu Sharma will connect with you at 2:30 PM.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: true,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'Consultation Starting Soon',
-    body:
-        'Your consultation starts in 15 minutes.\n'
-        'Please be ready to join the call.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: true,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'Consultation Scheduled',
-    body: 'Your consultation has been scheduled for 04 Jul • 6:30 PM.',
-    time: '2:30 PM',
-    kind: NotificationKind.consultation,
-    isToday: false,
-    unread: true,
-  ),
-  AppNotification(
-    title: 'Refund Processed',
-    body:
-        'Your refund request has been approved.\n'
-        'The amount will be credited within 5-7 business days.',
-    time: '2:30 PM',
-    kind: NotificationKind.report,
-    isToday: false,
-  ),
-];
+import 'notification_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, this.notifications = _sample});
+  const NotificationsScreen({super.key, this.notifications});
 
-  /// Pass an empty list to see the first-run state.
-  final List<AppNotification> notifications;
+  /// Supplied only by tests and previews; otherwise it is fetched.
+  final List<AppNotification>? notifications;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -80,10 +20,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   final _search = TextEditingController();
   String _filter = 'All';
 
+  List<AppNotification>? _items;
+  String? _error;
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+
+    final given = widget.notifications;
+    if (given != null) {
+      _items = given;
+      _loading = false;
+    } else {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final page = await NotificationRepository.instance.list();
+      if (!mounted) return;
+
+      setState(() => _items = page.items);
+
+      // Opening the screen is reading them; the bell should go quiet.
+      if (page.unread > 0) {
+        await NotificationRepository.instance.markRead();
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -93,12 +68,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   int get _unreadCount =>
-      widget.notifications.where((item) => item.unread).length;
+      _all.where((item) => item.unread).length;
+
+  List<AppNotification> get _all => _items ?? const <AppNotification>[];
 
   List<AppNotification> get _visible {
     final query = _search.text.trim().toLowerCase();
 
-    return widget.notifications.where((item) {
+    return _all.where((item) {
       final matchesQuery =
           query.isEmpty ||
           item.title.toLowerCase().contains(query) ||
@@ -117,7 +94,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = widget.notifications.isEmpty;
+    final isEmpty = _all.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -143,7 +120,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             : null,
         centerTitle: true,
       ),
-      body: isEmpty ? const _EmptyNotifications() : _list(),
+      body: _items == null
+          ? Center(
+              child: _loading
+                  ? const CircularProgressIndicator()
+                  : Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _error ?? 'Could not load your notifications.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.negative,
+                        ),
+                      ),
+                    ),
+            )
+          : isEmpty
+          ? const _EmptyNotifications()
+          : RefreshIndicator(onRefresh: _load, child: _list()),
     );
   }
 
@@ -201,17 +196,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.ink,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              // TODO: open advanced notification filters.
-              child: const Icon(Icons.tune, size: 18, color: Colors.white),
             ),
           ],
         ),

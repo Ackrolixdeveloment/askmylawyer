@@ -46,6 +46,32 @@ const schema = z.object({
   RESEND_FROM_EMAIL: z.string().default('onboarding@resend.dev'),
   RESEND_FROM_NAME: z.string().default('Ask My Lawyer'),
 
+  /**
+   * MSG91, for the SMS codes that sign customers and lawyers in.
+   *
+   * MSG91_OTP_MESSAGE must match the DLT-approved template word for word,
+   * `{otp}` being the only variable — India's DLT registry drops anything
+   * that differs, so this is configuration, not copy to be reworded.
+   */
+  MSG91_AUTH_KEY: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  MSG91_SENDER_ID: z.string().default('PULSAI'),
+  MSG91_COUNTRY_CODE: z.string().default('91'),
+  /** The DLT template entity id, when the account needs it sent explicitly. */
+  MSG91_DLT_TE_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  MSG91_SMS_URL: z.string().url().default('https://control.msg91.com/api/sendhttp.php'),
+  MSG91_OTP_MESSAGE: z
+    .string()
+    .default('PULS~E AI: {otp} is your OTP for login. Kindly do not share your OTP with anyone.')
+    .refine((value) => value.includes('{otp}'), {
+      message: 'MSG91_OTP_MESSAGE must contain {otp}',
+    }),
+
   GOOGLE_CLIENT_IDS: list,
   APPLE_CLIENT_IDS: list,
 
@@ -83,6 +109,41 @@ const schema = z.object({
     .string()
     .optional()
     .transform((value) => value || undefined),
+  /**
+   * Agora's REST credentials, which are not the App ID pair above.
+   *
+   * Used server-side to start and stop speech-to-text on a live call — the
+   * apps never see these.
+   */
+  AGORA_CUSTOMER_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  AGORA_CUSTOMER_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+
+  /**
+   * Where Agora drops the transcript of a call. Agora writes to S3 itself,
+   * so these are keys for a user with access to that one bucket and nothing
+   * else — not the EC2 role the rest of the app uses.
+   */
+  TRANSCRIPT_BUCKET: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  TRANSCRIPT_BUCKET_REGION: z.string().default('ap-south-1'),
+  TRANSCRIPT_AWS_ACCESS_KEY_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  TRANSCRIPT_AWS_SECRET_ACCESS_KEY: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  /** How long to wait for Agora's file before giving the lawyer a blank report. */
+  TRANSCRIPT_WAIT_SECONDS: z.coerce.number().int().positive().default(180),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./storage'),

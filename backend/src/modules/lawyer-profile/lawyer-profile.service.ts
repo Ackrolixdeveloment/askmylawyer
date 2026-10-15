@@ -6,7 +6,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AdminAlertsService } from '../admin-alerts/admin-alerts.service';
 import { encryptField } from '../../common/field-encryption';
-import { checkFile, EXTENSIONS, FILE_RULES } from '../lawyer-registration/file-rules';
+import { checkFile, EXTENSIONS, FILE_RULES } from '../../common/file-rules';
 import type { UpdateBankDto, UpdateProfileDto } from './dto/update-profile.dto';
 
 /** The only section that needs an admin's sign-off today. */

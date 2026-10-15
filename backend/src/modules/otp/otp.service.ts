@@ -4,6 +4,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { AppException } from '../../common/app-exception';
 import { env } from '../../config/env';
 import { MailService } from '../../infrastructure/mail/mail.service';
+import { SmsService } from '../../infrastructure/sms/sms.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -28,6 +29,7 @@ export class OtpService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   onModuleInit() {
@@ -127,25 +129,22 @@ export class OtpService implements OnModuleInit {
     if (count === 0) throw expired();
   }
 
-  /** MSG91 goes here once the DLT template is approved. */
-  private async sendSms(phone: string, code: string) {
-    if (env.NODE_ENV === 'production') {
-      this.logger.error(`SMS provider not configured — OTP for ${phone.slice(0, -4)}XXXX not sent.`);
-      throw new AppException(
-        HttpStatus.SERVICE_UNAVAILABLE,
-        'SMS_UNAVAILABLE',
-        'We could not send the code right now. Please try again later.',
-      );
-    }
-    this.logger.log(`[DEV SMS] OTP for ${phone}: ${code}`);
+  private sendSms(phone: string, code: string) {
+    return this.sms.sendOtp(phone, code);
   }
 
   private sendEmail(email: string, code: string) {
     return this.mail.send({
       to: email,
       subject: `${code} is your Ask My Lawyer verification code`,
-      text: `Your Ask My Lawyer verification code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes. If you did not request it, you can ignore this email.`,
-      html: `<p>Your Ask My Lawyer verification code is</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${env.OTP_TTL_MINUTES} minutes. If you did not request it, you can ignore this email.</p>`,
+      text:
+        `Your Ask My Lawyer verification code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes. ` +
+        `If you did not request it, you can ignore this email.\n\nThis mailbox is not monitored.`,
+      html:
+        `<p>Your Ask My Lawyer verification code is</p>` +
+        `<p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>` +
+        `<p>It expires in ${env.OTP_TTL_MINUTES} minutes. If you did not request it, you can ignore this email.</p>` +
+        `<p style="margin-top:24px;font-size:12px;color:#9ca3af">This mailbox is not monitored.</p>`,
     });
   }
 }

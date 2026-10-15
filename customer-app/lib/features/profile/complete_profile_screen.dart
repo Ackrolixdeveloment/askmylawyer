@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/network/api_client.dart';
@@ -8,6 +11,7 @@ import '../../core/widgets/form_fields.dart';
 import '../../core/widgets/multi_select_field.dart';
 import '../auth/customer_session.dart';
 import '../home/home_screen.dart';
+import 'location_lookup.dart';
 import 'location_permission_dialog.dart';
 
 /// Profile the customer fills in after verifying their number or email.
@@ -73,6 +77,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   final _name = TextEditingController();
   final _email = TextEditingController();
+  final _mobile = TextEditingController();
   final _address = TextEditingController();
   final _referralCode = TextEditingController();
 
@@ -81,6 +86,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   String _title = 'Mr';
   String? _gender;
+
+  /// True while the profile is being saved, and what went wrong if it was.
+  bool _saving = false;
+  String? _problem;
   String? _occupation;
   String? _maritalStatus;
   bool _is18Plus = false;
@@ -92,13 +101,29 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   String? _ageBand;
   Set<String> _preferredLanguages = {};
 
+  /// The photo they just took, before it is uploaded.
+  String? _photo;
+
+  /// The email already on the account — from an email sign-in, or from
+  /// Google. Shown rather than asked for, and never typed over here: the
+  /// backend only accepts a replacement with a code sent to the new one.
+  String? _knownEmail;
+
+  /// The number already on the account, when they signed in with one.
+  String? _knownMobile;
+
+  /// Filled by the device, so the pincode box can show what was found.
+  final _pincodeField = TextEditingController();
+  bool _locating = false;
+
   /// Filled once the customer allows location, or picks a state manually.
   String? _stateCity;
 
   @override
   void initState() {
     super.initState();
-    for (final controller in [_name, _email, _address, _referralCode]) {
+    _prefill();
+    for (final controller in [_name, _email, _mobile, _address, _referralCode]) {
       controller.addListener(() => setState(() {}));
     }
   }
@@ -107,8 +132,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   void dispose() {
     _name.dispose();
     _email.dispose();
+    _mobile.dispose();
     _address.dispose();
     _referralCode.dispose();
+    _pincodeField.dispose();
     super.dispose();
   }
 
@@ -128,37 +155,156 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   bool get _canContinue =>
       Validators.name(_name.text) == null &&
       (_email.text.trim().isEmpty || Validators.email(_email.text) == null) &&
+      (_mobile.text.trim().isEmpty || Validators.mobile(_mobile.text) == null) &&
       _gender != null &&
       _locationKnown &&
       _referralValid;
 
   Future<void> _useCurrentLocation() async {
+    // Our own prompt first, explaining why, so the system one is not the
+    // first time they hear the question.
     final allowed = await showLocationPermissionDialog(context);
     if (!mounted || !allowed) return;
 
-    // TODO: resolve the real position once a location plugin is added, and
-    // fill State / City and Pincode from it.
-    setState(() => _stateCity = 'Detecting…');
+    setState(() => _locating = true);
+    final result = await const LocationLookup().resolve();
+    if (!mounted) return;
+    setState(() => _locating = false);
+
+    final place = result.place;
+    if (place == null) {
+      showLocationProblem(context, result.problem!);
+      return;
+    }
+
+    setState(() {
+      _stateCity = place.stateCity;
+      if (place.pincode != null) {
+        _pincode = place.pincode!;
+        _pincodeField.text = place.pincode!;
+      }
+    });
+  }
+
+  /// Fills in what we already know, so the form does not ask for it again.
+  ///
+  /// How much there is depends on the way in: an email code gives us the
+  /// address, Google gives the address and the name, a mobile code gives
+  /// only the number. Anything already answered is one less thing between
+  /// a new customer and their first consultation.
+  Future<void> _prefill() async {
+    try {
+      final profile = await CustomerSession.instance.profile();
+      if (!mounted) return;
+      setState(() {
+        if (profile.fullName.trim().isNotEmpty) _name.text = profile.fullName;
+        final email = profile.email ?? '';
+        if (email.isNotEmpty) {
+          _email.text = email;
+          _knownEmail = email;
+        }
+        // Held as "+919812345678"; the form works in plain digits.
+        final mobile = profile.mobile.replaceFirst(RegExp(r'^\+91'), '');
+        if (mobile.isNotEmpty) {
+          _mobile.text = mobile;
+          _knownMobile = mobile;
+        }
+      });
+    } on ApiException {
+      // Nothing known is simply an empty form, which is where we started.
+    }
+  }
+
+  /// Taken here, uploaded with the rest on Save — so a customer who
+  /// changes their mind and skips has not already sent us their face.
+  Future<void> _pickPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      preferredCameraDevice: CameraDevice.front,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+    if (picked != null && mounted) setState(() => _photo = picked.path);
+  }
+
+  /// Straight to the home screen with nothing saved.
+  void _skip() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _submit() async {
-    // Only the name and email have a home on the backend so far; the rest of
-    // this form is kept for when the customer profile grows to hold it.
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _problem = null;
+    });
+
     final email = _email.text.trim();
+    final mobile = _mobile.text.trim();
+    final address = _address.text.trim();
+    final referral = _referralCode.text.trim();
+
+    // "Gurugram, Haryana" comes back from the picker as one string; the
+    // backend keeps the two apart.
+    final parts = (_stateCity ?? '').split(',').map((p) => p.trim()).toList();
 
     try {
       await CustomerSession.instance.updateProfile(
         fullName: _name.text.trim(),
-        email: email.isEmpty ? null : email,
+        // Sending an address different from the verified one is refused,
+        // which would fail the whole save; it is changed from the profile
+        // screen with a code instead.
+        email: _knownEmail != null || email.isEmpty ? null : email,
+        mobile: _knownMobile != null || mobile.isEmpty ? null : mobile,
+        gender: _gender,
+        ageBand: _ageBand,
+        city: parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : null,
+        state: parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null,
+        pincode: _pincodeValid ? _pincode : null,
+        address: address.isEmpty ? null : address,
+        prefix: _title,
+        maritalStatus: _maritalStatus,
+        occupation: _occupation,
+        // Part of what makes a profile complete, so leaving it behind sent
+        // people straight back to the profile screen after signing up.
+        languages: _preferredLanguages.toList(),
+        referredByCode: referral.isEmpty ? null : referral,
       );
-    } on ApiException {
-      // Not worth blocking the first run over: the profile screen can save
-      // it again later.
+    } on ApiException catch (error) {
+      // Worth stopping for: an email already on another account is the
+      // customer's to fix, and silently carrying on would lose everything
+      // they just typed.
+      if (mounted) {
+        setState(() {
+          _problem = error.message;
+          _saving = false;
+        });
+      }
+      return;
+    }
+
+    // The photo is optional and goes up separately, so a failure here is
+    // not worth losing everything else they just typed over.
+    final photo = _photo;
+    if (photo != null) {
+      try {
+        await CustomerSession.instance.uploadPhoto(photo);
+      } on ApiException {
+        // They can add it again from the profile screen.
+      }
     }
 
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
+
+    // Clears the stack, so the home shell is the first route and nothing
+    // from sign-in is left below it.
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      (route) => false,
     );
   }
 
@@ -195,21 +341,57 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      const _FieldCard(child: _ProfilePhotoRow()),
+                      _FieldCard(
+                        child: _ProfilePhotoRow(
+                          photo: _photo,
+                          onPick: _pickPhoto,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Someone who signed in with Google or an email code
+                      // has no number yet, and a report cannot be sent
+                      // without one — so it is asked for here rather than
+                      // sprung on them after the call.
+                      _FieldCard(
+                        child: _knownMobile != null
+                            ? _VerifiedContact(
+                                label: 'Mobile Number',
+                                value: '+91 $_knownMobile',
+                              )
+                            : AppTextField(
+                                label: 'Mobile Number',
+                                hint: 'Enter your 10-digit number',
+                                controller: _mobile,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(10),
+                                ],
+                                validator: (value) => value.trim().isEmpty
+                                    ? null
+                                    : Validators.mobile(value),
+                              ),
+                      ),
                       const SizedBox(height: 12),
 
                       _FieldCard(
-                        child: AppTextField(
-                          label: 'Email Address',
-                          hint: 'Enter your email Address',
-                          controller: _email,
-                          optionalNote: '(Optional)',
-                          keyboardType: TextInputType.emailAddress,
-                          // Optional, so only flag it once something is typed.
-                          validator: (value) => value.trim().isEmpty
-                              ? null
-                              : Validators.email(value),
-                        ),
+                        child: _knownEmail != null
+                            ? _VerifiedContact(
+                                label: 'Email Address',
+                                value: _knownEmail!,
+                              )
+                            : AppTextField(
+                                label: 'Email Address',
+                                hint: 'Enter your email Address',
+                                controller: _email,
+                                optionalNote: '(Optional)',
+                                keyboardType: TextInputType.emailAddress,
+                                // Optional, so only flag it once typed.
+                                validator: (value) => value.trim().isEmpty
+                                    ? null
+                                    : Validators.email(value),
+                              ),
                       ),
                       const SizedBox(height: 12),
 
@@ -228,6 +410,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                         child: _StateCityField(
                           value: _stateCity,
                           satisfied: _locationKnown,
+                          busy: _locating,
+                          pincode: _pincodeField,
                           onUseLocation: _useCurrentLocation,
                           onPincodeChanged: (code) =>
                               setState(() => _pincode = code),
@@ -338,12 +522,35 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _canContinue ? _submit : null,
-                    child: const Text('Continue'),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_problem != null) ...[
+                      Text(
+                        _problem!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.negative,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    FilledButton(
+                      onPressed: _canContinue && !_saving ? _submit : null,
+                      child: Text(_saving ? 'Saving…' : 'Continue'),
+                    ),
+                    const SizedBox(height: 4),
+                    // None of this is needed to book a consultation, so it
+                    // is an invitation rather than a gate. The details are
+                    // asked for again when they come to read a report.
+                    TextButton(
+                      onPressed: _saving ? null : _skip,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.inkMuted,
+                      ),
+                      child: const Text('Skip for now'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -576,37 +783,54 @@ class _OptionalLabel extends StatelessWidget {
 }
 
 class _ProfilePhotoRow extends StatelessWidget {
-  const _ProfilePhotoRow();
+  const _ProfilePhotoRow({required this.photo, required this.onPick});
+
+  /// The local file they just took, if any.
+  final String? photo;
+  final VoidCallback onPick;
 
   @override
   Widget build(BuildContext context) {
+    final taken = photo;
+
     // The surrounding card supplies the chrome, so this row is bare.
     return Row(
       children: [
         // Dashed ring, drawn as a circle of short strokes.
-        CustomPaint(
-          painter: const _DashedCirclePainter(),
-          child: Container(
-            width: 84,
-            height: 84,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.canvas,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.photo_camera_outlined,
-              size: 28,
-              color: AppColors.ink,
+        GestureDetector(
+          onTap: onPick,
+          child: CustomPaint(
+            painter: const _DashedCirclePainter(),
+            child: Container(
+              width: 84,
+              height: 84,
+              alignment: Alignment.center,
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(
+                color: AppColors.canvas,
+                shape: BoxShape.circle,
+              ),
+              child: taken == null
+                  ? const Icon(
+                      Icons.photo_camera_outlined,
+                      size: 28,
+                      color: AppColors.ink,
+                    )
+                  : Image.file(
+                      File(taken),
+                      width: 84,
+                      height: 84,
+                      fit: BoxFit.cover,
+                    ),
             ),
           ),
         ),
         const SizedBox(width: 18),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Profile Photo',
                 style: TextStyle(
                   fontSize: 15,
@@ -614,16 +838,8 @@ class _ProfilePhotoRow extends StatelessWidget {
                   color: AppColors.ink,
                 ),
               ),
-              SizedBox(height: 4),
-              // TODO: open the camera; image_picker is already a dependency.
-              Text(
-                'Upload live Photo',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.ink,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
+              const SizedBox(height: 4),
+              _PhotoAction(taken: taken != null, onTap: onPick),
             ],
           ),
         ),
@@ -675,11 +891,19 @@ class _StateCityField extends StatelessWidget {
   const _StateCityField({
     required this.value,
     required this.satisfied,
+    required this.busy,
+    required this.pincode,
     required this.onUseLocation,
     required this.onPincodeChanged,
   });
 
   final String? value;
+
+  /// True while the device is being asked; the row shows a spinner.
+  final bool busy;
+
+  /// Shared so a pincode found by the device appears in the box.
+  final TextEditingController pincode;
 
   /// True once either the device or a valid pincode has answered this, so the
   /// red Required note can drop away.
@@ -718,7 +942,7 @@ class _StateCityField extends StatelessWidget {
         const SizedBox(height: 8),
 
         InkWell(
-          onTap: onUseLocation,
+          onTap: busy ? null : onUseLocation,
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -728,11 +952,23 @@ class _StateCityField extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.my_location, size: 16, color: Colors.white),
+                if (busy)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  const Icon(Icons.my_location, size: 16, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    value ?? 'Use my current location',
+                    busy
+                        ? 'Finding your location…'
+                        : value ?? 'Use my current location',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -760,6 +996,7 @@ class _StateCityField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextField(
+          controller: pincode,
           keyboardType: TextInputType.number,
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -948,6 +1185,71 @@ class _ToggleButton extends StatelessWidget {
           color: active ? Colors.white : AppColors.inkMuted,
         ),
       ),
+    );
+  }
+}
+
+
+/// The "Upload live Photo" link under the ring.
+class _PhotoAction extends StatelessWidget {
+  const _PhotoAction({required this.taken, required this.onTap});
+
+  final bool taken;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        taken ? 'Retake Photo' : 'Upload live Photo',
+        style: const TextStyle(
+          fontSize: 13,
+          color: AppColors.ink,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    );
+  }
+}
+
+
+/// A contact that is already on the account — the one they signed in with,
+/// or the address Google gave us. Confirmed already, so it is shown rather
+/// than asked for, and cannot be typed over here: replacing it takes a code
+/// sent to the new one, from the profile screen.
+class _VerifiedContact extends StatelessWidget {
+  const _VerifiedContact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 14, color: AppColors.inkSubtle),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.verified_outlined, size: 18, color: AppColors.positive),
+      ],
     );
   }
 }

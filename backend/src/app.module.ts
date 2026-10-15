@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { env } from './config/env';
 import { MailModule } from './infrastructure/mail/mail.module';
+import { SmsModule } from './infrastructure/sms/sms.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { AgoraModule } from './infrastructure/agora/agora.module';
 import { PushModule } from './infrastructure/push/push.module';
@@ -25,6 +26,10 @@ import { ConsultationsModule } from './modules/consultations/consultations.modul
 import { CustomerAuthModule } from './modules/customer-auth/customer-auth.module';
 import { LawyerAuthModule } from './modules/lawyer-auth/lawyer-auth.module';
 import { LawyerProfileModule } from './modules/lawyer-profile/lawyer-profile.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { EarningsModule } from './modules/earnings/earnings.module';
+import { LawyerHomeModule } from './modules/lawyer-home/lawyer-home.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Controller('health')
 class HealthController {
@@ -64,6 +69,7 @@ class HealthController {
     ScheduleModule.forRoot(),
     PrismaModule,
     MailModule,
+    SmsModule,
     StorageModule,
     PushModule,
     AgoraModule,
@@ -80,6 +86,10 @@ class HealthController {
     LawyerAuthModule,
     CustomerAuthModule,
     ConsultationsModule,
+    PaymentsModule,
+    ReportsModule,
+    EarningsModule,
+    LawyerHomeModule,
     LawyerAccountModule,
     LawyerProfileModule,
     LawyerRegistrationModule,

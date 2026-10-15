@@ -55,36 +55,24 @@ const ROLES = [
  * What a customer can book, and what it costs. Priced here to start with;
  * the admin team changes it in Settings → App Setting.
  */
+/**
+ * The one consultation on sale.
+ *
+ * The customer no longer chooses between audio, video and chat — every
+ * consultation carries all three — so there is one price, one duration and
+ * one set of extension rules, all set in the admin panel.
+ */
 const PLANS = [
   {
-    code: 'audio',
-    type: 'Audio Call',
-    amount: 499,
-    commissionMode: 'percent' as const,
-    commissionValue: 20,
-    durationMinutes: 15,
-    extensionMinutes: 5,
-    extensionAmount: 150,
-  },
-  {
-    code: 'video',
-    type: 'Video Call',
+    code: 'consultation',
+    type: 'Consultation',
     amount: 999,
     commissionMode: 'percent' as const,
     commissionValue: 20,
     durationMinutes: 15,
     extensionMinutes: 5,
     extensionAmount: 300,
-  },
-  {
-    code: 'chat',
-    type: 'Chat',
-    amount: 299,
-    commissionMode: 'flat' as const,
-    commissionValue: 50,
-    durationMinutes: 15,
-    extensionMinutes: 10,
-    extensionAmount: 100,
+    maxExtensions: 1,
   },
 ];
 

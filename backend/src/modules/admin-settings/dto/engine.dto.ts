@@ -116,6 +116,42 @@ export class EngineSettingsDto {
   @Min(10)
   @Max(600)
   callGraceSeconds: number;
+
+  @IsInt()
+  @Min(10)
+  @Max(600)
+  absenceGraceSeconds: number;
+
+  @IsBoolean()
+  allowEndWhenAbandoned: boolean;
+
+  @IsInt()
+  @Min(10)
+  @Max(300)
+  extensionPromptSeconds: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  extensionGraceSeconds: number;
+
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  reportReviewMinutes: number;
+
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  reportExtensionMinutes: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  maxReportExtensions: number;
+
+  @IsBoolean()
+  holdEarningsUntilReport: boolean;
 }
 
 /** Applies a whole profile in one click. */

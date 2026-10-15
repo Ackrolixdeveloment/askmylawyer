@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_navigator.dart';
 import '../../core/theme/app_colors.dart';
@@ -6,9 +7,11 @@ import '../auth/customer_session.dart';
 import '../auth/get_started_screen.dart';
 import '../coupons/coupons_screen.dart';
 import '../profile/profile_screen.dart';
+import '../profile/verify_contact_sheet.dart';
 import '../support/support_screen.dart';
-import 'change_mobile_screen.dart';
 import '../referral/referral_screen.dart';
+import 'about_screen.dart';
+import 'legal_links.dart';
 import 'logout_dialog.dart';
 
 /// Profile, preferences and account actions, opened from the home menu.
@@ -91,15 +94,8 @@ class SettingsScreen extends StatelessWidget {
                 _Row(
                   icon: Icons.smartphone_outlined,
                   title: 'Change Mobile Number',
-                  subtitle: 'OTP verification on old + new number',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      // TODO: use the signed-in customer's number.
-                      builder: (_) => const ChangeMobileScreen(
-                        currentMobile: '1234567890',
-                      ),
-                    ),
-                  ),
+                  subtitle: 'Confirmed with a code sent to the new number',
+                  onTap: () => _changeMobile(context),
                 ),
               ],
             ),
@@ -150,25 +146,36 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const _Row(
-                  icon: Icons.description_outlined,
-                  title: 'Terms of Service',
-                  subtitle: 'Read our terms and conditions',
-                ),
-                const _Row(
-                  icon: Icons.shield_outlined,
-                  title: 'Privacy Policy',
-                  subtitle: 'Learn how we protect your data',
-                ),
-                const _Row(
-                  icon: Icons.currency_rupee,
-                  title: 'Refund Policy',
-                  subtitle: 'Understand refund eligibility and timelines',
-                ),
-                const _Row(
+                // Hidden until the pages exist; a row that opens nothing
+                // reads as a broken app.
+                if (LegalLinks.terms.isNotEmpty)
+                  _Row(
+                    icon: Icons.description_outlined,
+                    title: 'Terms of Service',
+                    subtitle: 'Read our terms and conditions',
+                    onTap: () => _open(context, LegalLinks.terms),
+                  ),
+                if (LegalLinks.privacy.isNotEmpty)
+                  _Row(
+                    icon: Icons.shield_outlined,
+                    title: 'Privacy Policy',
+                    subtitle: 'Learn how we protect your data',
+                    onTap: () => _open(context, LegalLinks.privacy),
+                  ),
+                if (LegalLinks.refunds.isNotEmpty)
+                  _Row(
+                    icon: Icons.currency_rupee,
+                    title: 'Refund Policy',
+                    subtitle: 'Understand refund eligibility and timelines',
+                    onTap: () => _open(context, LegalLinks.refunds),
+                  ),
+                _Row(
                   icon: Icons.info_outline,
                   title: 'About Ask My Lawyer',
-                  subtitle: 'App version, company information & licenses',
+                  subtitle: 'App version and licences',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const AboutScreen()),
+                  ),
                 ),
               ],
             ),
@@ -329,8 +336,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      // TODO: wire the remaining destinations as their screens are built.
-      onTap: onTap ?? () {},
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
@@ -380,5 +386,38 @@ class _Row extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+/// Opens the verified change-of-number flow — the same one the profile
+/// screen uses, so there is one way to change a contact and it always asks
+/// for a code.
+Future<void> _changeMobile(BuildContext context) async {
+  final profile = await CustomerSession.instance.profile();
+  if (!context.mounted) return;
+
+  final changed = await showVerifyContactSheet(
+    context: context,
+    isEmail: false,
+    current: profile.mobile.isEmpty ? 'not set' : profile.mobile,
+  );
+  if (changed && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Mobile number updated')));
+  }
+}
+
+/// Opens a policy page in the browser.
+Future<void> _open(BuildContext context, String url) async {
+  final opened = await launchUrl(
+    Uri.parse(url),
+    mode: LaunchMode.externalApplication,
+  );
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not open that page')));
   }
 }

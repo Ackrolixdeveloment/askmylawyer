@@ -123,11 +123,17 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     // A number we have not seen before still needs a name and a city.
-    Navigator.of(context).pushReplacement(
+    //
+    // Signing in clears the stack rather than replacing the top of it: the
+    // sign-in screens must not be left underneath, or anything that pops
+    // back to the first route — ending a call, say — lands on the login
+    // screen instead of home.
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(
         builder: (_) =>
             isNewUser ? const CompleteProfileScreen() : const HomeScreen(),
       ),
+      (route) => false,
     );
   }
 

@@ -7,11 +7,15 @@ interface Recipient {
 }
 
 /** Wraps the body in the same plain, readable shell for every message. */
+/** Replies go nowhere, so every email says so. */
+const NOT_MONITORED = 'This mailbox is not monitored.';
+
 function layout(heading: string, body: string) {
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1f2937;line-height:1.6">
   <h2 style="margin:0 0 12px;font-size:20px;color:#111827">${heading}</h2>
   ${body}
   <p style="margin:24px 0 0;font-size:12px;color:#6b7280">Ask My Lawyer</p>
+  <p style="margin:4px 0 0;font-size:12px;color:#9ca3af">${NOT_MONITORED}</p>
 </div>`;
 }
 
@@ -113,7 +117,11 @@ export class LawyerNotificationsService {
     }
 
     try {
-      await this.mail.send({ to: to.email, ...message });
+      await this.mail.send({
+        ...message,
+        to: to.email,
+        text: `${message.text}\n${NOT_MONITORED}`,
+      });
     } catch (error) {
       this.logger.error(`Could not email ${to.email}: ${(error as Error).message}`);
     }

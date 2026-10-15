@@ -42,6 +42,20 @@ android {
     }
 }
 
+/*
+ * Real phones are all arm, but Agora's AAR ships x86_64 libraries too and
+ * Flutter's own --target-platform does not reach inside a dependency to
+ * drop them. Left in, they add ~50 MB to every build for the sake of an
+ * emulator. Pass -Pkeep-x86 to build one that runs on an emulator.
+ */
+if (!project.hasProperty("keep-x86")) {
+    android {
+        packaging {
+            jniLibs.excludes += setOf("lib/x86_64/**", "lib/x86/**")
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

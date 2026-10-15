@@ -93,6 +93,35 @@ class AuthRepository {
     return _startSession(data);
   }
 
+  /// Exchanges a Google ID token for a session.
+  Future<({bool isNewUser, LawyerAccount lawyer})> signInWithGoogle(
+    String idToken,
+  ) async {
+    final data = await _api.post(
+      '/api/v1/lawyer/auth/google',
+      body: {'idToken': idToken},
+    );
+    return _startSession(data);
+  }
+
+  /// The same for Apple. [fullName] is sent because Apple hands it over on
+  /// the very first sign-in and never again.
+  Future<({bool isNewUser, LawyerAccount lawyer})> signInWithApple({
+    required String identityToken,
+    String? rawNonce,
+    String? fullName,
+  }) async {
+    final data = await _api.post(
+      '/api/v1/lawyer/auth/apple',
+      body: {
+        'identityToken': identityToken,
+        'rawNonce': ?rawNonce,
+        'fullName': ?fullName,
+      },
+    );
+    return _startSession(data);
+  }
+
   Future<({bool isNewUser, LawyerAccount lawyer})> _startSession(
     Map<String, dynamic> data,
   ) async {

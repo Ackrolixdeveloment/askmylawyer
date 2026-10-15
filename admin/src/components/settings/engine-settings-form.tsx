@@ -261,6 +261,84 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
           disabled={!canEdit}
           onChange={(value) => set("callGraceSeconds", value)}
         />
+        <NumberRow
+          label="Tell the other side someone has gone after"
+          unit="seconds"
+          hint="Long enough to survive a lift, short enough to be honest."
+          value={form.absenceGraceSeconds}
+          fallback={defaults.absenceGraceSeconds}
+          disabled={!canEdit}
+          onChange={(value) => set("absenceGraceSeconds", value)}
+        />
+        <Toggle
+          label="Let a stranded customer end and claim the unused time"
+          hint="Offered only while the lawyer is genuinely absent. The refund covers the minutes they did not get."
+          checked={form.allowEndWhenAbandoned}
+          disabled={!canEdit}
+          onChange={(value) => set("allowEndWhenAbandoned", value)}
+        />
+      </Section>
+
+      <Section
+        title="Extra time"
+        description="The lawyer asks mid-call, the customer agrees, and the charge is settled with the consultation report. How many are allowed, and what they cost, is set with the plan."
+      >
+        <NumberRow
+          label="The customer has this long to answer"
+          unit="seconds"
+          hint="No answer means no — the request lapses rather than extending by default."
+          value={form.extensionPromptSeconds}
+          fallback={defaults.extensionPromptSeconds}
+          disabled={!canEdit}
+          onChange={(value) => set("extensionPromptSeconds", value)}
+        />
+        <NumberRow
+          label="Hold the call open past its end while deciding"
+          unit="seconds"
+          hint="So nobody is cut off mid-sentence while the question is still on screen."
+          value={form.extensionGraceSeconds}
+          fallback={defaults.extensionGraceSeconds}
+          disabled={!canEdit}
+          onChange={(value) => set("extensionGraceSeconds", value)}
+        />
+      </Section>
+
+      <Section
+        title="Consultation report"
+        description="Drafted after the call, checked by the lawyer, then sent to the client."
+      >
+        <NumberRow
+          label="The lawyer has this long to check and send it"
+          unit="minutes"
+          hint="Counted from when the draft is ready, not from the end of the call."
+          value={form.reportReviewMinutes}
+          fallback={defaults.reportReviewMinutes}
+          disabled={!canEdit}
+          onChange={(value) => set("reportReviewMinutes", value)}
+        />
+        <NumberRow
+          label="A longer look adds"
+          unit="minutes"
+          value={form.reportExtensionMinutes}
+          fallback={defaults.reportExtensionMinutes}
+          disabled={!canEdit}
+          onChange={(value) => set("reportExtensionMinutes", value)}
+        />
+        <NumberRow
+          label="Longer looks allowed"
+          unit="times"
+          value={form.maxReportExtensions}
+          fallback={defaults.maxReportExtensions}
+          disabled={!canEdit}
+          onChange={(value) => set("maxReportExtensions", value)}
+        />
+        <Toggle
+          label="Hold the lawyer's earnings until the report is sent"
+          hint="A late report never costs the client their report — it holds the lawyer's money until they send it."
+          checked={form.holdEarningsUntilReport}
+          disabled={!canEdit}
+          onChange={(value) => set("holdEarningsUntilReport", value)}
+        />
       </Section>
 
       <div className="flex flex-wrap items-center gap-3">

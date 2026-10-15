@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../home_data.dart';
+import '../home_repository.dart';
 
 /// White card every dashboard section sits in.
 class SectionCard extends StatelessWidget {
@@ -273,7 +273,22 @@ class EarningsCard extends StatelessWidget {
   final double? changePercent;
   final List<double> series;
 
-  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  /// The chart's own colour. Named rather than repeated, so the line, the
+  /// dots, the touch indicator and the tooltip cannot drift apart.
+  static const _chartColor = Color(0xFF5B67CA);
+
+  /// The series is the last seven days ending today, not Monday to Sunday,
+  /// so the labels are worked out from today backwards. A fixed Mon–Sun row
+  /// would put every figure under the wrong day on six days out of seven.
+  static List<String> get _days {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final today = DateTime.now();
+
+    return [
+      for (var back = 6; back >= 0; back--)
+        names[today.subtract(Duration(days: back)).weekday - 1],
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +332,11 @@ class EarningsCard extends StatelessWidget {
           SizedBox(
             height: 140,
             child: LineChart(
+              // Eases the touch indicator and the tooltip from one day to
+              // the next instead of snapping, which reads as a stutter when
+              // a finger is dragged along the week.
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
               LineChartData(
                 minY: 0,
                 maxY: axisMax,
@@ -347,24 +367,82 @@ class EarningsCard extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 22,
+                      reservedSize: 24,
                       getTitlesWidget: (value, _) {
                         final index = value.round();
-                        if (index < 0 || index >= _days.length) {
+                        final days = _days;
+                        if (index < 0 || index >= days.length) {
                           return const SizedBox.shrink();
                         }
-                        return Text(
-                          _days[index],
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: AppColors.inkSubtle,
+                        return Padding(
+                          // Keeps the labels clear of the axis line.
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                          days[index],
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: AppColors.inkSubtle,
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
                 ),
-                lineTouchData: const LineTouchData(enabled: false),
+                // A line alone says "a good Thursday" but not how good.
+                // Touching a day gives the figure.
+                lineTouchData: LineTouchData(
+                  handleBuiltInTouches: true,
+                  getTouchedSpotIndicator: (_, indexes) => [
+                    for (final _ in indexes)
+                      TouchedSpotIndicatorData(
+                        FlLine(
+                          color: _chartColor.withValues(alpha: 0.4),
+                          strokeWidth: 1,
+                        ),
+                        FlDotData(
+                          getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+                            radius: 4,
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                            strokeColor: _chartColor,
+                          ),
+                        ),
+                      ),
+                  ],
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => _chartColor,
+                    tooltipBorderRadius: BorderRadius.circular(10),
+                    tooltipPadding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    // Clear of the line it is describing.
+                    tooltipMargin: 10,
+                    getTooltipItems: (spots) => [
+                      for (final spot in spots)
+                        LineTooltipItem(
+                          '${_days[spot.x.round()]}\n',
+                          const TextStyle(
+                            fontSize: 10,
+                            height: 1.5,
+                            color: Color(0xFFD5D9F5),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '₹${spot.y.round()}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
                 lineBarsData: [
                   LineChartBarData(
                     spots: [
@@ -373,17 +451,31 @@ class EarningsCard extends StatelessWidget {
                     ],
                     isCurved: true,
                     curveSmoothness: 0.3,
-                    color: const Color(0xFF5B67CA),
+                    // Without this the spline overshoots below zero between
+                    // a busy day and an empty one, and the line is drawn
+                    // straight through the day labels underneath.
+                    preventCurveOverShooting: true,
+                    color: _chartColor,
                     barWidth: 2,
-                    dotData: const FlDotData(show: false),
+                    // Only days with earnings get a dot, so the lawyer can
+                    // see at a glance which ones are worth touching.
+                    dotData: FlDotData(
+                      show: true,
+                      checkToShowDot: (spot, _) => spot.y > 0,
+                      getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+                        radius: 3,
+                        color: _chartColor,
+                        strokeWidth: 0,
+                      ),
+                    ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          const Color(0xFF5B67CA).withValues(alpha: 0.22),
-                          const Color(0xFF5B67CA).withValues(alpha: 0.02),
+                          _chartColor.withValues(alpha: 0.22),
+                          _chartColor.withValues(alpha: 0.02),
                         ],
                       ),
                     ),
@@ -399,270 +491,280 @@ class EarningsCard extends StatelessWidget {
 }
 
 /// The next booked consultation, highlighted so it cannot be missed.
-class UpcomingCard extends StatelessWidget {
-  const UpcomingCard({super.key, required this.consultation});
+// Parked with the Upcoming Consultation section on the home screen:
+// there is no diary to show until lawyers can set slots and clients
+// can book them. Kept so it can simply be uncommented.
+//
+// class UpcomingCard extends StatelessWidget {
+//   const UpcomingCard({super.key, required this.consultation});
+//
+//   final UpcomingConsultation consultation;
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       padding: const EdgeInsets.all(14),
+//       decoration: BoxDecoration(
+//         color: AppColors.ink,
+//         borderRadius: BorderRadius.circular(14),
+//       ),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             children: [
+//               Container(
+//                 padding: const EdgeInsets.symmetric(
+//                   horizontal: 10,
+//                   vertical: 5,
+//                 ),
+//                 decoration: BoxDecoration(
+//                   color: const Color(0xFF1E5B3A),
+//                   borderRadius: BorderRadius.circular(6),
+//                 ),
+//                 child: Text(
+//                   'Starts in ${consultation.startsInMinutes} min',
+//                   style: const TextStyle(
+//                     fontSize: 10,
+//                     fontWeight: FontWeight.w600,
+//                     color: Color(0xFF7DE2A5),
+//                   ),
+//                 ),
+//               ),
+//               const Spacer(),
+//               Container(
+//                 padding: const EdgeInsets.symmetric(
+//                   horizontal: 10,
+//                   vertical: 5,
+//                 ),
+//                 decoration: BoxDecoration(
+//                   color: Colors.white.withValues(alpha: 0.12),
+//                   borderRadius: BorderRadius.circular(6),
+//                 ),
+//                 child: Row(
+//                   children: [
+//                     Icon(
+//                       consultation.isVideo
+//                           ? Icons.videocam_outlined
+//                           : Icons.headset_mic_outlined,
+//                       size: 12,
+//                       color: Colors.white,
+//                     ),
+//                     const SizedBox(width: 4),
+//                     Text(
+//                       consultation.isVideo ? 'Video' : 'Audio',
+//                       style: const TextStyle(fontSize: 10, color: Colors.white),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 14),
+//           Row(
+//             children: [
+//               CircleAvatar(
+//                 radius: 18,
+//                 backgroundColor: Colors.white.withValues(alpha: 0.14),
+//                 child: Text(
+//                   consultation.initials,
+//                   style: const TextStyle(
+//                     fontSize: 12,
+//                     fontWeight: FontWeight.w600,
+//                     color: Colors.white,
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(width: 12),
+//               Expanded(
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   children: [
+//                     Text(
+//                       consultation.name,
+//                       style: const TextStyle(
+//                         fontSize: 14,
+//                         fontWeight: FontWeight.w700,
+//                         color: Colors.white,
+//                       ),
+//                     ),
+//                     const SizedBox(height: 2),
+//                     Text(
+//                       consultation.matter,
+//                       style: const TextStyle(
+//                         fontSize: 11,
+//                         color: Color(0xFFB6C0D4),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 14),
+//           Row(
+//             children: [
+//               _DarkChip(
+//                 icon: Icons.calendar_today_outlined,
+//                 label: consultation.day,
+//               ),
+//               const SizedBox(width: 10),
+//               _DarkChip(icon: Icons.access_time, label: consultation.time),
+//             ],
+//           ),
+//           const SizedBox(height: 14),
+//           SizedBox(
+//             width: double.infinity,
+//             child: FilledButton(
+//               // TODO: open the consultation detail screen.
+//               onPressed: () {},
+//               style: FilledButton.styleFrom(
+//                 backgroundColor: Colors.white,
+//                 foregroundColor: AppColors.ink,
+//               ),
+//               child: const Row(
+//                 mainAxisAlignment: MainAxisAlignment.center,
+//                 children: [
+//                   Text('View Details'),
+//                   Spacer(),
+//                   Icon(Icons.chevron_right, size: 18),
+//                 ],
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
-  final UpcomingConsultation consultation;
+// Only UpcomingCard used this, so it is parked alongside it.
+//
+// class _DarkChip extends StatelessWidget {
+//   const _DarkChip({required this.icon, required this.label});
+//
+//   final IconData icon;
+//   final String label;
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Expanded(
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+//         decoration: BoxDecoration(
+//           color: Colors.white.withValues(alpha: 0.08),
+//           borderRadius: BorderRadius.circular(8),
+//         ),
+//         child: Row(
+//           children: [
+//             Icon(icon, size: 13, color: const Color(0xFFB6C0D4)),
+//             const SizedBox(width: 6),
+//             Text(
+//               label,
+//               style: const TextStyle(fontSize: 11, color: Colors.white),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
+//
+// /// One booking in today's list.
+// // Parked with Today's Schedule, for the same reason as UpcomingCard.
+// //
+// // class ScheduleRow extends StatelessWidget {
+// //   const ScheduleRow({super.key, required this.entry});
+// //
+// //   final ScheduleEntry entry;
+// //
+// //   @override
+// //   Widget build(BuildContext context) {
+// //     final confirmed = entry.state == BookingState.confirmed;
+// //
+// //     return SectionCard(
+// //       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+// //       child: Row(
+// //         children: [
+// //           CircleAvatar(
+// //             radius: 16,
+// //             backgroundColor: AppColors.canvas,
+// //             child: Text(
+// //               entry.initials,
+// //               style: const TextStyle(
+// //                 fontSize: 11,
+// //                 fontWeight: FontWeight.w600,
+// //                 color: AppColors.inkMuted,
+// //               ),
+// //             ),
+// //           ),
+// //           const SizedBox(width: 12),
+// //           Expanded(
+// //             child: Column(
+// //               crossAxisAlignment: CrossAxisAlignment.start,
+// //               children: [
+// //                 Text(
+// //                   entry.name,
+// //                   style: const TextStyle(
+// //                     fontSize: 13,
+// //                     fontWeight: FontWeight.w600,
+// //                     color: AppColors.ink,
+// //                   ),
+// //                 ),
+// //                 const SizedBox(height: 2),
+// //                 Text(
+// //                   '${entry.time} . ${entry.slotMinutes} min slot',
+// //                   style: const TextStyle(
+// //                     fontSize: 11,
+// //                     color: AppColors.inkSubtle,
+// //                   ),
+// //                 ),
+// //               ],
+// //             ),
+// //           ),
+// //           Container(
+// //             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+// //             decoration: BoxDecoration(
+// //               color: confirmed
+// //                   ? const Color(0xFFE7F7EE)
+// //                   : const Color(0xFFFDF3E3),
+// //               borderRadius: BorderRadius.circular(20),
+// //             ),
+// //             child: Text(
+// //               confirmed ? 'Confirmed' : 'Pending',
+// //               style: TextStyle(
+// //                 fontSize: 10,
+// //                 fontWeight: FontWeight.w600,
+// //                 color: confirmed ? AppColors.positive : const Color(0xFFB98A2F),
+// //               ),
+// //             ),
+// //           ),
+// //           const Icon(Icons.chevron_right, size: 18, color: AppColors.inkSubtle),
+// //         ],
+// //       ),
+// //     );
+// //   }
+// // }
+// //
+// // /// Icon + label row used by Recent Activity.
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E5B3A),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Starts in ${consultation.startsInMinutes} min',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF7DE2A5),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      consultation.isVideo
-                          ? Icons.videocam_outlined
-                          : Icons.headset_mic_outlined,
-                      size: 12,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      consultation.isVideo ? 'Video' : 'Audio',
-                      style: const TextStyle(fontSize: 10, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.white.withValues(alpha: 0.14),
-                child: Text(
-                  consultation.initials,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      consultation.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      consultation.matter,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFFB6C0D4),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _DarkChip(
-                icon: Icons.calendar_today_outlined,
-                label: consultation.day,
-              ),
-              const SizedBox(width: 10),
-              _DarkChip(icon: Icons.access_time, label: consultation.time),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              // TODO: open the consultation detail screen.
-              onPressed: () {},
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.ink,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('View Details'),
-                  Spacer(),
-                  Icon(Icons.chevron_right, size: 18),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DarkChip extends StatelessWidget {
-  const _DarkChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 13, color: const Color(0xFFB6C0D4)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 11, color: Colors.white),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One booking in today's list.
-class ScheduleRow extends StatelessWidget {
-  const ScheduleRow({super.key, required this.entry});
-
-  final ScheduleEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final confirmed = entry.state == BookingState.confirmed;
-
-    return SectionCard(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.canvas,
-            child: Text(
-              entry.initials,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.inkMuted,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.name,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${entry.time} . ${entry.slotMinutes} min slot',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: confirmed
-                  ? const Color(0xFFE7F7EE)
-                  : const Color(0xFFFDF3E3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              confirmed ? 'Confirmed' : 'Pending',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: confirmed ? AppColors.positive : const Color(0xFFB98A2F),
-              ),
-            ),
-          ),
-          const Icon(Icons.chevron_right, size: 18, color: AppColors.inkSubtle),
-        ],
-      ),
-    );
-  }
-}
-
-/// Icon + label row used by Recent Activity.
 class ActivityRow extends StatelessWidget {
   const ActivityRow({super.key, required this.entry});
 
   final ActivityEntry entry;
 
+  /// Keyed by the backend's own word for what happened.
   static const _icons = {
-    ActivityKind.booking: Icons.event_available_outlined,
-    ActivityKind.consultation: Icons.check_circle_outline,
-    ActivityKind.report: Icons.description_outlined,
-    ActivityKind.payment: Icons.account_balance_wallet_outlined,
-    ActivityKind.approval: Icons.verified_outlined,
+    'booking': Icons.event_available_outlined,
+    'consultation': Icons.check_circle_outline,
+    'report': Icons.description_outlined,
+    'payment': Icons.account_balance_wallet_outlined,
+    'approval': Icons.verified_outlined,
   };
 
   @override
   Widget build(BuildContext context) {
-    final approval = entry.kind == ActivityKind.approval;
+    final approval = entry.kind == 'approval';
 
     return SectionCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

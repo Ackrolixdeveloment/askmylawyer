@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'commission_data.dart';
+import '../../core/network/api_client.dart';
+import 'earning_repository.dart';
 import 'earning_detail_screen.dart';
 import 'withdraw_sheet.dart';
 
 /// Earnings summary plus the recent consultation payouts.
 class CommissionScreen extends StatefulWidget {
-  const CommissionScreen({super.key, this.data = commissionSample});
+  const CommissionScreen({super.key, this.data});
 
-  final CommissionData data;
+  /// Supplied only by tests and previews; otherwise it is fetched.
+  final CommissionData? data;
 
   @override
   State<CommissionScreen> createState() => _CommissionScreenState();
@@ -21,10 +23,38 @@ class _CommissionScreenState extends State<CommissionScreen> {
   /// History splits into what came in and what was taken out.
   bool _showWithdraws = false;
 
+  CommissionData? _data;
+  String? _error;
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+
+    final given = widget.data;
+    if (given != null) {
+      _data = given;
+      _loading = false;
+    } else {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await EarningRepository.instance.summary();
+      if (mounted) setState(() => _data = data);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -34,18 +64,41 @@ class _CommissionScreenState extends State<CommissionScreen> {
   }
 
   List<Earning> get _visible {
+    final all = _data?.recent ?? const <Earning>[];
     final query = _search.text.trim().toLowerCase();
-    if (query.isEmpty) return widget.data.recent;
+    if (query.isEmpty) return all;
 
-    return widget.data.recent
-        .where((item) => item.client.toLowerCase().contains(query))
+    return all
+        .where(
+          (item) =>
+              item.client.toLowerCase().contains(query) ||
+              item.reference.toLowerCase().contains(query),
+        )
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
+    final data = _data;
     final visible = _visible;
+
+    if (data == null) {
+      return Center(
+        child: _loading
+            ? const CircularProgressIndicator()
+            : Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error ?? 'Nothing earned yet.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+              ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
@@ -121,11 +174,11 @@ class _CommissionScreenState extends State<CommissionScreen> {
             children: [
               Expanded(
                 child: _BalanceCard(
-                  amount: data.creditBalance,
+                  amount: data.creditBalance.toDouble(),
                   onWithdraw: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) =>
-                          WithdrawSheet(available: data.creditBalance),
+                          WithdrawSheet(available: data.creditBalance.toDouble()),
                     ),
                   ),
                 ),
@@ -134,7 +187,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
               Expanded(
                 child: _StatCard(
                   label: 'Under Process',
-                  amount: data.underProcess,
+                  amount: data.underProcess.toDouble(),
                   amountColor: AppColors.negative,
                   caption: '${data.underProcessCount} consultations',
                 ),
@@ -143,7 +196,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
               Expanded(
                 child: _StatCard(
                   label: 'This Month',
-                  amount: data.thisMonth,
+                  amount: data.thisMonth.toDouble(),
                   amountColor: AppColors.positive,
                   caption: '${data.thisMonthSessions} sessions',
                 ),
@@ -165,7 +218,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
                 ),
               ),
             ),
-            if (widget.data.recent.isNotEmpty)
+            if (data.recent.isNotEmpty)
               const Text(
                 'View All',
                 style: TextStyle(fontSize: 11, color: AppColors.inkSubtle),
@@ -362,14 +415,22 @@ class _EarningCard extends StatelessWidget {
 
   final Earning earning;
 
+  /// Two letters for the avatar.
+  String _initials(String name) => name
+      .split(' ')
+      .map((part) => part.isEmpty ? '' : part[0])
+      .take(2)
+      .join()
+      .toUpperCase();
+
   @override
   Widget build(BuildContext context) {
-    final paid = earning.state == PayoutState.paidOut;
+    final paid = earning.state != PayoutState.held;
 
     return InkWell(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => EarningDetailScreen(earning: earning),
+          builder: (_) => EarningDetailScreen(earningId: earning.id),
         ),
       ),
       borderRadius: BorderRadius.circular(12),
@@ -395,7 +456,7 @@ class _EarningCard extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Text(
-                    earning.initials,
+                    _initials(earning.client),
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -420,7 +481,7 @@ class _EarningCard extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            earning.practice,
+                            earning.category ?? 'General',
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppColors.inkSubtle,
@@ -434,7 +495,7 @@ class _EarningCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            earning.medium,
+                            earning.planName,
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppColors.inkSubtle,
@@ -448,8 +509,8 @@ class _EarningCard extends StatelessWidget {
                 // A paid-out amount is money in hand, so it reads green.
                 Text(
                   paid
-                      ? '+₹${_thousands(earning.amount)}'
-                      : _thousands(earning.amount),
+                      ? '+₹${_thousands(earning.net.toDouble())}'
+                      : _thousands(earning.net.toDouble()),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -462,7 +523,7 @@ class _EarningCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '${earning.date} . ${earning.time}',
+                  '${earning.dateLabel} . ${earning.timeLabel}',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.inkSubtle,

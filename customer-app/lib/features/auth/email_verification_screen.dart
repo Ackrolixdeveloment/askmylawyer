@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/otp_input.dart';
+import '../../core/network/api_client.dart';
+import '../home/home_screen.dart';
 import '../profile/complete_profile_screen.dart';
+import 'customer_session.dart';
 
 /// Email sign-in: collect the address, then verify the code sent to it.
 class EmailVerificationScreen extends StatefulWidget {
@@ -20,12 +23,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   static const _expirySeconds = 5 * 60;
 
   /// Stand-in until the backend verifies codes for real.
-  static const _validCode = '123456';
 
   final _email = TextEditingController();
   bool _codeSent = false;
   String _code = '';
-  bool _wrongCode = false;
 
   /// Bumped on a wrong code to rebuild [OtpInput] from scratch: it owns its
   /// controllers, so a new key is what empties the boxes for another try.
@@ -47,7 +48,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   }
 
   /// Good enough to catch typos; the real check is the code itself.
-  bool get _emailLooksValid => Validators.email(_email.text) == null;
+  final _session = CustomerSession.instance;
+
+  /// True while a request is in flight, and what went wrong if one did.
+  bool _busy = false;
+  String? _problem;
+
+  bool get _emailLooksValid => Validators.email(_email.text) == null && !_busy;
 
   String get _expiry {
     final minutes = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
@@ -55,10 +62,22 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     return '$minutes:$seconds';
   }
 
-  void _sendCode() {
-    // TODO: request the verification email.
-    setState(() => _codeSent = true);
-    _startExpiry();
+  Future<void> _sendCode() async {
+    setState(() {
+      _busy = true;
+      _problem = null;
+    });
+
+    try {
+      await _session.sendEmailOtp(_email.text.trim());
+      if (!mounted) return;
+      setState(() => _codeSent = true);
+      _startExpiry();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _problem = error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   void _startExpiry() {
@@ -80,7 +99,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     setState(() {
       _code = code;
       // Clear the previous complaint while they are correcting it.
-      if (code.length < 6) _wrongCode = false;
+      if (code.length < 6) _problem = null;
     });
 
     if (code.length != 6) return;
@@ -92,27 +111,50 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     });
   }
 
-  void _resend() {
-    // TODO: request a fresh code.
-    setState(() => _wrongCode = false);
+  Future<void> _resend() async {
+    setState(() {
+      _problem = null;
+    });
     _startExpiry();
+
+    try {
+      await _session.sendEmailOtp(_email.text.trim());
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _problem = error.message);
+    }
   }
 
-  void _verify() {
-    if (_code != _validCode) {
+  Future<void> _verify() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final bool isNewUser;
+    try {
+      isNewUser = await _session.verifyEmailOtp(_email.text.trim(), _code);
+    } on ApiException catch (error) {
       // Clear the boxes too, so there is always a way to try again now that
       // there is no button to press.
-      setState(() {
-        _wrongCode = true;
-        _code = '';
-        _attempt += 1;
-      });
+      if (mounted) {
+        setState(() {
+          _problem = error.message;
+          _busy = false;
+          _code = '';
+          _attempt += 1;
+        });
+      }
       return;
     }
 
-    // TODO: verify the code with the backend before moving on.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const CompleteProfileScreen()),
+    if (!mounted) return;
+
+    // The profile form is offered to a new account, never forced — it has a
+    // Skip, and the details are only really needed to download a report.
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            isNewUser ? const CompleteProfileScreen() : const HomeScreen(),
+      ),
+      (route) => false,
     );
   }
 
@@ -182,7 +224,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _emailLooksValid ? _sendCode : null,
-                  child: const Text('Send Code  →'),
+                  child: Text(_busy ? 'Sending…' : 'Send Code  →'),
                 ),
               ],
 
@@ -203,12 +245,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   onChanged: _handleCode,
                 ),
 
-                if (_wrongCode) ...[
+                if (_problem != null) ...[
                   const SizedBox(height: 10),
-                  const Text(
-                    'That code is incorrect. Please check and try '
-                    'again.',
-                    style: TextStyle(fontSize: 12, color: AppColors.negative),
+                  Text(
+                    _problem!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.negative,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -302,7 +346,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             onPressed: () => setState(() {
               _codeSent = false;
               _code = '';
-              _wrongCode = false;
               _timer?.cancel();
             }),
             style: TextButton.styleFrom(

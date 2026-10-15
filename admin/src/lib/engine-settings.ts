@@ -1,26 +1,34 @@
 import { api } from "./api";
 import type { EngineSettings, EngineStatus } from "@/types/engine";
 
-/** The settings, with the production defaults to show beside each field. */
+/**
+ * The settings, the production defaults to show beside each field, and when
+ * they were last changed. `updatedAt` sits outside `settings` because that
+ * object is posted back as-is when saving.
+ */
+interface EngineResponse {
+  settings: EngineSettings;
+  defaults: EngineSettings;
+  updatedAt: string;
+}
+
 export function fetchEngineSettings() {
-  return api<{ settings: EngineSettings; defaults: EngineSettings }>(
-    "/admin/settings/engine",
-  );
+  return api<EngineResponse>("/admin/settings/engine");
 }
 
 export function saveEngineSettings(settings: EngineSettings) {
-  return api<{ settings: EngineSettings; defaults: EngineSettings }>(
-    "/admin/settings/engine",
-    { method: "PUT", body: settings },
-  );
+  return api<EngineResponse>("/admin/settings/engine", {
+    method: "PUT",
+    body: settings,
+  });
 }
 
 /** Sets the whole demo or production profile in one click. */
 export function applyEngineProfile(profile: "demo" | "production") {
-  return api<{ settings: EngineSettings; defaults: EngineSettings }>(
-    "/admin/settings/engine/profile",
-    { method: "POST", body: { profile } },
-  );
+  return api<EngineResponse>("/admin/settings/engine/profile", {
+    method: "POST",
+    body: { profile },
+  });
 }
 
 /** Open to any signed-in admin — it drives the warning banner. */

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'booking_data.dart';
+import '../../core/network/api_client.dart';
+import 'booking_repository.dart';
 import 'consultation_detail_screen.dart';
 
 /// Past consultations, filtered by status and call mode.
@@ -19,13 +20,26 @@ class BookingsScreen extends StatefulWidget {
 class _BookingsScreenState extends State<BookingsScreen> {
   final _search = TextEditingController();
 
-  BookingStatus? _status = BookingStatus.completed;
-  CallMode? _mode = CallMode.video;
+  /// Null means "All" — nothing is hidden until a filter is picked.
+  String? _status;
+  CallMode? _mode;
+
+  List<Booking>? _bookings;
+  String? _error;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+
+    final given = widget.bookings;
+    if (given != null) {
+      _bookings = given;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   @override
@@ -34,7 +48,23 @@ class _BookingsScreenState extends State<BookingsScreen> {
     super.dispose();
   }
 
-  List<Booking> get _all => widget.bookings ?? bookingSample;
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final bookings = await BookingRepository.instance.history();
+      if (mounted) setState(() => _bookings = bookings);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  List<Booking> get _all => _bookings ?? const <Booking>[];
 
   List<Booking> get _visible {
     final query = _search.text.trim().toLowerCase();
@@ -42,8 +72,8 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return _all.where((booking) {
       final matchesQuery =
           query.isEmpty ||
-          booking.lawyer.toLowerCase().contains(query) ||
-          booking.bookingId.toLowerCase().contains(query);
+          (booking.lawyer ?? '').toLowerCase().contains(query) ||
+          booking.reference.toLowerCase().contains(query);
 
       return matchesQuery &&
           (_status == null || booking.status == _status) &&
@@ -54,6 +84,24 @@ class _BookingsScreenState extends State<BookingsScreen> {
   @override
   Widget build(BuildContext context) {
     final visible = _visible;
+
+    if (_bookings == null) {
+      return Center(
+        child: _loading
+            ? const CircularProgressIndicator()
+            : Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error ?? 'No consultations yet.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+              ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 108),
@@ -105,22 +153,6 @@ class _BookingsScreenState extends State<BookingsScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.ink,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              // TODO: open the advanced booking filters.
-              child: const Icon(
-                Icons.filter_alt_outlined,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -142,23 +174,23 @@ class _BookingsScreenState extends State<BookingsScreen> {
               _StatusChip(
                 label: 'Completed',
                 icon: Icons.check_circle_outline,
-                selected: _status == BookingStatus.completed,
-                onTap: () => setState(() => _status = BookingStatus.completed),
+                selected: _status == 'completed',
+                onTap: () => setState(() => _status = 'completed'),
               ),
               const SizedBox(width: 8),
               _StatusChip(
-                label: 'Canceled',
+                label: 'Cancelled',
                 icon: Icons.close,
-                selected: _status == BookingStatus.canceled,
-                onTap: () => setState(() => _status = BookingStatus.canceled),
+                selected: _status == 'cancelled',
+                onTap: () => setState(() => _status = 'cancelled'),
               ),
               const SizedBox(width: 8),
+              // Nobody took the consultation; the money came back.
               _StatusChip(
-                label: 'Rescheduled',
+                label: 'Refunded',
                 icon: Icons.history,
-                selected: _status == BookingStatus.rescheduled,
-                onTap: () =>
-                    setState(() => _status = BookingStatus.rescheduled),
+                selected: _status == 'refunded',
+                onTap: () => setState(() => _status = 'refunded'),
               ),
             ],
           ),
@@ -344,14 +376,14 @@ class _BookingCard extends StatelessWidget {
   void _open(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ConsultationDetailScreen(booking: booking),
+        builder: (_) => ConsultationDetailScreen(consultationId: booking.id),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final reportAvailable = booking.report == ReportStatus.available;
+    final reportAvailable = booking.reportReady;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -405,7 +437,7 @@ class _BookingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          booking.lawyer,
+                          booking.lawyer ?? 'No lawyer found',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -433,7 +465,7 @@ class _BookingCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        booking.practice,
+                        booking.category ?? 'General',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.inkMuted,
@@ -454,7 +486,7 @@ class _BookingCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        booking.date,
+                        booking.dateLabel,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.inkMuted,
@@ -462,7 +494,7 @@ class _BookingCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      booking.time,
+                      booking.timeLabel,
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.inkMuted,
@@ -527,15 +559,15 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (Color tint, Color background) = switch (booking.status) {
-      BookingStatus.completed => (
+      'completed' => (
         AppColors.positive,
         AppColors.positive.withValues(alpha: 0.12),
       ),
-      BookingStatus.canceled => (
+      'cancelled' || 'no_lawyer' => (
         AppColors.negative,
         AppColors.negative.withValues(alpha: 0.12),
       ),
-      BookingStatus.rescheduled => (AppColors.inkMuted, AppColors.canvas),
+      _ => (AppColors.inkMuted, AppColors.canvas),
     };
 
     return Container(

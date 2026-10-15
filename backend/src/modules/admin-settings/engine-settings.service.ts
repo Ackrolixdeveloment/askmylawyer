@@ -28,6 +28,14 @@ export interface EngineProfile {
   allowCancelDuringSearch: boolean;
   tokenGraceMinutes: number;
   callGraceSeconds: number;
+  absenceGraceSeconds: number;
+  allowEndWhenAbandoned: boolean;
+  extensionPromptSeconds: number;
+  extensionGraceSeconds: number;
+  reportReviewMinutes: number;
+  reportExtensionMinutes: number;
+  maxReportExtensions: number;
+  holdEarningsUntilReport: boolean;
 }
 
 /** Normal operation: one lawyer at a time, filtered, five minutes. */
@@ -52,6 +60,16 @@ export const PRODUCTION_PROFILE: EngineProfile = {
   allowCancelDuringSearch: true,
   tokenGraceMinutes: 10,
   callGraceSeconds: 60,
+  absenceGraceSeconds: 120,
+  allowEndWhenAbandoned: true,
+  // One only: a consultation may be extended once, and after that the
+  // lawyer is not offered it again.
+  extensionPromptSeconds: 45,
+  extensionGraceSeconds: 30,
+  reportReviewMinutes: 30,
+  reportExtensionMinutes: 30,
+  maxReportExtensions: 1,
+  holdEarningsUntilReport: true,
 };
 
 /**
@@ -67,7 +85,9 @@ export const DEMO_PROFILE: EngineProfile = {
   searchLimitSeconds: 60,
   wrapUpCooldownMinutes: 0,
   scheduledBufferMinutes: 0,
-  skipPayment: true,
+  // The demo charges like the real thing, in the gateway's sandbox. Turn the
+  // toggle off by hand if a live demo has to skip the payment step.
+  skipPayment: false,
 };
 
 /**
@@ -88,10 +108,16 @@ export class EngineSettingsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** What the settings screen shows, with the production defaults beside it. */
+  /**
+   * What the settings screen shows, with the production defaults beside it.
+   *
+   * `updatedAt` is kept out of `settings` deliberately: the screen sends that
+   * object straight back when saving, and the save only accepts fields the
+   * team can actually change.
+   */
   async get() {
-    const settings = await this.current();
-    return { settings, defaults: PRODUCTION_PROFILE };
+    const { updatedAt, ...settings } = await this.current();
+    return { settings, defaults: PRODUCTION_PROFILE, updatedAt };
   }
 
   /** Just the banner's question: are we in demo mode? */
@@ -187,6 +213,14 @@ export class EngineSettingsService {
       allowCancelDuringSearch: row.allowCancelDuringSearch,
       tokenGraceMinutes: row.tokenGraceMinutes,
       callGraceSeconds: row.callGraceSeconds,
+      absenceGraceSeconds: row.absenceGraceSeconds,
+      allowEndWhenAbandoned: row.allowEndWhenAbandoned,
+      extensionPromptSeconds: row.extensionPromptSeconds,
+      extensionGraceSeconds: row.extensionGraceSeconds,
+      reportReviewMinutes: row.reportReviewMinutes,
+      reportExtensionMinutes: row.reportExtensionMinutes,
+      maxReportExtensions: row.maxReportExtensions,
+      holdEarningsUntilReport: row.holdEarningsUntilReport,
       updatedAt: row.updatedAt,
     };
 

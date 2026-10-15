@@ -1,18 +1,72 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'commission_data.dart';
+import '../../core/network/api_client.dart';
+import 'earning_repository.dart';
 
 /// Full breakdown of a single consultation payout.
-class EarningDetailScreen extends StatelessWidget {
-  const EarningDetailScreen({super.key, required this.earning});
+class EarningDetailScreen extends StatefulWidget {
+  const EarningDetailScreen({super.key, required this.earningId});
 
-  final Earning earning;
+  final String earningId;
+
+  @override
+  State<EarningDetailScreen> createState() => _EarningDetailScreenState();
+}
+
+class _EarningDetailScreenState extends State<EarningDetailScreen> {
+  EarningDetail? _detail;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final detail = await EarningRepository.instance.detail(widget.earningId);
+      if (mounted) setState(() => _detail = detail);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final paid = earning.state == PayoutState.paidOut;
-    final lawyerEarnings = earning.customerPaid - earning.platformFee;
+    final detail = _detail;
+
+    if (detail == null) {
+      return Scaffold(
+        backgroundColor: AppColors.canvas,
+        appBar: AppBar(
+          backgroundColor: AppColors.canvas,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+            color: AppColors.ink,
+          ),
+        ),
+        body: Center(
+          child: _error == null
+              ? const CircularProgressIndicator()
+              : Text(
+                  _error!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.negative,
+                  ),
+                ),
+        ),
+      );
+    }
+
+    final earning = detail.earning;
+    final paid = earning.state != PayoutState.held;
+    final lawyerEarnings = earning.net;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -71,7 +125,7 @@ class EarningDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        '₹${_thousands(earning.amount)}',
+                        '₹${_thousands(earning.net.toDouble())}',
                         style: const TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w700,
@@ -80,7 +134,7 @@ class EarningDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${earning.date} . ${earning.time}',
+                        '${earning.dateLabel} . ${earning.timeLabel}',
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.inkSubtle,
@@ -95,8 +149,8 @@ class EarningDetailScreen extends StatelessWidget {
                 _DetailCard(
                   rows: [
                     ('Client Name', earning.client, null),
-                    ('Category', earning.practice, null),
-                    ('Case Tag', earning.caseTag, null),
+                    ('Category', earning.category ?? 'General', null),
+                    ('Consultation', earning.reference, null),
                     ('Mode', 'Video Consultation', null),
                     ('Duration', '${earning.durationMinutes} min', null),
                   ],
@@ -108,16 +162,16 @@ class EarningDetailScreen extends StatelessWidget {
                   rows: [
                     (
                       'Customer Paid',
-                      '₹${_thousands(earning.customerPaid)}',
+                      '₹${_thousands(detail.gross.toDouble())}',
                       null,
                     ),
                     // The platform's cut comes off, so it reads as a deduction.
                     (
-                      'Platform fee (${earning.platformFeePercent}%)',
-                      '-₹${_thousands(earning.platformFee)}',
+                      'Platform fee (${detail.commissionPercent}%)',
+                      '-₹${_thousands(detail.commission.toDouble())}',
                       AppColors.negative,
                     ),
-                    ('Lawyer Earnings', '₹${_thousands(lawyerEarnings)}', null),
+                    ('Lawyer Earnings', '₹${_thousands(lawyerEarnings.toDouble())}', null),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -126,9 +180,9 @@ class EarningDetailScreen extends StatelessWidget {
                 _DetailCard(
                   rows: [
                     ('Status', paid ? 'Paid Out' : 'Pending', null),
-                    ('Bank Account', earning.bankAccount, null),
-                    ('Reference ID', earning.reference, null),
-                    ('Payout Date', earning.payoutDate, null),
+                    ('Bank Account', detail.bankAccount ?? 'Not set up yet', null),
+                    ('Reference ID', detail.payoutReference ?? '—', null),
+                    ('Payout Date', detail.paidOutAt == null ? 'Not paid out yet' : earning.dateLabel, null),
                   ],
                 ),
               ],

@@ -6,8 +6,11 @@ class ApiConfig {
 
   static const _fromBuild = String.fromEnvironment('API_BASE_URL');
 
-  /// The development backend: a tunnel to the machine running the API, so a
-  /// phone on mobile data reaches it without being on the same Wi-Fi.
+  /// Where the apps talk to by default.
+  ///
+  /// A tunnel to the machine running the API, so a phone on mobile data
+  /// reaches it without being on the same Wi-Fi. This is the one line to
+  /// change when the backend goes live — everything reads [baseUrl].
   static const _devTunnel = 'https://f194n1ll-4000.inc1.devtunnels.ms';
 
   static String get baseUrl {

@@ -54,6 +54,11 @@ export class PlanDto {
   @Max(1_000_000)
   extensionAmount: number;
 
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  maxExtensions: number;
+
   @IsBoolean()
   enabled: boolean;
 }

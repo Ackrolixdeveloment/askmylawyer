@@ -5,19 +5,34 @@ import '../../core/theme/app_colors.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/form_fields.dart';
 import '../../core/widgets/multi_select_field.dart';
+import 'location_lookup.dart';
 import 'location_permission_dialog.dart';
 import 'profile_data.dart';
+import 'verify_contact_sheet.dart';
+
+/// What the caller should do once a sheet closes.
+enum ProfileEditResult {
+  /// Dismissed; nothing to do.
+  cancelled,
+
+  /// Saved into the local copy — write it to the backend.
+  save,
+
+  /// Already written by a flow of its own, such as a verified change of
+  /// email. Saving the local copy again would send the old value back.
+  reload,
+}
 
 /// Opens one of the four profile editors as a bottom sheet.
 ///
 /// The sheet edits a copy and only writes back on Save, so dismissing it
-/// leaves the profile untouched. Returns true when something was saved.
-Future<bool> showProfileEditSheet({
+/// leaves the profile untouched.
+Future<ProfileEditResult> showProfileEditSheet({
   required BuildContext context,
   required ProfileSection section,
   required ProfileData data,
 }) async {
-  final saved = await showModalBottomSheet<bool>(
+  final result = await showModalBottomSheet<ProfileEditResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -27,7 +42,7 @@ Future<bool> showProfileEditSheet({
     useRootNavigator: true,
     builder: (_) => _EditSheet(section: section, data: data),
   );
-  return saved ?? false;
+  return result ?? ProfileEditResult.cancelled;
 }
 
 /// The four editable groups, in the order they appear on the profile.
@@ -48,12 +63,16 @@ extension ProfileSectionLabels on ProfileSection {
     ProfileSection.contact => 'Edit Contact & Language',
   };
 
-  bool isComplete(ProfileData data) => switch (this) {
-    ProfileSection.personal => data.personalComplete,
-    ProfileSection.age => data.ageComplete,
-    ProfileSection.location => data.locationComplete,
-    ProfileSection.contact => data.contactComplete,
+  /// Which of the backend's completeness keys belong to this section. The
+  /// dot is green when none of them is outstanding.
+  List<String> get keys => switch (this) {
+    ProfileSection.personal => const ['fullName', 'gender'],
+    ProfileSection.age => const ['ageBand'],
+    ProfileSection.location => const ['location', 'address'],
+    ProfileSection.contact => const ['languages', 'mobile', 'email'],
   };
+
+  bool isComplete(ProfileData data) => data.hasEverything(keys);
 }
 
 class _EditSheet extends StatefulWidget {
@@ -70,6 +89,7 @@ class _EditSheetState extends State<_EditSheet> {
   late final TextEditingController _name;
   late final TextEditingController _address;
   late final TextEditingController _email;
+  late final TextEditingController _mobile;
 
   late String _prefix;
   late String? _gender;
@@ -78,6 +98,9 @@ class _EditSheetState extends State<_EditSheet> {
   late String? _occupation;
   late String? _stateCity;
   late String _pincode;
+
+  /// True while the device is being asked.
+  bool _locating = false;
   late Set<String> _languages;
 
   @override
@@ -87,6 +110,7 @@ class _EditSheetState extends State<_EditSheet> {
     _name = TextEditingController(text: data.fullName);
     _address = TextEditingController(text: data.address);
     _email = TextEditingController(text: data.email);
+    _mobile = TextEditingController(text: data.mobile);
     _prefix = data.prefix;
     _gender = data.gender;
     _ageBand = data.ageBand;
@@ -111,6 +135,10 @@ class _EditSheetState extends State<_EditSheet> {
   bool get _emailValid =>
       _email.text.trim().isEmpty || Validators.email(_email.text) == null;
 
+  /// The same for the number: whoever signed in by email has none yet.
+  bool get _mobileValid =>
+      _mobile.text.trim().isEmpty || Validators.mobile(_mobile.text) == null;
+
   bool get _canSave => switch (widget.section) {
     ProfileSection.personal =>
       Validators.name(_name.text) == null && _gender != null,
@@ -118,16 +146,44 @@ class _EditSheetState extends State<_EditSheet> {
     ProfileSection.location =>
       (_stateCity != null || ProfileData(pincode: _pincode).pincodeValid) &&
           _address.text.trim().isNotEmpty,
-    ProfileSection.contact => _emailValid && _languages.isNotEmpty,
+    ProfileSection.contact =>
+      (widget.data.hasEmail || _emailValid) &&
+          (widget.data.hasMobile || _mobileValid) &&
+          _languages.isNotEmpty,
   };
 
+  /// Opens the verified change flow. It writes to the backend itself, so
+  /// the sheet closes and the profile reloads rather than saving again.
+  Future<void> _changeContact({required bool isEmail}) async {
+    final changed = await showVerifyContactSheet(
+      context: context,
+      isEmail: isEmail,
+      current: isEmail ? widget.data.email : '+91 ${widget.data.mobile}',
+    );
+    if (changed && mounted) Navigator.of(context).pop(ProfileEditResult.reload);
+  }
+
   Future<void> _useCurrentLocation() async {
+    // Our own prompt first, explaining why, so the system one is not the
+    // first time they hear the question.
     final allowed = await showLocationPermissionDialog(context);
     if (!mounted || !allowed) return;
 
-    // TODO: resolve the real position once a location plugin is added, and
-    // fill State / City and Pincode from it.
-    setState(() => _stateCity = 'Detecting…');
+    setState(() => _locating = true);
+    final result = await const LocationLookup().resolve();
+    if (!mounted) return;
+    setState(() => _locating = false);
+
+    final place = result.place;
+    if (place == null) {
+      showLocationProblem(context, result.problem!);
+      return;
+    }
+
+    setState(() {
+      _stateCity = place.stateCity;
+      if (place.pincode != null) _pincode = place.pincode!;
+    });
   }
 
   void _save() {
@@ -149,12 +205,15 @@ class _EditSheetState extends State<_EditSheet> {
           ..pincode = _pincode
           ..address = _address.text.trim();
       case ProfileSection.contact:
-        data
-          ..email = _email.text.trim()
-          ..languages = _languages;
+        data.languages = _languages;
+        // A contact already on the account is changed through its own
+        // verified flow, so Save must not quietly overwrite it.
+        if (!data.hasEmail) data.email = _email.text.trim();
+        if (!data.hasMobile) data.mobile = _mobile.text.trim();
     }
-    // TODO: persist the profile to the backend.
-    Navigator.of(context).pop(true);
+
+    // The profile screen writes this to the backend; it owns the session.
+    Navigator.of(context).pop(ProfileEditResult.save);
   }
 
   @override
@@ -181,7 +240,8 @@ class _EditSheetState extends State<_EditSheet> {
           children: [
             _SheetHeader(
               title: widget.section.sheetTitle,
-              onClose: () => Navigator.of(context).pop(false),
+              onClose: () =>
+                  Navigator.of(context).pop(ProfileEditResult.cancelled),
             ),
             Flexible(
               child: SingleChildScrollView(
@@ -271,7 +331,11 @@ class _EditSheetState extends State<_EditSheet> {
     ProfileSection.location => [
       const _SheetLabel('State/ City'),
       const SizedBox(height: 8),
-      _UseLocationButton(value: _stateCity, onTap: _useCurrentLocation),
+      _UseLocationButton(
+        value: _stateCity,
+        busy: _locating,
+        onTap: _useCurrentLocation,
+      ),
       const SizedBox(height: 16),
       const _OrDivider(),
       const SizedBox(height: 14),
@@ -295,16 +359,43 @@ class _EditSheetState extends State<_EditSheet> {
     ],
 
     ProfileSection.contact => [
-      AppTextField(
-        label: 'Email Address',
-        hint: 'Enter your email Address',
-        controller: _email,
-        optionalNote: '(Optional)',
-        keyboardType: TextInputType.emailAddress,
-        // Optional, so only flag it once something is typed.
-        validator: (value) =>
-            value.trim().isEmpty ? null : Validators.email(value),
-      ),
+      // Whichever contact the account already holds is changed through a
+      // code sent to the new one, not by typing over it here.
+      if (widget.data.hasMobile)
+        _LockedContact(
+          label: 'Mobile Number',
+          value: '+91 ${widget.data.mobile}',
+          onChange: () => _changeContact(isEmail: false),
+        )
+      else
+        AppTextField(
+          label: 'Mobile Number',
+          hint: 'Enter your 10-digit number',
+          controller: _mobile,
+          optionalNote: '(Optional)',
+          keyboardType: TextInputType.phone,
+          // Optional, so only flag it once something is typed.
+          validator: (value) =>
+              value.trim().isEmpty ? null : Validators.mobile(value),
+        ),
+      const SizedBox(height: 18),
+      if (widget.data.hasEmail)
+        _LockedContact(
+          label: 'Email Address',
+          value: widget.data.email,
+          onChange: () => _changeContact(isEmail: true),
+        )
+      else
+        AppTextField(
+          label: 'Email Address',
+          hint: 'Enter your email Address',
+          controller: _email,
+          optionalNote: '(Optional)',
+          keyboardType: TextInputType.emailAddress,
+          // Optional, so only flag it once something is typed.
+          validator: (value) =>
+              value.trim().isEmpty ? null : Validators.email(value),
+        ),
       const SizedBox(height: 18),
       const _SheetLabel('Preferred Language'),
       const SizedBox(height: 8),
@@ -447,15 +538,22 @@ class _Pill extends StatelessWidget {
 }
 
 class _UseLocationButton extends StatelessWidget {
-  const _UseLocationButton({required this.value, required this.onTap});
+  const _UseLocationButton({
+    required this.value,
+    required this.busy,
+    required this.onTap,
+  });
 
   final String? value;
+
+  /// True while the device is being asked; the row shows a spinner.
+  final bool busy;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -465,11 +563,23 @@ class _UseLocationButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.my_location, size: 16, color: Colors.white),
+            if (busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            else
+              const Icon(Icons.my_location, size: 16, color: Colors.white),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                value ?? 'Use my current location',
+                busy
+                    ? 'Finding your location…'
+                    : value ?? 'Use my current location',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -502,6 +612,14 @@ class _PincodeFieldState extends State<_PincodeField> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_PincodeField old) {
+    super.didUpdateWidget(old);
+    // The device can fill this in while the sheet is open; typing must not
+    // be disturbed, so only a genuinely different value is written back.
+    if (widget.value != _controller.text) _controller.text = widget.value;
   }
 
   @override
@@ -564,6 +682,56 @@ class _OrDivider extends StatelessWidget {
           ),
         ),
         Expanded(child: Divider(color: AppColors.line)),
+      ],
+    );
+  }
+}
+
+
+/// A contact that is already on the account: shown, not typed over.
+class _LockedContact extends StatelessWidget {
+  const _LockedContact({
+    required this.label,
+    required this.value,
+    required this.onChange,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _SheetLabel(label)),
+            TextButton(
+              onPressed: onChange,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Change', style: TextStyle(fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+          decoration: BoxDecoration(
+            color: AppColors.canvas,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 14, color: AppColors.inkSubtle),
+          ),
+        ),
       ],
     );
   }

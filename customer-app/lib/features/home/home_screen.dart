@@ -1,9 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../bookings/bookings_screen.dart';
+import '../bookings/consultation_detail_screen.dart';
+import '../consultation/call_screen.dart';
+import '../consultation/consultation_repository.dart';
 import '../consultation/consultation_screen.dart';
+import '../notifications/notification_repository.dart';
 import '../notifications/notifications_screen.dart';
+import '../profile/profile_nudge.dart';
 import '../profile/profile_screen.dart';
 import '../settings/settings_screen.dart';
 import '../upcoming/upcoming_screen.dart';
@@ -57,14 +65,35 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
+  /// What the home tab shows. Starts as whatever was passed in — usually
+  /// nothing — and is replaced by the server's answer.
+  late HomeData _home = widget.data;
+
   /// The shell's own route, so a flow pushed over it knows how far to
   /// unwind: popping to `isFirst` would tear the whole app down instead.
   ModalRoute<Object?>? _shellRoute;
 
   @override
+  void initState() {
+    super.initState();
+    _loadHome();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _shellRoute = ModalRoute.of(context);
+  }
+
+  /// Greeting, who is online and the last few consultations.
+  Future<void> _loadHome() async {
+    try {
+      final home = await HomeRepository.instance.load();
+      if (mounted) setState(() => _home = home);
+    } on ApiException {
+      // The rest of the screen still works; the consult card simply shows
+      // nobody online until the next look.
+    }
   }
 
   void _showTab(int index) => setState(() => _tab = index);
@@ -139,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // Every tab is wrapped, so pushes from any of them stay inside the
         // tab and the bottom nav survives.
         body: switch (_tab) {
-          0 => _tabNavigator(0, _HomeTab(data: widget.data)),
+          0 => _tabNavigator(0, _HomeTab(data: _home, onRefresh: _loadHome)),
           // Has its own scroll view, so it just needs the status-bar inset.
           1 => _tabNavigator(
             1,
@@ -163,15 +192,46 @@ class _HomeScreenState extends State<HomeScreen> {
           destinations: _destinations,
           current: _tab,
           onSelect: (index) => setState(() => _tab = index),
-          // Pushed on the root navigator so the flow covers the bar: it is a
-          // task to finish, not a tab to browse.
-          onConsult: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const ConsultationScreen()),
-          ),
+          onConsult: () => _startConsultation(context),
         ),
       ),
     );
   }
+}
+
+/// Opens the booking flow, unless one consultation is already running.
+///
+/// A customer may only have one at a time, and hanging up does not end it —
+/// the time is paid for until it runs out. The backend refuses a second one
+/// either way; this just says so before they have filled in a form.
+Future<void> _startConsultation(BuildContext context) async {
+  LiveConsultation? live;
+  try {
+    live = await ConsultationRepository.instance.liveConsultation();
+  } on ApiException {
+    // Could not check: let them through and let the backend decide.
+  }
+
+  if (!context.mounted) return;
+
+  if (live != null && !live.isOver) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Your consultation with ${live.withName} is still running. '
+          'You can book another once it ends.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  // Pushed on the root navigator so the flow covers the bar: it is a task to
+  // finish, not a tab to browse.
+  Navigator.of(
+    context,
+    rootNavigator: true,
+  ).push(MaterialPageRoute<void>(builder: (_) => const ConsultationScreen()));
 }
 
 /// Reports every push and pop, so the shell can re-read whether the active
@@ -395,68 +455,74 @@ class _NavItem extends StatelessWidget {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab({required this.data});
+  const _HomeTab({required this.data, required this.onRefresh});
 
   final HomeData data;
+
+  /// Pull to refresh, which is also how the activity list catches up after
+  /// a consultation finishes.
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _TopBar(name: data.greetingName),
+        _TopBar(name: data.greetingName ?? 'there'),
         Expanded(
-          child: ListView(
-            // Bottom clears the floating nav.
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 108),
-            children: [
-              _ConsultNowCard(lawyersOnline: data.lawyersOnline),
-              const SizedBox(height: 12),
-              const _ScheduleCard(),
-              const SizedBox(height: 20),
-
-              const _SectionTitle('Why Ask My Lawyer'),
-              const SizedBox(height: 10),
-              // Two per row. `Wrap` lets each tile keep its own height, so a
-              // wrapped title left the pair ragged; `IntrinsicHeight` sizes
-              // both to the taller of the two instead.
-              for (var i = 0; i < homeFeatures.length; i += 2) ...[
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: _FeatureTile(feature: homeFeatures[i])),
-                      const SizedBox(width: 12),
-                      // The trailing gap keeps a lone last tile at half width
-                      // rather than letting it stretch across the row.
-                      if (i + 1 < homeFeatures.length)
-                        Expanded(
-                          child: _FeatureTile(feature: homeFeatures[i + 1]),
-                        )
-                      else
-                        const Expanded(child: SizedBox()),
-                    ],
-                  ),
-                ),
-                if (i + 2 < homeFeatures.length) const SizedBox(height: 12),
-              ],
-              const SizedBox(height: 20),
-
-              if (data.offerHeadline != null && data.offerBody != null) ...[
-                _OfferCard(
-                  headline: data.offerHeadline!,
-                  body: data.offerBody!,
-                ),
+          child: RefreshIndicator(
+            onRefresh: onRefresh,
+            child: ListView(
+              // Bottom clears the floating nav.
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 108),
+              children: [
+                // Shows nothing once the profile is complete.
+                const ProfileNudge(),
+                _ConsultNowCard(lawyersOnline: data.lawyersOnline),
+                const SizedBox(height: 12),
+                const _ScheduleCard(),
                 const SizedBox(height: 20),
-              ],
 
-              const _SectionTitle('Your Activity'),
-              const SizedBox(height: 10),
-              if (data.hasConsultations)
-                // TODO: list real bookings once the backend is wired.
-                const SizedBox.shrink()
-              else
-                const _NoActivityCard(),
-            ],
+                const _SectionTitle('Why Ask My Lawyer'),
+                const SizedBox(height: 10),
+                // Two per row. `Wrap` lets each tile keep its own height, so a
+                // wrapped title left the pair ragged; `IntrinsicHeight` sizes
+                // both to the taller of the two instead.
+                for (var i = 0; i < homeFeatures.length; i += 2) ...[
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _FeatureTile(feature: homeFeatures[i])),
+                        const SizedBox(width: 12),
+                        // The trailing gap keeps a lone last tile at half width
+                        // rather than letting it stretch across the row.
+                        if (i + 1 < homeFeatures.length)
+                          Expanded(
+                            child: _FeatureTile(feature: homeFeatures[i + 1]),
+                          )
+                        else
+                          const Expanded(child: SizedBox()),
+                      ],
+                    ),
+                  ),
+                  if (i + 2 < homeFeatures.length) const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 20),
+
+                // The offer card is out until there is a coupon engine behind
+                // it; a banner promising money off with nothing to apply is
+                // worse than no banner.
+                const _SectionTitle('Your Activity'),
+                const SizedBox(height: 10),
+                if (data.hasConsultations)
+                  for (final booking in data.recent) ...[
+                    _RecentCard(booking: booking),
+                    const SizedBox(height: 10),
+                  ]
+                else
+                  const _NoActivityCard(),
+              ],
+            ),
           ),
         ),
       ],
@@ -517,44 +583,95 @@ class _TopBar extends StatelessWidget {
                 ],
               ),
             ),
-            InkWell(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const NotificationsScreen(),
-                ),
-              ),
-              borderRadius: BorderRadius.circular(19),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
-                  shape: BoxShape.circle,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(
-                      Icons.notifications_none,
-                      size: 19,
-                      color: AppColors.ink,
-                    ),
-                    Positioned(
-                      top: 9,
-                      right: 10,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: AppColors.negative,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const _NotificationBell(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The bell, with a dot only when something is actually waiting.
+class _NotificationBell extends StatefulWidget {
+  const _NotificationBell();
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell>
+    with WidgetsBindingObserver {
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the app is when something new is most likely waiting.
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final unread = await NotificationRepository.instance.unreadCount();
+      if (mounted) setState(() => _unread = unread);
+    } on ApiException {
+      // Leave the dot as it is rather than inventing one.
+    }
+  }
+
+  Future<void> _open() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+    // Opening the list marks everything read, so the dot should clear.
+    if (mounted) _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _open,
+      borderRadius: BorderRadius.circular(19),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          shape: BoxShape.circle,
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Icon(
+              Icons.notifications_none,
+              size: 19,
+              color: AppColors.ink,
             ),
+            if (_unread > 0)
+              Positioned(
+                top: 9,
+                right: 10,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: AppColors.negative,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -581,13 +698,92 @@ class _SectionTitle extends StatelessWidget {
 }
 
 /// Dark card offering an instant consultation.
-class _ConsultNowCard extends StatelessWidget {
+///
+/// While a consultation is live it becomes the way back into it instead. A
+/// customer can only have one at a time — hanging up does not end it, so the
+/// card keeps offering Rejoin until the paid time is up, and only then goes
+/// back to offering a new consultation with whoever is available.
+class _ConsultNowCard extends StatefulWidget {
   const _ConsultNowCard({required this.lawyersOnline});
 
   final bool lawyersOnline;
 
   @override
+  State<_ConsultNowCard> createState() => _ConsultNowCardState();
+}
+
+class _ConsultNowCardState extends State<_ConsultNowCard>
+    with WidgetsBindingObserver {
+  static const _pollEvery = Duration(seconds: 10);
+
+  Timer? _poll;
+  Timer? _clock;
+  LiveConsultation? _live;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+    _poll = Timer.periodic(_pollEvery, (_) => _refresh());
+    // Runs the visible countdown between polls.
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _live != null) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _poll?.cancel();
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the app is exactly when this needs to be right.
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final live = await ConsultationRepository.instance.liveConsultation();
+      if (mounted) setState(() => _live = live);
+    } on ApiException {
+      // Not worth a message on the home screen; the next poll will do.
+    }
+  }
+
+  Future<void> _rejoin(LiveConsultation live) async {
+    // Root navigator, so the call covers the tab bar.
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CallScreen(
+          consultationId: live.id,
+          title: live.withName,
+          planName: live.planName,
+        ),
+      ),
+    );
+
+    if (mounted) _refresh();
+  }
+
+  void _start() {
+    // On the root navigator, like the centre button: booking a consultation
+    // is a task that covers the shell, and the call at the end of it must
+    // not have the tab bar sitting over it.
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ConsultationScreen()));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final live = _live;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -595,72 +791,148 @@ class _ConsultNowCard extends StatelessWidget {
         color: AppColors.ink,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (lawyersOnline)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _OnlineDot(),
-                  SizedBox(width: 6),
-                  Text(
-                    'LAWYERS ONLINE',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 14),
-          const Text(
-            'Consult Now',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Connect with a lawyer instantly',
-            style: TextStyle(fontSize: 12, color: Color(0xFFB6C0D4)),
-          ),
-          const SizedBox(height: 14),
-          InkWell(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ConsultationScreen(),
-              ),
+      child: live == null || live.isOver ? _idle() : _inProgress(live),
+    );
+  }
+
+  /// Nothing running: the usual invitation to start one.
+  Widget _idle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.lawyersOnline)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _OnlineDot(),
+                SizedBox(width: 6),
                 Text(
-                  'Start',
+                  'LAWYERS ONLINE',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(width: 6),
-                Icon(Icons.arrow_forward, size: 15, color: Colors.white),
               ],
             ),
           ),
-        ],
-      ),
+        const SizedBox(height: 14),
+        const Text(
+          'Consult Now',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Connect with a lawyer instantly',
+          style: TextStyle(fontSize: 12, color: Color(0xFFB6C0D4)),
+        ),
+        const SizedBox(height: 14),
+        InkWell(
+          onTap: _start,
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Start',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 6),
+              Icon(Icons.arrow_forward, size: 15, color: Colors.white),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// One already running: the same card, offering the way back in.
+  Widget _inProgress(LiveConsultation live) {
+    final left = live.secondsLeft;
+    final minutes = (left ~/ 60).toString().padLeft(2, '0');
+    final seconds = (left % 60).toString().padLeft(2, '0');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _OnlineDot(),
+              const SizedBox(width: 6),
+              Text(
+                live.started ? 'IN PROGRESS' : 'LAWYER WAITING',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          live.withName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${live.planName} · $minutes:$seconds left',
+          style: const TextStyle(fontSize: 12, color: Color(0xFFB6C0D4)),
+        ),
+        const SizedBox(height: 4),
+        // Says plainly why Start is not on offer.
+        const Text(
+          'You can book another once this one ends.',
+          style: TextStyle(fontSize: 12, color: Color(0xFF8B97AE)),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => _rejoin(live),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.ink,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            child: Text(live.started ? 'Rejoin' : 'Join'),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -805,89 +1077,6 @@ class _FeatureTile extends StatelessWidget {
 }
 
 /// Dark promo banner.
-class _OfferCard extends StatelessWidget {
-  const _OfferCard({required this.headline, required this.body});
-
-  final String headline;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              'LIMITED OFFER',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            headline,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            body,
-            style: const TextStyle(fontSize: 12, color: Color(0xFFB6C0D4)),
-          ),
-          const SizedBox(height: 14),
-          InkWell(
-            // TODO: apply the offer.
-            onTap: () {},
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Apply Now',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward, size: 13, color: AppColors.ink),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// First-run state for Your Activity.
 class _NoActivityCard extends StatelessWidget {
   const _NoActivityCard();
 
@@ -936,13 +1125,102 @@ class _NoActivityCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            // TODO: open the consult flow.
-            onPressed: () {},
-            child: const Text('Start Consultation'),
+          Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => _startConsultation(context),
+              child: const Text('Start Consultation'),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+/// One of the last few consultations on the home screen. Tapping it opens
+/// the same detail screen the Bookings tab uses.
+class _RecentCard extends StatelessWidget {
+  const _RecentCard({required this.booking});
+
+  final RecentConsultation booking;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                ConsultationDetailScreen(consultationId: booking.id),
+          ),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      booking.lawyerName ?? booking.planName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${booking.statusLabel} · ${_shortDate(booking.at)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSubtle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '\u20b9${booking.amount}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.inkSubtle,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "12 Jun" — enough to place a consultation without a full timestamp.
+String _shortDate(DateTime at) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${at.day} ${months[at.month - 1]}';
 }

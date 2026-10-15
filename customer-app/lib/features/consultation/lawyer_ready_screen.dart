@@ -34,7 +34,8 @@ class LawyerReadyScreen extends StatelessWidget {
 
   /// Opens the call, and comes back here when it ends.
   Future<void> _join(BuildContext context) async {
-    await Navigator.of(context).push(
+    // Root navigator: a call covers the whole app, tab bar included.
+    await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => CallScreen(
           consultationId: consultation.id,

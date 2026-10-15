@@ -1,11 +1,13 @@
 plugins {
     id("com.android.application")
+    // Reads android/app/google-services.json.
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.askmylawyer.customer_app"
+    namespace = "com.askmylawyer.customer"
     // permission_handler_android is built against 37 and refuses consumers
     // on anything older, so this is pinned rather than following Flutter.
     compileSdk = 37
@@ -17,8 +19,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.askmylawyer.customer_app"
+        // Matches the app registered in the AskMyLawyer Firebase project;
+        // Google keys both OAuth and FCM on it.
+        applicationId = "com.askmylawyer.customer"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -36,6 +39,21 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+        }
+    }
+}
+
+/*
+ * Real phones are all arm, but Agora's AAR ships x86_64 libraries too and
+ * Flutter's own --target-platform does not reach inside a dependency to
+ * drop them. Left in, they add ~53 MB to every build for the sake of an
+ * emulator. Pass -Pkeep-x86 to build one that runs on an emulator.
+ */
+if (!project.hasProperty("keep-x86")) {
+    android {
+        packaging {
+            jniLibs.excludes += setOf("lib/x86_64/**", "lib/x86/**")
         }
     }
 }

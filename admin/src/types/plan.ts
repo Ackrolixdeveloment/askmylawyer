@@ -1,11 +1,17 @@
 /** How Ask My Lawyer's cut is worked out for a consultation type. */
 export type CommissionMode = "percent" | "flat";
 
-/** One consultation mode the customer can book, with what it costs. */
+/**
+ * The consultation on sale, and what it costs.
+ *
+ * One of these now. The customer no longer chooses between audio, video and
+ * chat — every consultation can carry all three — so there is one price,
+ * one duration and one set of extension rules.
+ */
 export interface ConsultationRate {
-  /** The stable key the apps use: "audio", "video", "chat". */
+  /** The stable key the apps use. */
   id: string;
-  /** Audio, Video, Chat — shown to the customer when choosing a mode. */
+  /** What the customer sees it called. */
   type: string;
   /** What the customer pays, in rupees. */
   amount: number;
@@ -19,6 +25,8 @@ export interface ConsultationRate {
   extensionMinutes: number;
   /** What the customer pays for each extension block, in rupees. */
   extensionAmount: number;
+  /** How many times one consultation may be extended. */
+  maxExtensions: number;
   /** Off hides the mode from the apps without deleting its pricing. */
   enabled: boolean;
 }

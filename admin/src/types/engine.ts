@@ -36,6 +36,21 @@ export interface EngineSettings {
   // Session
   tokenGraceMinutes: number;
   callGraceSeconds: number;
+
+  // How long one side may be missing before the other is told they have
+  // gone, and whether a stranded customer may end the consultation.
+  absenceGraceSeconds: number;
+  allowEndWhenAbandoned: boolean;
+
+  // Extra time, asked for by the lawyer and agreed by the customer.
+  extensionPromptSeconds: number;
+  extensionGraceSeconds: number;
+
+  // The consultation report the lawyer checks and sends.
+  reportReviewMinutes: number;
+  reportExtensionMinutes: number;
+  maxReportExtensions: number;
+  holdEarningsUntilReport: boolean;
 }
 
 /** What the demo-mode banner needs. */

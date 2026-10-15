@@ -9,7 +9,12 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { env } from './config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    // Cashfree signs its webhooks over the bytes it sent, so the raw body has
+    // to survive JSON parsing for the signature to be checkable.
+    rawBody: true,
+  });
 
   app.useLogger(app.get(Logger));
   // Behind Nginx / a load balancer on EC2, so request.ip is the real client.

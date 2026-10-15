@@ -56,9 +56,29 @@ export class AdminSettingsService {
           durationMinutes: plan.durationMinutes,
           extensionMinutes: plan.extensionMinutes,
           extensionAmount: plan.extensionAmount,
+          maxExtensions: plan.maxExtensions,
         };
       }),
     };
+  }
+
+  /**
+   * What one plan costs a customer right now, as the payment should charge
+   * it. Prices and GST are set in the panel, so this is read at the moment of
+   * payment rather than cached.
+   */
+  async priceFor(code: string) {
+    const [plan, settings] = await Promise.all([
+      this.prisma.servicePlan.findUnique({ where: { code } }),
+      this.settings(),
+    ]);
+
+    if (!plan || !plan.enabled) {
+      throw new AppException(HttpStatus.NOT_FOUND, 'PLAN_NOT_FOUND', 'That plan is not available.');
+    }
+
+    const gst = Math.round((plan.amount * settings.gstPercent) / 100);
+    return { amount: plan.amount, gst, payable: plan.amount + gst };
   }
 
   /** The screen saves every plan at once; each row is matched on its code. */
@@ -127,6 +147,7 @@ function toPlan(row: {
   durationMinutes: number;
   extensionMinutes: number;
   extensionAmount: number;
+  maxExtensions: number;
   enabled: boolean;
 }) {
   return {
@@ -140,6 +161,7 @@ function toPlan(row: {
     durationMinutes: row.durationMinutes,
     extensionMinutes: row.extensionMinutes,
     extensionAmount: row.extensionAmount,
+    maxExtensions: row.maxExtensions,
     enabled: row.enabled,
   };
 }

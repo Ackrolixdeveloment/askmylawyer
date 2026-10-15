@@ -2,10 +2,16 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConsultationStatus, OfferOutcome } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
+import { AgoraSttService } from '../../infrastructure/agora/agora-stt.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PushService } from '../../infrastructure/push/push.service';
 import { EngineSettingsService } from '../admin-settings/engine-settings.service';
+import { UserNotificationsService } from '../lawyer-notifications/user-notifications.service';
+import { ReportsService } from '../reports/reports.service';
 import { PresenceService } from './presence.service';
+
+/** Nobody joined after being matched; give the lawyer their slot back. */
+const ABANDONED_AFTER_MS = 10 * 60_000;
 
 /**
  * Ringing lawyers for a consultation request.
@@ -23,6 +29,9 @@ export class DispatchService {
     private readonly presence: PresenceService,
     private readonly settings: EngineSettingsService,
     private readonly push: PushService,
+    private readonly reports: ReportsService,
+    private readonly stt: AgoraSttService,
+    private readonly notifications: UserNotificationsService,
   ) {}
 
   /** Starts the search for a request that is ready to go out. */
@@ -50,7 +59,7 @@ export class DispatchService {
     const engine = await this.settings.forEngine();
     const request = await this.prisma.consultationRequest.findUnique({
       where: { id: requestId },
-      include: { offers: { select: { lawyerId: true } } },
+      include: { offers: { select: { lawyerId: true, outcome: true } } },
     });
     if (!request || request.status !== ConsultationStatus.searching) return;
 
@@ -60,28 +69,61 @@ export class DispatchService {
       return;
     }
 
-    const alreadyAsked = new Set(request.offers.map((offer) => offer.lawyerId));
-    const candidates = (await this.presence.candidates()).filter(
-      (id) => !alreadyAsked.has(id) && id !== request.customerId,
-    );
+    // A lawyer may only be offered a request once — the table enforces it —
+    // so a ring that simply timed out is reopened rather than duplicated.
+    // Someone who said no, or is ringing right now, is left alone.
+    const missed = new Set<string>();
+    const settled = new Set<string>();
+    for (const offer of request.offers) {
+      if (offer.outcome === OfferOutcome.expired) missed.add(offer.lawyerId);
+      else settled.add(offer.lawyerId);
+    }
 
-    if (candidates.length === 0) {
-      // Nobody new to try; wait for an answer or for the clock to run out.
-      if (alreadyAsked.size === 0) await this.giveUp(requestId);
+    const available = (await this.presence.candidates()).filter(
+      (id) => id !== request.customerId && !settled.has(id),
+    );
+    const fresh = available.filter((id) => !missed.has(id));
+    const reopen = available.filter((id) => missed.has(id));
+
+    // Someone is still being rung; let their window play out.
+    const ringing = request.offers.some((offer) => offer.outcome === OfferOutcome.ringing);
+
+    if (fresh.length === 0 && reopen.length === 0) {
+      // Nobody is ringing and nobody is left to try: there is no point
+      // making the customer watch the clock run down.
+      if (!ringing) await this.giveUp(requestId);
       return;
     }
 
-    const chosen =
-      engine.dispatchMode === 'broadcast' ? candidates : candidates.slice(0, 1);
+    // Broadcast rings everyone at once, new lawyers first; sequential takes
+    // one, preferring someone who has not been asked yet.
+    const queue = [...fresh, ...reopen];
+    const chosen = engine.dispatchMode === 'broadcast' ? queue : queue.slice(0, 1);
     const expiresAt = new Date(Date.now() + engine.ringWindowSeconds * 1000);
 
-    await this.prisma.consultationOffer.createMany({
-      data: chosen.map((lawyerId) => ({ requestId, lawyerId, expiresAt })),
-      skipDuplicates: true,
-    });
+    const reopened = chosen.filter((id) => missed.has(id));
+    await this.prisma.$transaction([
+      this.prisma.consultationOffer.createMany({
+        data: chosen
+          .filter((id) => !missed.has(id))
+          .map((lawyerId) => ({ requestId, lawyerId, expiresAt })),
+        skipDuplicates: true,
+      }),
+      ...(reopened.length > 0
+        ? [
+            this.prisma.consultationOffer.updateMany({
+              where: { requestId, lawyerId: { in: reopened } },
+              data: { outcome: OfferOutcome.ringing, expiresAt, answeredAt: null },
+            }),
+          ]
+        : []),
+    ]);
 
     await this.pushRing(requestId, chosen, request.planName, request.amount, expiresAt);
-    this.logger.log(`Request ${requestId}: rang ${chosen.length} lawyer(s)`);
+    this.logger.log(
+      `Request ${requestId}: rang ${chosen.length} lawyer(s)` +
+        (reopened.length > 0 ? ` (${reopened.length} retried)` : ''),
+    );
   }
 
   /**
@@ -153,6 +195,21 @@ export class DispatchService {
     await this.cancelOthers(offer.requestId, lawyerId);
     this.logger.log(`Request ${offer.requestId}: accepted by ${lawyerId}`);
 
+    // The customer has been staring at a searching screen; tell them.
+    const lawyer = await this.prisma.user.findUnique({
+      where: { id: lawyerId },
+      select: { fullName: true },
+    });
+    await this.notifications
+      .notify(
+        offer.request.customerId,
+        'Consultation request accepted',
+        `${lawyer?.fullName ?? 'Your lawyer'} is ready to speak with you now.`,
+      )
+      .catch((error: unknown) =>
+        this.logger.error({ err: error }, 'Could not notify the customer'),
+      );
+
     return { requestId: offer.requestId };
   }
 
@@ -194,6 +251,21 @@ export class DispatchService {
 
     await this.cancelOthers(requestId, null);
     this.logger.log(`Request ${requestId}: nobody accepted`);
+
+    const giving = await this.prisma.consultationRequest.findUnique({
+      where: { id: requestId },
+      select: { customerId: true },
+    });
+    if (giving) {
+      await this.notifications
+        .notify(
+          giving.customerId,
+          'No lawyer was available',
+          'Nobody could take your consultation in time. You can try again '
+            + 'or ask for a refund.',
+        )
+        .catch(() => undefined);
+    }
   }
 
   /**
@@ -233,6 +305,134 @@ export class DispatchService {
     for (const request of overdue) {
       await this.giveUp(request.id).catch((error: unknown) =>
         this.logger.error({ err: error }, `Could not close request ${request.id}`),
+      );
+    }
+  }
+
+  /**
+   * Closes a consultation for good — nobody may rejoin afterwards. Called
+   * when the paid time runs out, and by the worker that sweeps up.
+   */
+  async close(requestId: string, endedBy: string) {
+    const request = await this.prisma.consultationRequest.findUnique({
+      where: { id: requestId },
+      include: { session: true },
+    });
+    if (!request || !request.session || request.session.endedAt) return;
+
+    const engine = await this.settings.forEngine();
+    const busyUntil = new Date(Date.now() + engine.wrapUpCooldownMinutes * 60_000);
+
+    const spoke = request.session.startedAt !== null;
+
+    // The bot writes its file on the way out, so this has to happen before
+    // anything goes looking for a transcript.
+    if (request.session.sttAgentId && request.session.sttToken) {
+      await this.stt
+        .stop({ agentId: request.session.sttAgentId, token: request.session.sttToken })
+        .catch((error: unknown) =>
+          this.logger.error({ err: error }, `Could not stop transcription for ${requestId}`),
+        );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.consultationSession.update({
+        where: { id: request.session.id },
+        data: {
+          endedAt: new Date(),
+          endedBy,
+          // Cleared together: an agent id left behind means a bot that was
+          // never shut down.
+          sttAgentId: null,
+          sttToken: null,
+          ...(request.session.sttAgentId ? { sttStoppedAt: new Date() } : {}),
+        },
+      }),
+      this.prisma.consultationRequest.update({
+        where: { id: requestId },
+        data: { status: ConsultationStatus.completed },
+      }),
+      ...(request.lawyerId
+        ? [
+            this.prisma.lawyerPresence.updateMany({
+              where: { userId: request.lawyerId },
+              data: {
+                activeSessions: { decrement: 1 },
+                ...(engine.wrapUpCooldownMinutes > 0 ? { busyUntil } : {}),
+              },
+            }),
+          ]
+        : []),
+    ]);
+
+    // A consultation nobody ever joined has nothing to report on.
+    if (spoke) {
+      await this.reports.open(requestId).catch((error: unknown) =>
+        this.logger.error({ err: error }, `Could not open a report for ${requestId}`),
+      );
+    }
+  }
+
+  /**
+   * Closes calls whose paid time is up.
+   *
+   * Runs on the same beat as the ring tick. Either side may rejoin right up
+   * until this fires; afterwards nobody can, which is what stops a 15-minute
+   * consultation quietly becoming an hour.
+   */
+  @Cron(CronExpression.EVERY_5_SECONDS)
+  async closeFinishedCalls() {
+    const now = new Date();
+
+    const engine = await this.settings.forEngine();
+
+    // A call with a question outstanding is held open a little longer: being
+    // cut off mid-sentence while deciding whether to carry on is exactly
+    // what the extension is meant to prevent.
+    const heldOpenUntil = new Date(now.getTime() - engine.extensionGraceSeconds * 1000);
+
+    const overrun = await this.prisma.consultationRequest.findMany({
+      where: {
+        status: { in: [ConsultationStatus.assigned, ConsultationStatus.active] },
+        session: { endedAt: null, expiresAt: { lte: now } },
+        NOT: {
+          extensions: {
+            some: { status: 'pending', promptEndsAt: { gt: heldOpenUntil } },
+          },
+        },
+      },
+      select: { id: true },
+      take: 50,
+    });
+
+    for (const request of overrun) {
+      await this.close(request.id, 'system').catch((error: unknown) =>
+        this.logger.error({ err: error }, `Could not close consultation ${request.id}`),
+      );
+    }
+
+    // A question the customer never answered: silence is not consent, so it
+    // lapses rather than lingering.
+    await this.prisma.consultationExtension.updateMany({
+      where: { status: 'pending', promptEndsAt: { lte: now } },
+      data: { status: 'expired', answeredAt: now },
+    });
+
+    // Accepted but never joined by either side: the lawyer should not stay
+    // marked busy forever because a customer walked away.
+    const abandoned = await this.prisma.consultationRequest.findMany({
+      where: {
+        status: ConsultationStatus.assigned,
+        session: { startedAt: null },
+        assignedAt: { lte: new Date(now.getTime() - ABANDONED_AFTER_MS) },
+      },
+      select: { id: true },
+      take: 50,
+    });
+
+    for (const request of abandoned) {
+      await this.close(request.id, 'system').catch((error: unknown) =>
+        this.logger.error({ err: error }, `Could not close abandoned ${request.id}`),
       );
     }
   }

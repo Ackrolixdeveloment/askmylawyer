@@ -5,21 +5,25 @@ import '../bookings/bookings_screen.dart';
 import '../commission/commission_screen.dart';
 import '../consultations/availability_controller.dart';
 import '../consultations/offer_watcher.dart';
+import '../consultations/rejoin_card.dart';
+import '../reports/report_screen.dart';
+import 'activity_screen.dart';
 import '../notifications/notification_poller.dart';
 import '../notifications/notification_repository.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../referral/referral_screen.dart';
 import '../settings/settings_screen.dart';
-import 'home_data.dart';
+import '../../core/network/api_client.dart';
+import 'home_repository.dart';
 import 'widgets/home_sections.dart';
 
 /// Shell holding the five bottom-nav destinations.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.data = activeHome});
+  const HomeScreen({super.key, this.data});
 
-  /// Defaults to a working week; pass [emptyHome] for the first-run state.
-  final HomeData data;
+  /// Supplied only by tests and previews; otherwise it is fetched.
+  final HomeData? data;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -124,7 +128,10 @@ class _HomeScreenState extends State<HomeScreen> {
           1,
           const SafeArea(bottom: false, child: CommissionScreen()),
         ),
-        2 => _tabNavigator(2, SafeArea(bottom: false, child: BookingsScreen())),
+        2 => _tabNavigator(
+          2,
+          const SafeArea(bottom: false, child: BookingsScreen()),
+        ),
         // Inside a tab there is nothing to pop, so close returns home.
         _ => _tabNavigator(
           3,
@@ -233,15 +240,23 @@ class _NavItem extends StatelessWidget {
 class _HomeTab extends StatefulWidget {
   const _HomeTab({required this.data, required this.onOpenSettings});
 
-  final HomeData data;
+  /// Null until the dashboard has been fetched.
+  final HomeData? data;
   final VoidCallback onOpenSettings;
 
   @override
   State<_HomeTab> createState() => _HomeTabState();
 }
 
+/// How much of the activity list the home screen shows.
+const _recentActivityShown = 3;
+
 class _HomeTabState extends State<_HomeTab> {
   final _availability = AvailabilityController.instance;
+
+  HomeData? _data;
+  String? _error;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -250,6 +265,30 @@ class _HomeTabState extends State<_HomeTab> {
     _availability.load();
     // Consultation offers ring from here.
     OfferWatcher.instance.start();
+
+    final given = widget.data;
+    if (given != null) {
+      _data = given;
+      _loading = false;
+    } else {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await HomeRepository.instance.dashboard();
+      if (mounted) setState(() => _data = data);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -281,13 +320,40 @@ class _HomeTabState extends State<_HomeTab> {
     };
   }
 
+  /// Toggles availability, and explains if they went offline part-way
+  /// through a consultation — that one is still theirs to finish.
+  Future<void> _setOnline(bool value) async {
+    await _availability.setOnline(value);
+    if (!mounted) return;
+
+    final endsAt = _availability.takeLiveUntil();
+    if (endsAt == null) return;
+
+    final hour = endsAt.hour % 12 == 0 ? 12 : endsAt.hour % 12;
+    final minute = endsAt.minute.toString().padLeft(2, '0');
+    final period = endsAt.hour < 12 ? 'am' : 'pm';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          "You'll get no new requests. Your current consultation is still "
+          'yours until $hour:$minute$period — the client can rejoin until then.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
+    final data = _data;
 
     return Column(
       children: [
-        _TopBar(name: data.greetingName, onOpenSettings: widget.onOpenSettings),
+        _TopBar(
+          name: data?.greetingName ?? '',
+          onOpenSettings: widget.onOpenSettings,
+        ),
         // Pinned under the top bar rather than scrolled away with the rest,
         // so availability can be toggled from anywhere on the page.
         Padding(
@@ -300,56 +366,89 @@ class _HomeTabState extends State<_HomeTab> {
                 _availability.problem == LocationProblem.deniedForever
                 ? _availability.openSettings
                 : null,
-            onChanged: _availability.setOnline,
+            onChanged: _setOnline,
           ),
         ),
 
-        Expanded(
-          child: ListView(
+        if (data == null)
+          Expanded(
+            child: Center(
+              child: _loading
+                  ? const CircularProgressIndicator()
+                  : Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _error ?? 'Nothing to show yet.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.inkMuted,
+                        ),
+                      ),
+                    ),
+            ),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
             children: [
+              // A call still running is the most urgent thing here, so it
+              // goes above the earnings. Hides itself when there is none.
+              const RejoinCard(),
               const SectionHeader(title: 'Total Weekly Earnings'),
               EarningsCard(
-                amount: data.weeklyEarnings,
+                amount: data.weeklyEarnings.toDouble(),
                 changePercent: data.weeklyChangePercent,
                 series: data.earningsSeries,
               ),
               const SizedBox(height: 16),
 
-              SectionHeader(
-                title: 'Upcoming Consultation',
-                actionLabel: data.upcoming == null ? null : 'View All',
-              ),
-              if (data.upcoming case final upcoming?)
-                UpcomingCard(consultation: upcoming)
-              else
-                const EmptySection(
-                  icon: Icons.event_note_outlined,
-                  title: 'No Consultation',
-                  body:
-                      'Your upcoming client consultations will be displayed '
-                      'here.',
-                ),
-              const SizedBox(height: 16),
-
-              SectionHeader(
-                title: "Today's Schedule",
-                actionLabel: data.schedule.isEmpty ? null : 'View All',
-              ),
-              if (data.schedule.isEmpty)
-                const EmptySection(
-                  icon: Icons.event_available_outlined,
-                  title: 'No Schedule for Today',
-                  body:
-                      'Your confirmed consultations for today will appear '
-                      'here.',
-                )
-              else
-                for (final entry in data.schedule) ...[
-                  ScheduleRow(entry: entry),
-                  const SizedBox(height: 8),
-                ],
-              const SizedBox(height: 8),
+              /*
+               * Upcoming Consultation and Today's Schedule are parked, not
+               * dropped.
+               *
+               * Both describe a diary, and a lawyer has no diary: they go
+               * online and take whatever comes. Neither section can ever
+               * hold anything until lawyers can set their own slots and
+               * clients can book them. Shown empty they read as broken, so
+               * they stay here until there is scheduling to fill them.
+               *
+               * SectionHeader(
+               *   title: 'Upcoming Consultation',
+               *   actionLabel: data.upcoming == null ? null : 'View All',
+               * ),
+               * if (data.upcoming case final upcoming?)
+               *   UpcomingCard(consultation: upcoming)
+               * else
+               *   const EmptySection(
+               *     icon: Icons.event_note_outlined,
+               *     title: 'No Consultation',
+               *     body: 'Your upcoming client consultations will be '
+               *         'displayed here.',
+               *   ),
+               * const SizedBox(height: 16),
+               *
+               * SectionHeader(
+               *   title: "Today's Schedule",
+               *   actionLabel: data.schedule.isEmpty ? null : 'View All',
+               * ),
+               * if (data.schedule.isEmpty)
+               *   const EmptySection(
+               *     icon: Icons.event_available_outlined,
+               *     title: 'No Schedule for Today',
+               *     body: 'Your confirmed consultations for today will '
+               *         'appear here.',
+               *   )
+               * else
+               *   for (final entry in data.schedule) ...[
+               *     ScheduleRow(entry: entry),
+               *     const SizedBox(height: 8),
+               *   ],
+               * const SizedBox(height: 8),
+               */
 
               // Reports are only worth surfacing when something is overdue.
               if (data.pendingReports.isNotEmpty) ...[
@@ -359,7 +458,10 @@ class _HomeTabState extends State<_HomeTab> {
                   actionIcon: Icons.edit_outlined,
                 ),
                 Text(
-                  '${data.pendingReports.length} Reports Pending',
+                  data.heldTotal > 0
+                      ? '${data.pendingReports.length} pending · '
+                            '₹${data.heldTotal} on hold'
+                      : '${data.pendingReports.length} Reports Pending',
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -368,7 +470,10 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 const SizedBox(height: 8),
                 for (final report in data.pendingReports) ...[
-                  SectionCard(
+                  InkWell(
+                    onTap: () => _openReport(report),
+                    borderRadius: BorderRadius.circular(12),
+                    child: SectionCard(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 12,
@@ -389,10 +494,15 @@ class _HomeTabState extends State<_HomeTab> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Consulted ${report.consultedAgo}',
-                                style: const TextStyle(
+                                report.heldAmount > 0
+                                    ? 'Consulted ${report.consultedAgo} · '
+                                          'holding ₹${report.heldAmount}'
+                                    : 'Consulted ${report.consultedAgo}',
+                                style: TextStyle(
                                   fontSize: 11,
-                                  color: AppColors.inkSubtle,
+                                  color: report.overdue
+                                      ? AppColors.negative
+                                      : AppColors.inkSubtle,
                                 ),
                               ),
                             ],
@@ -405,6 +515,7 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                       ],
                     ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -413,17 +524,39 @@ class _HomeTabState extends State<_HomeTab> {
 
               SectionHeader(
                 title: 'Recent Activity',
-                actionLabel: data.activity.length > 1 ? 'View All' : null,
+                // Only worth offering when there is more than is shown.
+                actionLabel: data.activity.length > _recentActivityShown
+                    ? 'View All'
+                    : null,
+                onAction: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ActivityScreen(),
+                  ),
+                ),
               ),
-              for (final entry in data.activity) ...[
+              // A dashboard is for what needs attention now, not a ledger of
+              // everything that has ever happened. The rest is a tap away.
+              for (final entry in data.activity.take(_recentActivityShown)) ...[
                 ActivityRow(entry: entry),
                 const SizedBox(height: 8),
               ],
             ],
+              ),
+            ),
           ),
-        ),
       ],
     );
+  }
+
+  /// Opens the report this card is about, then refreshes — sending it moves
+  /// money out of hold, and the dashboard should say so at once.
+  Future<void> _openReport(PendingReport report) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReportScreen(consultationId: report.consultationId),
+      ),
+    );
+    if (mounted) _load();
   }
 }
 

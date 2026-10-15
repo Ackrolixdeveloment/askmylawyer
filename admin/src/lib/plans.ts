@@ -27,6 +27,7 @@ export function savePlans(plans: ConsultationRate[]) {
         durationMinutes: plan.durationMinutes,
         extensionMinutes: plan.extensionMinutes,
         extensionAmount: plan.extensionAmount,
+        maxExtensions: plan.maxExtensions,
         enabled: plan.enabled,
       })),
     },

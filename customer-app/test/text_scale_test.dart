@@ -4,10 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:customer_app/core/theme/app_theme.dart';
 import 'package:customer_app/core/widgets/upload_field.dart';
 import 'package:customer_app/features/bookings/bookings_screen.dart';
-import 'package:customer_app/features/consultation/case_details_screen.dart';
 import 'package:customer_app/features/consultation/booking_confirmed_screen.dart';
 import 'package:customer_app/features/consultation/choose_time_screen.dart';
+import 'package:customer_app/features/consultation/case_details_screen.dart';
 import 'package:customer_app/features/consultation/consult_draft.dart';
+import 'package:customer_app/features/bookings/booking_repository.dart';
 import 'package:customer_app/features/consultation/consultation_repository.dart';
 import 'package:customer_app/features/consultation/consult_preview_screen.dart';
 import 'package:customer_app/features/consultation/consultation_screen.dart';
@@ -45,7 +46,7 @@ void main() {
   });
 
   testWidgets('bookings lays out at the maximum text scale', (tester) async {
-    await _pumpAtMaxScale(tester, const BookingsScreen());
+    await _pumpAtMaxScale(tester, BookingsScreen(bookings: [_booking]));
   });
 
   testWidgets('settings lays out at the maximum text scale', (tester) async {
@@ -83,7 +84,6 @@ void main() {
       ConsultPreviewScreen(
         draft: ConsultDraft(
           mode: ConsultMode.scheduled,
-          channel: CallChannel.audio,
           location: 'Delhi',
           caseTag: 'Civil',
           slot: DateTime(2026, 6, 12, 14, 30),
@@ -131,7 +131,6 @@ void main() {
       BookingConfirmedScreen(
         draft: ConsultDraft(
           mode: ConsultMode.scheduled,
-          channel: CallChannel.video,
           location: 'Gurugram, Haryana',
           caseTag: 'Family Law',
           slot: DateTime(2026, 6, 12, 14, 30),
@@ -150,10 +149,24 @@ void main() {
   });
 }
 
+/// One past consultation, so the list has something to lay out.
+final _booking = Booking(
+  id: '7b5c1e9e-0000-4000-8000-000000000002',
+  reference: 'AML-000038',
+  mode: CallMode.video,
+  planName: 'Video Call',
+  durationMinutes: 15,
+  amount: 1179,
+  status: 'completed',
+  at: DateTime(2026, 6, 12, 14, 30),
+  lawyer: 'Adv. Rahul Sharma',
+  category: 'Family Law',
+  reportStatus: 'delivered',
+);
+
 /// Shared stand-in booking for the screens that only render a draft.
 final _draft = ConsultDraft(
   mode: ConsultMode.now,
-  channel: CallChannel.audio,
   location: 'Gurugram, Haryana',
   caseTag: 'Family Law',
   plan: const ServicePlan(

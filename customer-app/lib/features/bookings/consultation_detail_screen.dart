@@ -1,16 +1,87 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import 'booking_data.dart';
+import '../reports/report_screen.dart';
+import 'booking_repository.dart';
 
 /// Everything recorded against one consultation.
-class ConsultationDetailScreen extends StatelessWidget {
-  const ConsultationDetailScreen({super.key, required this.booking});
+class ConsultationDetailScreen extends StatefulWidget {
+  const ConsultationDetailScreen({super.key, required this.consultationId});
 
-  final Booking booking;
+  final String consultationId;
+
+  @override
+  State<ConsultationDetailScreen> createState() =>
+      _ConsultationDetailScreenState();
+}
+
+class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
+  BookingDetail? _booking;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final booking = await BookingRepository.instance.detail(
+        widget.consultationId,
+      );
+      if (mounted) setState(() => _booking = booking);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
+
+  /// Long case descriptions are clamped until the customer asks for the rest.
+  bool _summaryOpen = false;
+
+  static bool _summaryIsLong(String? text) => (text ?? '').length > 220;
+
+  Future<void> _openReport() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReportScreen(consultationId: widget.consultationId),
+      ),
+    );
+    if (mounted) _load();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final booking = _booking;
+
+    if (booking == null) {
+      return Scaffold(
+        backgroundColor: AppColors.canvas,
+        appBar: AppBar(
+          backgroundColor: AppColors.canvas,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+            color: AppColors.ink,
+          ),
+        ),
+        body: Center(
+          child: _error == null
+              ? const CircularProgressIndicator()
+              : Text(
+                  _error!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.negative,
+                  ),
+                ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
@@ -44,72 +115,50 @@ class ConsultationDetailScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  booking.summary,
+                  booking.description ??
+                      'No summary yet — it arrives with your report.',
+                  // Long descriptions pushed everything below off the
+                  // screen; the link below opens the rest.
+                  maxLines: _summaryOpen ? null : 4,
+                  overflow: _summaryOpen
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
                     height: 1.55,
                     color: AppColors.inkSubtle,
                   ),
                 ),
-                const SizedBox(height: 10),
-                // TODO: expand to the full summary.
-                InkWell(
-                  onTap: () {},
-                  child: const Text(
-                    'Read full summary',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      decoration: TextDecoration.underline,
+                if (_summaryIsLong(booking.description)) ...[
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () =>
+                        setState(() => _summaryOpen = !_summaryOpen),
+                    child: Text(
+                      _summaryOpen ? 'Show less' : 'Read full summary',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 18),
 
-          _DocumentSection(
-            title: 'Your Documents (${booking.myDocuments.length})',
-            action: 'View All',
-            documents: booking.myDocuments,
-          ),
-          const SizedBox(height: 18),
-
-          _DocumentSection(
-            title: 'Lawyer Reference Documents',
-            documents: booking.lawyerDocuments,
-          ),
-          const SizedBox(height: 18),
-
-          const _SectionTitle('Chat During Consultation'),
-          _Card(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              children: [
-                for (final message in booking.chat) ...[
-                  _ChatRow(message: message),
-                  const SizedBox(height: 12),
-                ],
-                // TODO: open the full transcript.
-                InkWell(
-                  onTap: () {},
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '+6 more Messages',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.brand,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          // Files attached at booking are not stored or passed through
+          // yet, and chat consultations do not connect at all — so these
+          // say so rather than showing empty lists as though none were
+          // sent.
+          const _SectionTitle('Documents'),
+          const _Card(
+            child: Text(
+              'No documents shared.',
+              style: TextStyle(fontSize: 12, color: AppColors.inkSubtle),
             ),
           ),
           const SizedBox(height: 18),
@@ -134,9 +183,11 @@ class ConsultationDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        booking.reportGeneratedAt == null
+                        !booking.hasReport
                             ? 'Pending'
-                            : 'Generated on ${booking.reportGeneratedAt}',
+                            : booking.reportReady
+                            ? 'Ready to read'
+                            : 'With your lawyer for review',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.inkSubtle,
@@ -155,18 +206,18 @@ class ConsultationDetailScreen extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _DetailRow(label: 'Consultation ID', value: booking.bookingId),
+                _DetailRow(label: 'Consultation ID', value: booking.reference),
                 const _Hairline(),
-                _DetailRow(label: 'Mode', value: '${booking.modeLabel} Call'),
+                _DetailRow(label: 'Mode', value: booking.planName),
                 const _Hairline(),
                 _DetailRow(
                   label: 'Duration',
-                  value: '${booking.durationMinutes} Minutes',
+                  value: '${booking.totalMinutes} Minutes',
                 ),
                 const _Hairline(),
                 _DetailRow(
                   label: 'Date',
-                  value: '${booking.date}  ${booking.time}',
+                  value: booking.dateLabel,
                 ),
               ],
             ),
@@ -180,17 +231,17 @@ class ConsultationDetailScreen extends StatelessWidget {
               children: [
                 _DetailRow(
                   label: 'Amount Paid',
-                  value: '₹${booking.payment.amountPaid}',
+                  value: '₹${booking.paid}',
                 ),
                 const _Hairline(),
                 _DetailRow(
                   label: 'Coupon Discount',
-                  value: '₹${booking.payment.couponDiscount}',
+                  value: '₹${booking.owedForExtraTime}',
                 ),
                 const _Hairline(),
                 _DetailRow(
                   label: 'Final Paid',
-                  value: '₹${booking.payment.finalPaid}',
+                  value: '₹${booking.paid + booking.owedForExtraTime}',
                   emphasised: true,
                 ),
               ],
@@ -201,29 +252,15 @@ class ConsultationDetailScreen extends StatelessWidget {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              // TODO: open or download the generated report.
-              onPressed: booking.reportGeneratedAt == null ? null : () {},
+              onPressed: booking.hasReport ? _openReport : null,
               icon: const Icon(Icons.description_outlined, size: 17),
-              label: const Text('View or download Report'),
+              label: const Text('View Report'),
             ),
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 48,
-            child: OutlinedButton.icon(
-              // TODO: download the tax invoice.
-              onPressed: () {},
-              icon: const Icon(Icons.download_outlined, size: 17),
-              label: const Text('Download Invoice'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.ink,
-                side: const BorderSide(color: AppColors.line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
+          // The invoice button is out until there are invoices to download:
+          // that needs the GSTIN, the registered address and an agreed
+          // layout. Saying "Download Invoice" and producing nothing is
+          // worse than not offering it.
         ],
       ),
     );
@@ -234,12 +271,12 @@ class ConsultationDetailScreen extends StatelessWidget {
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({required this.booking});
 
-  final Booking booking;
+  final BookingDetail booking;
 
-  IconData get _modeIcon => switch (booking.mode) {
-    CallMode.audio => Icons.headset_outlined,
-    CallMode.video => Icons.videocam_outlined,
-    CallMode.chat => Icons.chat_bubble_outline,
+  IconData get _modeIcon => switch (booking.planName.toLowerCase()) {
+    final name when name.contains('audio') => Icons.headset_outlined,
+    final name when name.contains('chat') => Icons.chat_bubble_outline,
+    _ => Icons.videocam_outlined,
   };
 
   @override
@@ -274,7 +311,7 @@ class _HeaderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      booking.lawyer,
+                      booking.lawyer ?? 'No lawyer found',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -283,7 +320,7 @@ class _HeaderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      booking.practice,
+                      booking.category ?? 'General',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFFB6C0D4),
@@ -307,7 +344,7 @@ class _HeaderCard extends StatelessWidget {
                     Icon(_modeIcon, size: 12, color: Colors.white),
                     const SizedBox(width: 5),
                     Text(
-                      booking.modeLabel,
+                      booking.planName,
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -325,8 +362,7 @@ class _HeaderCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${booking.date}   ${booking.time}   '
-                  '${booking.durationMinutes}min',
+                  '${booking.dateLabel}   ${booking.totalMinutes} min',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFFB6C0D4),
@@ -343,7 +379,7 @@ class _HeaderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  booking.statusLabel,
+                  booking.status,
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -360,134 +396,6 @@ class _HeaderCard extends StatelessWidget {
 }
 
 /// A titled card listing documents, with an optional trailing action.
-class _DocumentSection extends StatelessWidget {
-  const _DocumentSection({
-    required this.title,
-    required this.documents,
-    this.action,
-  });
-
-  final String title;
-  final List<BookingDocument> documents;
-  final String? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ),
-              if (action != null)
-                // TODO: open the full document list.
-                InkWell(
-                  onTap: () {},
-                  child: Text(
-                    action!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.inkSubtle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        _Card(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              for (var i = 0; i < documents.length; i++) ...[
-                if (i > 0) const _Hairline(),
-                _DocumentRow(document: documents[i]),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChatRow extends StatelessWidget {
-  const _ChatRow({required this.message});
-
-  final ChatMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: message.fromCustomer ? AppColors.ink : AppColors.canvas,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.person_outline,
-            size: 14,
-            color: message.fromCustomer ? Colors.white : AppColors.inkMuted,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      message.author,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    message.time,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.inkSubtle,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              Text(
-                message.body,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.45,
-                  color: AppColors.inkSubtle,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.label);
 
@@ -558,54 +466,6 @@ class _PdfBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: AppColors.inkMuted,
         ),
-      ),
-    );
-  }
-}
-
-class _DocumentRow extends StatelessWidget {
-  const _DocumentRow({required this.document});
-
-  final BookingDocument document;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          const _PdfBadge(),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  document.name,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Uploaded by ${document.uploadedBy} . ${document.size}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // TODO: download the document.
-          const Icon(
-            Icons.download_outlined,
-            size: 18,
-            color: AppColors.inkMuted,
-          ),
-        ],
       ),
     );
   }

@@ -32,6 +32,10 @@ class AvailabilityController extends ChangeNotifier {
 
   bool _isOnline = false;
   bool _busy = false;
+
+  /// Set when they went offline with a consultation still running, so the
+  /// home screen can explain. Cleared once it has been shown.
+  DateTime? _liveUntil;
   LocationProblem? _problem;
   String? _error;
 
@@ -39,6 +43,14 @@ class AvailabilityController extends ChangeNotifier {
   int _heartbeatSeconds = 45;
 
   bool get isOnline => _isOnline;
+
+  /// When the consultation they are still committed to ends, if they went
+  /// offline during one. Reading it clears it: it is shown once.
+  DateTime? takeLiveUntil() {
+    final value = _liveUntil;
+    _liveUntil = null;
+    return value;
+  }
 
   /// True while a toggle is being carried out.
   bool get busy => _busy;
@@ -72,6 +84,13 @@ class AvailabilityController extends ChangeNotifier {
         _stopHeartbeat();
         await _consultations.goOffline();
         _isOnline = false;
+
+        // Going offline stops new requests; it does not hand back a
+        // consultation already paid for. Say so, rather than leave the
+        // lawyer thinking the toggle got them out of it.
+        _liveUntil = await _consultations
+            .liveConsultationEndsAt()
+            .catchError((_) => null);
         return;
       }
 

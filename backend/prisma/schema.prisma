@@ -46,6 +46,18 @@ enum ConsultationStatus {
   refunded
 }
 
+/// Where a consultation's payment has got to.
+enum PaymentStatus {
+  /// An order exists at the gateway; nothing has been charged.
+  created
+  /// The money has landed; the search may start.
+  paid
+  /// The customer abandoned it, or the gateway turned it down.
+  failed
+  /// Sent back, because nobody accepted or the customer cancelled.
+  refunded
+}
+
 /// What one lawyer did with one offer.
 enum OfferOutcome {
   ringing
@@ -133,6 +145,8 @@ model User {
   updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?               @map("deleted_at") @db.Timestamptz(6)
   lawyerProfile       LawyerProfile?
+  customerProfile     CustomerProfile?
+  sentMessages        ConsultationMessage[]
   bankAccount         LawyerBankAccount?
   documents           LawyerDocument[]
   sessions            UserSession[]
@@ -148,6 +162,7 @@ model User {
   alerts              AdminAlert[]
   scheduled           ScheduledNotification[]
   pushTokens          AdminPushToken[]
+  lawyerEarnings      LawyerEarning[]
 
   /// The same phone/email may hold one account per role (see ALLOW_MULTI_ROLE_PHONE).
   @@unique([phone, role])
@@ -569,7 +584,9 @@ model ScheduledNotification {
 /// picks which of these they take, and the customer picks one to book.
 model ServicePlan {
   id               String         @id @default(uuid()) @db.Uuid
-  /// Stable key the apps refer to: "audio", "video", "chat".
+  /// Stable key the apps refer to. One plan now — "consultation" — since
+  /// the customer no longer chooses between audio, video and chat; the old
+  /// three are kept disabled so past bookings still resolve.
   code             String         @unique @db.VarChar(30)
   /// What the customer sees, e.g. "Audio Call".
   type             String         @db.VarChar(60)
@@ -583,6 +600,10 @@ model ServicePlan {
   /// Length of one paid extension, and what it costs.
   extensionMinutes Int            @map("extension_minutes")
   extensionAmount  Int            @map("extension_amount")
+  /// How many times one consultation may be extended. Lives with the rest
+  /// of the pricing rather than in the engine settings, so everything about
+  /// what a consultation costs is in one place.
+  maxExtensions    Int            @default(1) @map("max_extensions")
   /// Off hides the plan from the apps without losing its pricing.
   enabled          Boolean        @default(true)
   sortOrder        Int            @default(0) @map("sort_order")
@@ -671,9 +692,29 @@ model ConsultationSettings {
 
   // ---- Session ----
   /// How long a call token stays valid past the plan's duration.
-  tokenGraceMinutes Int @default(10) @map("token_grace_minutes")
+  tokenGraceMinutes      Int     @default(10) @map("token_grace_minutes")
   /// A dropped call is closed after this long without a reconnect.
-  callGraceSeconds  Int @default(60) @map("call_grace_seconds")
+  callGraceSeconds       Int     @default(60) @map("call_grace_seconds")
+  /// How long one side may be missing before the other is told they have
+  /// gone. Short enough to be honest, long enough to survive a lift.
+  absenceGraceSeconds    Int     @default(120) @map("absence_grace_seconds")
+  /// Whether a customer left alone may end the consultation and ask for the
+  /// unused time back.
+  allowEndWhenAbandoned  Boolean @default(true) @map("allow_end_when_abandoned")
+  /// How long the customer has to answer before the offer lapses.
+  extensionPromptSeconds Int     @default(45) @map("extension_prompt_seconds")
+  /// The call is held open this long past its end while an answer is
+  /// outstanding, so nobody is cut off mid-sentence deciding.
+  extensionGraceSeconds  Int     @default(30) @map("extension_grace_seconds")
+
+  /// How long the lawyer has to check and send the consultation report,
+  /// counted from the moment the draft is ready.
+  reportReviewMinutes     Int     @default(30) @map("report_review_minutes")
+  /// A longer look, if they ask for one.
+  reportExtensionMinutes  Int     @default(30) @map("report_extension_minutes")
+  maxReportExtensions     Int     @default(1) @map("max_report_extensions")
+  /// Whether a late report holds the lawyer's earnings until it is sent.
+  holdEarningsUntilReport Boolean @default(true) @map("hold_earnings_until_report")
 
   updatedById String?    @map("updated_by_id") @db.Uuid
   updatedBy   AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
@@ -722,37 +763,275 @@ model LawyerPresence {
 
 /// One customer asking for a consultation, and how the search went.
 model ConsultationRequest {
-  id              String               @id @default(uuid()) @db.Uuid
-  customerId      String               @map("customer_id") @db.Uuid
-  customer        User                 @relation("CustomerConsultations", fields: [customerId], references: [id], onDelete: Cascade)
-  planCode        String               @map("plan_code") @db.VarChar(30)
+  id              String                  @id @default(uuid()) @db.Uuid
+  /// The reference both sides quote: "AML-000123". See consultation_number_seq.
+  number          Int?                    @unique
+  customerId      String                  @map("customer_id") @db.Uuid
+  customer        User                    @relation("CustomerConsultations", fields: [customerId], references: [id], onDelete: Cascade)
+  planCode        String                  @map("plan_code") @db.VarChar(30)
   /// What the plan cost when it was booked; prices change, records should not.
-  planName        String               @map("plan_name") @db.VarChar(60)
+  planName        String                  @map("plan_name") @db.VarChar(60)
   amount          Int
-  durationMinutes Int                  @map("duration_minutes")
+  durationMinutes Int                     @map("duration_minutes")
   /// What the customer says the matter is about.
-  category        String?              @db.VarChar(120)
-  description     String?              @db.VarChar(1000)
+  category        String?                 @db.VarChar(120)
+  description     String?                 @db.VarChar(1000)
   /// Where the customer was, for distance-based matching later.
   latitude        Float?
   longitude       Float?
-  status          ConsultationStatus   @default(searching)
+  status          ConsultationStatus      @default(searching)
   /// The lawyer who accepted.
-  lawyerId        String?              @map("lawyer_id") @db.Uuid
-  lawyer          User?                @relation("LawyerConsultations", fields: [lawyerId], references: [id], onDelete: SetNull)
+  lawyerId        String?                 @map("lawyer_id") @db.Uuid
+  lawyer          User?                   @relation("LawyerConsultations", fields: [lawyerId], references: [id], onDelete: SetNull)
   /// When the search gives up.
-  searchEndsAt    DateTime?            @map("search_ends_at") @db.Timestamptz(6)
-  assignedAt      DateTime?            @map("assigned_at") @db.Timestamptz(6)
+  searchEndsAt    DateTime?               @map("search_ends_at") @db.Timestamptz(6)
+  assignedAt      DateTime?               @map("assigned_at") @db.Timestamptz(6)
   /// For a booked consultation, when it should start.
-  scheduledFor    DateTime?            @map("scheduled_for") @db.Timestamptz(6)
-  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  scheduledFor    DateTime?               @map("scheduled_for") @db.Timestamptz(6)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
   offers          ConsultationOffer[]
   session         ConsultationSession?
+  payment         ConsultationPayment?
+  extensions      ConsultationExtension[]
+  messages        ConsultationMessage[]
+  report          ConsultationReport?
+  earning         LawyerEarning?
 
   @@index([status, searchEndsAt])
   @@index([customerId, createdAt])
   @@map("consultation_requests")
+}
+
+/// What the customer was charged for one consultation.
+///
+/// One row per consultation: the gateway order is created with the
+/// consultation's own id, so the two can never drift apart. The amount here
+/// is what was actually charged — the plan's price plus GST — which is not
+/// the same as the request's `amount`.
+model ConsultationPayment {
+  id            String              @id @default(uuid()) @db.Uuid
+  requestId     String              @unique @map("request_id") @db.Uuid
+  request       ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// The gateway's order id, which is the consultation id.
+  orderId       String              @unique @map("order_id") @db.VarChar(60)
+  /// Paise are not used anywhere else in the platform, so this is rupees.
+  amount        Int
+  gst           Int                 @default(0)
+  currency      String              @default("INR") @db.VarChar(3)
+  status        PaymentStatus       @default(created)
+  /// Which keys took it, so a sandbox payment is never mistaken for a real one.
+  environment   GatewayEnvironment
+  /// Handed to the app to open the gateway's checkout sheet.
+  sessionId     String?             @map("session_id") @db.VarChar(255)
+  /// The gateway's own reference for the successful payment.
+  reference     String?             @db.VarChar(120)
+  /// "upi", "card", "netbanking" — whatever the gateway reports.
+  method        String?             @db.VarChar(40)
+  /// Why it did not go through, for the customer and for support.
+  failureReason String?             @map("failure_reason") @db.VarChar(255)
+  paidAt        DateTime?           @map("paid_at") @db.Timestamptz(6)
+  refundedAt    DateTime?           @map("refunded_at") @db.Timestamptz(6)
+  /// In rupees. Less than [amount] when part of the consultation was given.
+  refundAmount  Int?                @map("refund_amount")
+  /// Plain words for the customer and for support, e.g. "the lawyer left
+  /// after 3 of 15 minutes".
+  refundReason  String?             @map("refund_reason") @db.VarChar(255)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("consultation_payments")
+}
+
+/// Where an extension request has got to.
+enum ExtensionStatus {
+  /// Waiting on the customer.
+  pending
+  /// The customer agreed; the clock has already moved.
+  accepted
+  /// The customer said no.
+  declined
+  /// The customer never answered in time.
+  expired
+}
+
+/// More minutes on a consultation, asked for by the lawyer mid-call.
+///
+/// The lawyer asks, the customer agrees, and only then does the clock move —
+/// the lawyer cannot add to somebody else's bill on their own. Each row is
+/// the record of that exchange: who asked, what was quoted, what was
+/// answered. That is what settles a disputed bill weeks later.
+model ConsultationExtension {
+  id           String              @id @default(uuid()) @db.Uuid
+  requestId    String              @map("request_id") @db.Uuid
+  request      ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// How many minutes this adds, from the plan.
+  minutes      Int
+  /// The price quoted at the moment of asking, in rupees. Held here rather
+  /// than read from the plan later, so a price change cannot alter a bill
+  /// the customer already agreed to.
+  amount       Int
+  status       ExtensionStatus     @default(pending)
+  /// When the customer's prompt gives up. Silence is not consent.
+  promptEndsAt DateTime            @map("prompt_ends_at") @db.Timestamptz(6)
+  answeredAt   DateTime?           @map("answered_at") @db.Timestamptz(6)
+  /// Settled when the customer pays for their consultation report.
+  paidAt       DateTime?           @map("paid_at") @db.Timestamptz(6)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([requestId, status])
+  @@index([status, promptEndsAt])
+  @@map("consultation_extensions")
+}
+
+/// Where a consultation's report has got to.
+enum ReportStatus {
+  /// Waiting on the transcript and the draft.
+  generating
+  /// The draft is ready and the lawyer's review clock is running.
+  awaiting_review
+  /// The lawyer has sent it; the client may read it.
+  delivered
+  /// No usable transcript. The lawyer writes it themselves.
+  failed
+}
+
+/// A message typed during a consultation.
+///
+/// Kept rather than passed through a realtime channel and forgotten: people
+/// type the things that are hard to say aloud — a case number, a date, the
+/// spelling of a name — and those belong in the report.
+model ConsultationMessage {
+  id         String              @id @default(uuid()) @db.Uuid
+  requestId  String              @map("request_id") @db.Uuid
+  request    ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  senderId   String              @map("sender_id") @db.Uuid
+  sender     User                @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  /// "customer" or "lawyer" — which side of the thread it sits on.
+  senderRole String              @map("sender_role") @db.VarChar(10)
+  body       String              @db.VarChar(2000)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([requestId, createdAt])
+  @@map("consultation_messages")
+}
+
+/// What a customer tells us about themselves.
+///
+/// Separate from [User], which holds only what signing in needs. None of
+/// this is required to book a consultation — it is filled in at sign-up and
+/// topped up later from the profile screen — so every field is optional.
+model CustomerProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @map("user_id") @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "Mr.", "Ms.", "Mx." — how they are addressed.
+  prefix         String?  @db.VarChar(10)
+  gender         String?  @db.VarChar(20)
+  /// A band rather than a birthday: enough to be useful, less to look after.
+  ageBand        String?  @map("age_band") @db.VarChar(20)
+  maritalStatus  String?  @map("marital_status") @db.VarChar(30)
+  occupation     String?  @db.VarChar(80)
+  state          String?  @db.VarChar(80)
+  city           String?  @db.VarChar(80)
+  pincode        String?  @db.VarChar(10)
+  address        String?  @db.VarChar(300)
+  /// Which languages they would rather be advised in.
+  languages      String[] @default([])
+  /// The code they were invited with, kept for when referrals pay out.
+  referredByCode String?  @map("referred_by_code") @db.VarChar(30)
+  /// Where their photo lives in storage.
+  photoKey       String?  @map("photo_key") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("customer_profiles")
+}
+
+/// The written record of a consultation, drafted from what was said.
+///
+/// Drafted by machine, published by a person: it goes out under the
+/// lawyer's name as legal advice they are answerable for, so nothing
+/// reaches the client until they have read it and pressed send.
+model ConsultationReport {
+  id               String              @id @default(uuid()) @db.Uuid
+  requestId        String              @unique @map("request_id") @db.Uuid
+  request          ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status           ReportStatus        @default(generating)
+  /// The three sections the client reads.
+  caseSummary      String              @default("") @map("case_summary")
+  legalGuidance    String              @default("") @map("legal_guidance")
+  nextSteps        String              @default("") @map("next_steps")
+  /// What was said, kept only as long as the report needs it.
+  transcript       String?
+  /// Why there is no draft, when there is none.
+  problem          String?             @db.VarChar(255)
+  /// When the draft became ready. The review clock runs from here, not from
+  /// the end of the call — a slow transcript should not eat the lawyer's
+  /// window.
+  draftedAt        DateTime?           @map("drafted_at") @db.Timestamptz(6)
+  reviewEndsAt     DateTime?           @map("review_ends_at") @db.Timestamptz(6)
+  /// How many times the lawyer has asked for longer to review.
+  reviewExtensions Int                 @default(0) @map("review_extensions")
+  submittedAt      DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  /// True when the lawyer changed the draft before sending it.
+  edited           Boolean             @default(false)
+  attachments      ReportAttachment[]
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, reviewEndsAt])
+  @@map("consultation_reports")
+}
+
+/// A document the lawyer attached to a report.
+model ReportAttachment {
+  id        String             @id @default(uuid()) @db.Uuid
+  reportId  String             @map("report_id") @db.Uuid
+  report    ConsultationReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  /// Where the file lives in storage.
+  key       String             @db.VarChar(255)
+  name      String             @db.VarChar(255)
+  sizeBytes Int                @map("size_bytes")
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([reportId])
+  @@map("report_attachments")
+}
+
+/// What a lawyer has earned from one consultation, and whether they can
+/// have it yet.
+///
+/// Held until the report is delivered: it is the only thing that makes a
+/// review deadline mean anything, and it costs the client nothing.
+enum EarningStatus {
+  held
+  available
+  paid_out
+}
+
+model LawyerEarning {
+  id         String              @id @default(uuid()) @db.Uuid
+  requestId  String              @unique @map("request_id") @db.Uuid
+  request    ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  lawyerId   String              @map("lawyer_id") @db.Uuid
+  lawyer     User                @relation(fields: [lawyerId], references: [id], onDelete: Cascade)
+  /// What the client paid, before the platform's cut.
+  gross      Int
+  /// The platform's share.
+  commission Int
+  /// What the lawyer keeps.
+  net        Int
+  status     EarningStatus       @default(held)
+  /// Plain words for the lawyer, e.g. "waiting on your consultation report".
+  heldReason String?             @map("held_reason") @db.VarChar(255)
+  releasedAt DateTime?           @map("released_at") @db.Timestamptz(6)
+  paidOutAt  DateTime?           @map("paid_out_at") @db.Timestamptz(6)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([lawyerId, status])
+  @@map("lawyer_earnings")
 }
 
 /// One lawyer's phone ringing for one request.
@@ -775,16 +1054,49 @@ model ConsultationOffer {
 
 /// The call or chat itself.
 model ConsultationSession {
-  id        String              @id @default(uuid()) @db.Uuid
-  requestId String              @unique @map("request_id") @db.Uuid
-  request   ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id         String              @id @default(uuid()) @db.Uuid
+  requestId  String              @unique @map("request_id") @db.Uuid
+  request    ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   /// The Agora channel both sides join; the request id, so it is unique.
-  channel   String              @db.VarChar(64)
-  startedAt DateTime?           @map("started_at") @db.Timestamptz(6)
-  endedAt   DateTime?           @map("ended_at") @db.Timestamptz(6)
+  channel    String              @db.VarChar(64)
+  startedAt  DateTime?           @map("started_at") @db.Timestamptz(6)
+  /// When the paid time runs out. Set the moment the first person joins, and
+  /// the same for both sides. Hanging up does not end the consultation —
+  /// either side may rejoin until this passes, and nobody may after it.
+  expiresAt  DateTime?           @map("expires_at") @db.Timestamptz(6)
+  endedAt    DateTime?           @map("ended_at") @db.Timestamptz(6)
   /// Who hung up: "customer", "lawyer" or "system".
-  endedBy   String?             @map("ended_by") @db.VarChar(20)
-  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  endedBy    String?             @map("ended_by") @db.VarChar(20)
+  /// The last time either side left the channel, for the rejoin card.
+  lastLeftAt DateTime?           @map("last_left_at") @db.Timestamptz(6)
 
+  /// Agora's transcription bot, while one is listening.
+  ///
+  /// Both are needed to stop it again: the token authorises the task and the
+  /// id says which task. They are cleared once it has left, so a row with an
+  /// id still set means a bot nobody shut down.
+  sttAgentId   String?   @map("stt_agent_id") @db.VarChar(64)
+  sttToken     String?   @map("stt_token") @db.VarChar(255)
+  sttStartedAt DateTime? @map("stt_started_at") @db.Timestamptz(6)
+  sttStoppedAt DateTime? @map("stt_stopped_at") @db.Timestamptz(6)
+
+  /// Who is actually in the call, and when they were last heard from.
+  ///
+  /// The paid window says what was bought; these say what was delivered. A
+  /// lawyer who joins, leaves and never returns looks the same here whether
+  /// they went offline on purpose, closed the app, or ran out of battery —
+  /// which is the point, because the customer cannot tell either.
+  customerLastSeenAt DateTime? @map("customer_last_seen_at") @db.Timestamptz(6)
+  lawyerLastSeenAt   DateTime? @map("lawyer_last_seen_at") @db.Timestamptz(6)
+  /// True between joining the channel and leaving it.
+  customerInCall     Boolean   @default(false) @map("customer_in_call")
+  lawyerInCall       Boolean   @default(false) @map("lawyer_in_call")
+  /// Seconds both sides were in the call at the same time — the consultation
+  /// the customer actually received, which is what a refund is judged on.
+  talkedSeconds      Int       @default(0) @map("talked_seconds")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
   @@map("consultation_sessions")
 }
