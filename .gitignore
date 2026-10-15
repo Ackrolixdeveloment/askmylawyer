@@ -1,8 +1,18 @@
+# The three apps and the admin panel are tracked; these lines are kept
+# commented so it is obvious they are deliberately not ignored.
 # /admin
-#/customer-app
+# /customer-app
 # /website
 
-
+# Built output and dependencies.
+.next/
+node_modules/
+out/
+build/
+.env*.local
 
 # Built APKs, handed over for testing.
 /apk/
+
+AGENTS.md
+CLAUDE.md
