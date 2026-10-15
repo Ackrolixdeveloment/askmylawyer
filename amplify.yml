@@ -1,0 +1,46 @@
+# AWS Amplify Hosting build settings for the two web apps in this monorepo.
+# Create one Amplify app per entry (connect the repo, tick "monorepo", and
+# give the matching root: `admin` or `website`). Both are Next.js SSR apps.
+#
+# Neither needs an environment variable: a production build talks to
+# https://api.amlst.in. Set API_URL in the Amplify console only to point a
+# build at a different backend.
+version: 1
+applications:
+  - appRoot: admin
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*
+
+  - appRoot: website
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*

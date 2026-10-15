@@ -6,15 +6,12 @@ class ApiConfig {
 
   static const _fromBuild = String.fromEnvironment('API_BASE_URL');
 
-  /// Where the apps talk to by default.
-  ///
-  /// A tunnel to the machine running the API, so a phone on mobile data
-  /// reaches it without being on the same Wi-Fi. This is the one line to
-  /// change when the backend goes live — everything reads [baseUrl].
-  static const _devTunnel = 'https://f194n1ll-4000.inc1.devtunnels.ms';
+  /// Where the apps talk to by default: the live API. Pass API_BASE_URL to
+  /// test against a local backend or a dev tunnel instead.
+  static const _liveApi = 'https://api.amlst.in';
 
   static String get baseUrl {
-    final value = _fromBuild.isNotEmpty ? _fromBuild : _devTunnel;
+    final value = _fromBuild.isNotEmpty ? _fromBuild : _liveApi;
     // Every path starts with "/api/v1", and a trailing slash here would make
     // that "//api/v1" — which the server answers with a 404.
     return value.endsWith('/')

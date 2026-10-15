@@ -6,12 +6,15 @@ import type { NextConfig } from "next";
  * nothing here is used yet — the rewrite is in place so switching over is a
  * one-line change in the page rather than a config change.
  *
- * The default is the shared development tunnel, so a fresh checkout works
- * without any setup. Point `API_URL` at your own backend to override it.
+ * `next dev` talks to the backend on this machine; a production build
+ * talks to the live API. Set `API_URL` to point either somewhere else.
  */
-const DEV_TUNNEL = "https://f194n1ll-4000.inc1.devtunnels.ms";
+const LOCAL_API = "http://localhost:4000";
+const LIVE_API = "https://api.amlst.in";
 
-const apiUrl = (process.env.API_URL ?? DEV_TUNNEL).replace(/\/$/, "");
+const defaultApi = process.env.NODE_ENV === "production" ? LIVE_API : LOCAL_API;
+
+const apiUrl = (process.env.API_URL || defaultApi).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {
