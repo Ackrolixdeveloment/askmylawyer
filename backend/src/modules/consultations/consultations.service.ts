@@ -646,7 +646,7 @@ export class ConsultationsService {
 
       await this.prisma.consultationSession.update({
         where: { id: sessionId },
-        data: { sttAgentId: task.agentId, sttToken: task.token, sttStartedAt: new Date() },
+        data: { sttAgentId: task.agentId, sttStartedAt: new Date() },
       });
     } catch (error) {
       // A call without a transcript is still a call; the lawyer writes the

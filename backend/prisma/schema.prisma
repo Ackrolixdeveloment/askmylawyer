@@ -1070,13 +1070,9 @@ model ConsultationSession {
   /// The last time either side left the channel, for the rejoin card.
   lastLeftAt DateTime?           @map("last_left_at") @db.Timestamptz(6)
 
-  /// Agora's transcription bot, while one is listening.
-  ///
-  /// Both are needed to stop it again: the token authorises the task and the
-  /// id says which task. They are cleared once it has left, so a row with an
-  /// id still set means a bot nobody shut down.
+  /// Agora's transcription bot, while one is listening. Cleared once it has
+  /// left, so a row with an id still set means a bot nobody shut down.
   sttAgentId   String?   @map("stt_agent_id") @db.VarChar(64)
-  sttToken     String?   @map("stt_token") @db.VarChar(255)
   sttStartedAt DateTime? @map("stt_started_at") @db.Timestamptz(6)
   sttStoppedAt DateTime? @map("stt_stopped_at") @db.Timestamptz(6)
 

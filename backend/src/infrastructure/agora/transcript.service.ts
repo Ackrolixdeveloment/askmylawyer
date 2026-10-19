@@ -1,6 +1,7 @@
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { Injectable, Logger } from '@nestjs/common';
 import { env } from '../../config/env';
+import { transcriptKeyPrefix } from './transcript-path';
 
 /** The uids the two people in a call join with. */
 const CUSTOMER_UID = '1';
@@ -47,7 +48,9 @@ export class TranscriptService {
   async fetch(requestId: string): Promise<string | null> {
     if (!this.s3) return null;
 
-    const prefix = `transcripts/${requestId}/`;
+    // The same prefix the bot was told to write to, dashes and all
+    // removed — Agora will not accept them.
+    const prefix = transcriptKeyPrefix(requestId);
 
     try {
       const listed = await this.s3.send(

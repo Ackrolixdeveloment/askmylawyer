@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { env } from '../../config/env';
+import { transcriptPrefix } from './transcript-path';
 
-/** Agora's bot needs a uid of its own; neither side's and not zero. */
+/** Agora's bot needs two uids of its own; neither side's, and different. */
 const SUBSCRIBER_UID = '1001';
 const PUBLISHER_UID = '1002';
 
@@ -9,10 +10,27 @@ const PUBLISHER_UID = '1002';
 const VENDOR_S3 = 1;
 
 /**
- * Agora numbers its regions rather than naming them; 3 is Asia Pacific,
- * which is where the Mumbai bucket lives.
+ * Agora numbers S3 regions rather than naming them, and writes to the wrong
+ * one rather than complaining, so the bucket's region is translated here
+ * instead of being hard-coded.
  */
-const REGION_ASIA_PACIFIC = 3;
+const S3_REGIONS: Record<string, number> = {
+  'us-east-1': 0,
+  'us-east-2': 1,
+  'us-west-1': 2,
+  'us-west-2': 3,
+  'eu-west-1': 4,
+  'eu-west-2': 5,
+  'eu-west-3': 6,
+  'eu-central-1': 7,
+  'ap-southeast-1': 8,
+  'ap-southeast-2': 9,
+  'ap-northeast-1': 10,
+  'ap-northeast-2': 11,
+  'sa-east-1': 12,
+  'ca-central-1': 13,
+  'ap-south-1': 14,
+};
 
 /**
  * What the bot listens for. Hindi and English cover the Hinglish case
@@ -21,12 +39,17 @@ const REGION_ASIA_PACIFIC = 3;
  */
 const LANGUAGES = ['en-IN', 'hi-IN'];
 
+/**
+ * Agora's own ceiling on how long the bot sits in a silent channel. The
+ * call's paid window is shorter, and the sweep that ends a call takes the
+ * bot out, so this is only a backstop against a bot nobody shut down.
+ */
+const MAX_IDLE_SECONDS = 60;
+
 const BASE = 'https://api.agora.io';
 
 export interface SttTask {
   agentId: string;
-  /** The builder token the task was started with; stopping it needs both. */
-  token: string;
 }
 
 /**
@@ -37,6 +60,11 @@ export interface SttTask {
  * the critical path of a call: every method reports failure by returning
  * null, because a consultation that cannot be transcribed is still a
  * consultation, and the lawyer writes the report by hand instead.
+ *
+ * This speaks Agora's **v7** API. The v6 one took a "builder token" from a
+ * separate `acquire` call and passed it in the query string; v7 removed
+ * that step and authenticates each request on its own, so there is no token
+ * to fetch, carry or store.
  */
 @Injectable()
 export class AgoraSttService {
@@ -53,9 +81,9 @@ export class AgoraSttService {
     );
   }
 
-  /** Where this consultation's transcript is written. */
+  /** Where this consultation's transcript is written, as path segments. */
   prefixFor(requestId: string) {
-    return ['transcripts', requestId];
+    return transcriptPrefix(requestId);
   }
 
   /**
@@ -68,25 +96,34 @@ export class AgoraSttService {
       return null;
     }
 
-    const token = await this.builderToken(channel);
-    if (!token) return null;
+    const region = S3_REGIONS[env.TRANSCRIPT_BUCKET_REGION];
+    if (region === undefined) {
+      // Sending the wrong number here loses the transcript silently, which
+      // is worse than not starting.
+      this.logger.error(
+        `No Agora region code for ${env.TRANSCRIPT_BUCKET_REGION}; this call will not be transcribed.`,
+      );
+      return null;
+    }
 
-    const started = await this.call<{ agent_id?: string; agentId?: string }>(
-      'POST',
-      `/api/speech-to-text/v1/projects/${env.AGORA_APP_ID}/join?builderToken=${token}`,
+    const started = await this.call<{ agent_id?: string; status?: string }>(
+      `/api/speech-to-text/v1/projects/${env.AGORA_APP_ID}/join`,
       {
+        // Required in v7, and it has to be unique while the agent runs.
+        name: `aml-${requestId}`,
         languages: LANGUAGES,
-        maxIdleTime: 60,
+        maxIdleTime: MAX_IDLE_SECONDS,
         rtcConfig: {
           channelName: channel,
-          // The bot subscribes on one uid and publishes captions on another.
+          // The bot subscribes on one uid and publishes captions on
+          // another; Agora rejects them being the same.
           subBotUid: SUBSCRIBER_UID,
           pubBotUid: PUBLISHER_UID,
         },
         captionConfig: {
           storage: {
             vendor: VENDOR_S3,
-            region: REGION_ASIA_PACIFIC,
+            region,
             bucket: env.TRANSCRIPT_BUCKET,
             accessKey: env.TRANSCRIPT_AWS_ACCESS_KEY_ID,
             secretKey: env.TRANSCRIPT_AWS_SECRET_ACCESS_KEY,
@@ -96,11 +133,11 @@ export class AgoraSttService {
       },
     );
 
-    const agentId = started?.agent_id ?? started?.agentId;
+    const agentId = started?.agent_id;
     if (!agentId) return null;
 
-    this.logger.log(`Transcribing ${channel} as agent ${agentId}.`);
-    return { agentId, token };
+    this.logger.log(`Transcribing ${channel} as agent ${agentId} (${started.status ?? 'started'}).`);
+    return { agentId };
   }
 
   /**
@@ -110,9 +147,7 @@ export class AgoraSttService {
    */
   async stop(task: SttTask) {
     const left = await this.call(
-      'POST',
-      `/api/speech-to-text/v1/projects/${env.AGORA_APP_ID}` +
-        `/agents/${task.agentId}/leave?builderToken=${task.token}`,
+      `/api/speech-to-text/v1/projects/${env.AGORA_APP_ID}/agents/${task.agentId}/leave`,
       {},
     );
 
@@ -122,32 +157,18 @@ export class AgoraSttService {
   }
 
   /**
-   * A short-lived token authorising one transcription task. Agora wants the
-   * channel as the instance id so repeated calls on the same channel are
-   * recognised as the same task.
-   */
-  private async builderToken(channel: string) {
-    const acquired = await this.call<{ tokenName?: string }>(
-      'POST',
-      `/v1/projects/${env.AGORA_APP_ID}/rtsc/speech-to-text/builderTokens`,
-      { instanceId: channel },
-    );
-    return acquired?.tokenName ?? null;
-  }
-
-  /**
    * One request to Agora's REST API. Returns null on anything that is not a
    * success, having logged it — callers carry on without transcription
    * rather than failing the call.
    */
-  private async call<T>(method: string, path: string, body: unknown): Promise<T | null> {
+  private async call<T>(path: string, body: unknown): Promise<T | null> {
     const auth = Buffer.from(`${env.AGORA_CUSTOMER_ID}:${env.AGORA_CUSTOMER_SECRET}`).toString(
       'base64',
     );
 
     try {
       const response = await fetch(`${BASE}${path}`, {
-        method,
+        method: 'POST',
         headers: {
           Authorization: `Basic ${auth}`,
           'Content-Type': 'application/json',
@@ -158,13 +179,13 @@ export class AgoraSttService {
 
       const text = await response.text();
       if (!response.ok) {
-        this.logger.error(`Agora ${method} ${path} returned ${response.status}: ${text}`);
+        this.logger.error(`Agora POST ${path} returned ${response.status}: ${text}`);
         return null;
       }
 
       return (text ? JSON.parse(text) : {}) as T;
     } catch (error) {
-      this.logger.error({ err: error }, `Agora ${method} ${path} failed.`);
+      this.logger.error({ err: error }, `Agora POST ${path} failed.`);
       return null;
     }
   }

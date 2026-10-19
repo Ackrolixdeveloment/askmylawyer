@@ -327,9 +327,9 @@ export class DispatchService {
 
     // The bot writes its file on the way out, so this has to happen before
     // anything goes looking for a transcript.
-    if (request.session.sttAgentId && request.session.sttToken) {
+    if (request.session.sttAgentId) {
       await this.stt
-        .stop({ agentId: request.session.sttAgentId, token: request.session.sttToken })
+        .stop({ agentId: request.session.sttAgentId })
         .catch((error: unknown) =>
           this.logger.error({ err: error }, `Could not stop transcription for ${requestId}`),
         );
@@ -341,10 +341,8 @@ export class DispatchService {
         data: {
           endedAt: new Date(),
           endedBy,
-          // Cleared together: an agent id left behind means a bot that was
-          // never shut down.
+          // An agent id left behind means a bot that was never shut down.
           sttAgentId: null,
-          sttToken: null,
           ...(request.session.sttAgentId ? { sttStoppedAt: new Date() } : {}),
         },
       }),
