@@ -362,10 +362,16 @@ class _HomeTabState extends State<_HomeTab> {
             online: _availability.isOnline,
             busy: _availability.busy,
             notice: _notice,
-            onFixLocation:
-                _availability.problem == LocationProblem.deniedForever
-                ? _availability.openSettings
-                : null,
+            // Both of these are a setting the lawyer has to change, so
+            // both get a button rather than only an instruction.
+            onFixLocation: switch (_availability.problem) {
+              LocationProblem.deniedForever ||
+              LocationProblem.servicesOff => _availability.openSettings,
+              _ => null,
+            },
+            fixLabel: _availability.problem == LocationProblem.servicesOff
+                ? 'Turn on location'
+                : 'Open settings',
             onChanged: _setOnline,
           ),
         ),
@@ -393,20 +399,20 @@ class _HomeTabState extends State<_HomeTab> {
             child: RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
-            children: [
-              // A call still running is the most urgent thing here, so it
-              // goes above the earnings. Hides itself when there is none.
-              const RejoinCard(),
-              const SectionHeader(title: 'Total Weekly Earnings'),
-              EarningsCard(
-                amount: data.weeklyEarnings.toDouble(),
-                changePercent: data.weeklyChangePercent,
-                series: data.earningsSeries,
-              ),
-              const SizedBox(height: 16),
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+                children: [
+                  // A call still running is the most urgent thing here, so it
+                  // goes above the earnings. Hides itself when there is none.
+                  const RejoinCard(),
+                  const SectionHeader(title: 'Total Weekly Earnings'),
+                  EarningsCard(
+                    amount: data.weeklyEarnings.toDouble(),
+                    changePercent: data.weeklyChangePercent,
+                    series: data.earningsSeries,
+                  ),
+                  const SizedBox(height: 16),
 
-              /*
+                  /*
                * Upcoming Consultation and Today's Schedule are parked, not
                * dropped.
                *
@@ -450,97 +456,96 @@ class _HomeTabState extends State<_HomeTab> {
                * const SizedBox(height: 8),
                */
 
-              // Reports are only worth surfacing when something is overdue.
-              if (data.pendingReports.isNotEmpty) ...[
-                const SectionHeader(
-                  title: 'Pending Reports',
-                  actionLabel: 'Create',
-                  actionIcon: Icons.edit_outlined,
-                ),
-                Text(
-                  data.heldTotal > 0
-                      ? '${data.pendingReports.length} pending · '
-                            '₹${data.heldTotal} on hold'
-                      : '${data.pendingReports.length} Reports Pending',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFB98A2F),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                for (final report in data.pendingReports) ...[
-                  InkWell(
-                    onTap: () => _openReport(report),
-                    borderRadius: BorderRadius.circular(12),
-                    child: SectionCard(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+                  // Reports are only worth surfacing when something is overdue.
+                  if (data.pendingReports.isNotEmpty) ...[
+                    const SectionHeader(
+                      title: 'Pending Reports',
+                      actionLabel: 'Create',
+                      actionIcon: Icons.edit_outlined,
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    Text(
+                      data.heldTotal > 0
+                          ? '${data.pendingReports.length} pending · '
+                                '₹${data.heldTotal} on hold'
+                          : '${data.pendingReports.length} Reports Pending',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB98A2F),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final report in data.pendingReports) ...[
+                      InkWell(
+                        onTap: () => _openReport(report),
+                        borderRadius: BorderRadius.circular(12),
+                        child: SectionCard(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                report.client,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.ink,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      report.client,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.ink,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      report.heldAmount > 0
+                                          ? 'Consulted ${report.consultedAgo} · '
+                                                'holding ₹${report.heldAmount}'
+                                          : 'Consulted ${report.consultedAgo}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: report.overdue
+                                            ? AppColors.negative
+                                            : AppColors.inkSubtle,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                report.heldAmount > 0
-                                    ? 'Consulted ${report.consultedAgo} · '
-                                          'holding ₹${report.heldAmount}'
-                                    : 'Consulted ${report.consultedAgo}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: report.overdue
-                                      ? AppColors.negative
-                                      : AppColors.inkSubtle,
-                                ),
+                              const Icon(
+                                Icons.chevron_right,
+                                size: 18,
+                                color: AppColors.inkSubtle,
                               ),
                             ],
                           ),
                         ),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: AppColors.inkSubtle,
-                        ),
-                      ],
-                    ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                const SizedBox(height: 8),
-              ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    const SizedBox(height: 8),
+                  ],
 
-              SectionHeader(
-                title: 'Recent Activity',
-                // Only worth offering when there is more than is shown.
-                actionLabel: data.activity.length > _recentActivityShown
-                    ? 'View All'
-                    : null,
-                onAction: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ActivityScreen(),
+                  SectionHeader(
+                    title: 'Recent Activity',
+                    // Only worth offering when there is more than is shown.
+                    actionLabel: data.activity.length > _recentActivityShown
+                        ? 'View All'
+                        : null,
+                    onAction: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ActivityScreen(),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              // A dashboard is for what needs attention now, not a ledger of
-              // everything that has ever happened. The rest is a tap away.
-              for (final entry in data.activity.take(_recentActivityShown)) ...[
-                ActivityRow(entry: entry),
-                const SizedBox(height: 8),
-              ],
-            ],
+                  // A dashboard is for what needs attention now, not a ledger of
+                  // everything that has ever happened. The rest is a tap away.
+                  for (final entry in data.activity.take(
+                    _recentActivityShown,
+                  )) ...[ActivityRow(entry: entry), const SizedBox(height: 8)],
+                ],
               ),
             ),
           ),
@@ -661,7 +666,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-
 /// Bell on the home banner, carrying the unread count.
 class _NotificationBell extends StatefulWidget {
   const _NotificationBell();
@@ -713,11 +717,7 @@ class _NotificationBellState extends State<_NotificationBell> {
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            const Icon(
-              Icons.notifications_none,
-              size: 19,
-              color: Colors.white,
-            ),
+            const Icon(Icons.notifications_none, size: 19, color: Colors.white),
             ValueListenableBuilder<int>(
               valueListenable: _notifications.unreadBadge,
               builder: (context, unread, _) {

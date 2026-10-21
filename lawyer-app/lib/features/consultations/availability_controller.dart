@@ -88,9 +88,9 @@ class AvailabilityController extends ChangeNotifier {
         // Going offline stops new requests; it does not hand back a
         // consultation already paid for. Say so, rather than leave the
         // lawyer thinking the toggle got them out of it.
-        _liveUntil = await _consultations
-            .liveConsultationEndsAt()
-            .catchError((_) => null);
+        _liveUntil = await _consultations.liveConsultationEndsAt().catchError(
+          (_) => null,
+        );
         return;
       }
 
@@ -151,8 +151,13 @@ class AvailabilityController extends ChangeNotifier {
     }
   }
 
-  /// Opens the system settings, for a permission that was refused for good.
-  Future<void> openSettings() => Geolocator.openAppSettings();
+  /// Opens the right settings screen for whatever is wrong: the app's own
+  /// permissions when it was refused for good, the phone's location screen
+  /// when the service itself is off. Sending them to the wrong one of the
+  /// two is how people conclude the app is broken.
+  Future<void> openSettings() => _problem == LocationProblem.servicesOff
+      ? Geolocator.openLocationSettings()
+      : Geolocator.openAppSettings();
 
   void _startHeartbeat() {
     _heartbeat?.cancel();

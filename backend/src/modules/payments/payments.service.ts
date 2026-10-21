@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { ConsultationStatus, PaymentStatus } from '@prisma/client';
+import { ConsultationStatus, GatewayEnvironment, PaymentStatus } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
+import { env } from '../../config/env';
 import { CashfreeService } from '../../infrastructure/cashfree/cashfree.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AdminSettingsService } from '../admin-settings/admin-settings.service';
@@ -63,6 +64,13 @@ export class PaymentsService {
     }
 
     const price = await this.settings.priceFor(request.planCode);
+
+    // No gateway live: record the consultation as paid so the search can
+    // start and the rest of the flow can be exercised.
+    if (env.PAYMENTS_BYPASS_ENABLED) {
+      return this.bypass(request.id, price);
+    }
+
     const order = await this.cashfree.createOrder(request.id, price.payable, {
       id: request.customerId,
       phone: request.customer.phone ?? '',
@@ -96,6 +104,57 @@ export class PaymentsService {
       sessionId: order.sessionId,
       amount: payment.amount,
       environment: payment.environment,
+    };
+  }
+
+  /**
+   * Marks a consultation paid without a gateway, for testing.
+   *
+   * It goes through the same [settle] as a real payment, so the search
+   * starts the same way and nothing downstream can tell the difference —
+   * except the reference, which says plainly that no money was taken.
+   */
+  private async bypass(requestId: string, price: { payable: number; gst: number }) {
+    // The consultation id doubles as the order id elsewhere, so it does
+    // here too; there is no gateway to allocate one.
+    const orderId = requestId;
+
+    await this.prisma.consultationPayment.upsert({
+      where: { requestId },
+      // Recorded as sandbox because no money moved; the reference below is
+      // what marks it as a bypass rather than a real sandbox payment.
+      create: {
+        requestId,
+        orderId,
+        amount: price.payable,
+        gst: price.gst,
+        environment: GatewayEnvironment.sandbox,
+      },
+      update: {
+        orderId,
+        amount: price.payable,
+        gst: price.gst,
+        environment: GatewayEnvironment.sandbox,
+        sessionId: null,
+        status: PaymentStatus.created,
+        failureReason: null,
+      },
+    });
+
+    this.logger.warn(`PAYMENT BYPASS: ${requestId} marked paid with no money taken.`);
+    await this.settle(orderId, {
+      paid: true,
+      orderStatus: 'PAID',
+      reference: 'BYPASS-NO-PAYMENT-TAKEN',
+      method: 'bypass',
+    });
+
+    return {
+      orderId,
+      /** Null tells the app there is no checkout sheet to open. */
+      sessionId: null,
+      amount: price.payable,
+      environment: GatewayEnvironment.sandbox,
     };
   }
 

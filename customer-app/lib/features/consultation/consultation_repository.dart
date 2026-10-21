@@ -131,13 +131,15 @@ class PaymentSession {
 
   factory PaymentSession.fromJson(Map<String, dynamic> json) => PaymentSession(
     orderId: json['orderId'] as String,
-    sessionId: json['sessionId'] as String,
+    sessionId: json['sessionId'] as String?,
     amount: json['amount'] as int,
     environment: json['environment'] as String? ?? 'sandbox',
   );
 
   final String orderId;
-  final String sessionId;
+  /// Null when the backend has nothing for the customer to pay — it has
+  /// settled the consultation itself and there is no checkout to open.
+  final String? sessionId;
 
   /// What will be charged, all in.
   final int amount;

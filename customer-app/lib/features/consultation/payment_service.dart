@@ -66,6 +66,12 @@ class PaymentService {
       return PaymentResult(PaymentOutcome.problem, message: error.message);
     }
 
+    // Nothing to pay: the backend settled it and the search has already
+    // started, so there is no checkout sheet to open. Go straight to
+    // asking the backend where things stand.
+    final sessionId = session.sessionId;
+    if (sessionId == null) return _confirm(consultation);
+
     final sheet = _sheet = Completer<void>();
 
     try {
@@ -76,7 +82,7 @@ class PaymentService {
                 : CFEnvironment.SANDBOX,
           )
           .setOrderId(session.orderId)
-          .setPaymentSessionId(session.sessionId)
+          .setPaymentSessionId(sessionId)
           .build();
 
       _gateway.doPayment(
@@ -100,6 +106,16 @@ class PaymentService {
     _sheet = null;
 
     // The backend is the judge of this, not the sheet.
+    try {
+      return await _confirm(consultation);
+    } on ApiException catch (error) {
+      return PaymentResult(PaymentOutcome.problem, message: error.message);
+    }
+  }
+
+  /// Asks the backend how the payment went. It is the judge of this, not
+  /// the sheet — and when there was no sheet, it is the only judge.
+  Future<PaymentResult> _confirm(Consultation consultation) async {
     try {
       final result = await _consultations.verifyPayment(consultation.id);
       return PaymentResult(

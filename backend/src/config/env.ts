@@ -32,6 +32,15 @@ const schema = z.object({
   APP_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   ALLOW_MULTI_ROLE_PHONE: bool,
 
+  /**
+   * Skips the gateway and treats every consultation as paid.
+   *
+   * For exercising the call flow while no gateway is live. It must never
+   * be on with real customers: it hands out consultations for nothing.
+   * Named like the OTP bypass so it is as easy to spot.
+   */
+  PAYMENTS_BYPASS_ENABLED: bool,
+
   OTP_BYPASS_ENABLED: bool,
   OTP_BYPASS_CODE: z.string().regex(/^\d{6}$/, 'OTP_BYPASS_CODE must be 6 digits').default('123456'),
   OTP_TTL_MINUTES: z.coerce.number().int().positive().default(5),

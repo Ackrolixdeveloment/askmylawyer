@@ -144,6 +144,7 @@ class OnlineCard extends StatelessWidget {
     this.busy = false,
     this.notice,
     this.onFixLocation,
+    this.fixLabel = 'Open settings',
   });
 
   final bool online;
@@ -157,6 +158,10 @@ class OnlineCard extends StatelessWidget {
 
   /// Opens the phone's settings, when permission was refused for good.
   final VoidCallback? onFixLocation;
+
+  /// What that button says — which settings screen it opens depends on
+  /// what is wrong.
+  final String fixLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -240,12 +245,14 @@ class OnlineCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     GestureDetector(
                       onTap: onFixLocation,
-                      child: const Text(
-                        'Open settings',
-                        style: TextStyle(
+                      child: Text(
+                        fixLabel,
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFFC2410C),
+                          decoration: TextDecoration.underline,
+                          decorationColor: Color(0xFFC2410C),
                         ),
                       ),
                     ),
@@ -378,7 +385,7 @@ class EarningsCard extends StatelessWidget {
                           // Keeps the labels clear of the axis line.
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
-                          days[index],
+                            days[index],
                             style: const TextStyle(
                               fontSize: 9,
                               color: AppColors.inkSubtle,
