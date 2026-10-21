@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { LawyerDocumentType, OnboardingStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AppException } from '../../common/app-exception';
-import { encryptField } from '../../common/field-encryption';
+import { decryptField, encryptField } from '../../common/field-encryption';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AdminAlertsService } from '../admin-alerts/admin-alerts.service';
@@ -87,6 +87,16 @@ export class LawyerRegistrationService {
 
     const completedSteps = STEPS.filter((step) => profile[step.field]).map((step) => step.key);
 
+    // The account number is normally never sent back — it is kept
+    // encrypted and only its last four digits are in the clear. The one
+    // exception is a correction: the lawyer has been asked to fix this
+    // section, so they are shown what is on file and can edit it in place.
+    // It leaves the server only while that section is open, and only to
+    // the lawyer it belongs to.
+    const bankUnderCorrection =
+      profile.onboardingStatus === OnboardingStatus.correction_requested &&
+      Boolean((profile.correctionNotes as Record<string, string> | null)?.['Bank Details']);
+
     return {
       onboardingStatus: profile.onboardingStatus,
       canEdit: EDITABLE.includes(profile.onboardingStatus),
@@ -123,6 +133,8 @@ export class LawyerRegistrationService {
         ? {
             accountHolderName: bank.holderName,
             accountNumberMasked: `XXXXXX${bank.accountLast4}`,
+            /** Only while this section is back for correction; null otherwise. */
+            accountNumber: bankUnderCorrection ? decryptField(bank.accountNumberEnc) : null,
             ifscCode: bank.ifscCode,
             bankName: bank.bankName,
             swiftCode: bank.swiftCode,

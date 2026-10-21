@@ -47,6 +47,7 @@ class RegistrationSnapshot {
     this.certificate,
     this.accountHolderName,
     this.accountNumberMasked,
+    this.accountNumberPlain,
     this.ifscCode,
     this.bankName,
     this.swiftCode,
@@ -104,6 +105,7 @@ class RegistrationSnapshot {
       certificate: doc(professional, 'certificate'),
       accountHolderName: bank['accountHolderName'] as String?,
       accountNumberMasked: bank['accountNumberMasked'] as String?,
+      accountNumberPlain: bank['accountNumber'] as String?,
       ifscCode: bank['ifscCode'] as String?,
       bankName: bank['bankName'] as String?,
       swiftCode: bank['swiftCode'] as String?,
@@ -165,8 +167,13 @@ class RegistrationSnapshot {
 
   final String? accountHolderName;
 
-  /// "XXXXXX6655" — the full number never leaves the server.
+  /// "XXXXXX6655" — what is shown when the section is not being corrected.
   final String? accountNumberMasked;
+
+  /// The number in full, sent only while Bank Details is back for
+  /// correction so the lawyer can see and fix what is on file. Null at
+  /// every other time.
+  final String? accountNumberPlain;
 
   final String? ifscCode;
   final String? bankName;

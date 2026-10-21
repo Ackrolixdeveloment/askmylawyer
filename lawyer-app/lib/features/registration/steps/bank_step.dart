@@ -31,15 +31,25 @@ class _BankStepState extends State<BankStep> {
   late final _holder = TextEditingController(
     text: widget.initial?.accountHolderName,
   );
-  // The account number is stored encrypted and never sent back. Leaving both
-  // fields blank keeps whatever is on file.
-  final _account = TextEditingController();
-  final _confirmAccount = TextEditingController();
+  // Normally the account number is not sent back, and leaving both fields
+  // blank keeps whatever is on file. While this section is back for
+  // correction the server does return it, so it is filled in and can be
+  // edited in place — the lawyer was asked to fix this section and should
+  // be able to see what they are fixing.
+  late final _account = TextEditingController(
+    text: widget.initial?.accountNumberPlain ?? '',
+  );
+  late final _confirmAccount = TextEditingController(
+    text: widget.initial?.accountNumberPlain ?? '',
+  );
 
   /// Read-only once the admin has approved this section.
   bool get _editable => widget.initial?.canEditSection('Bank Details') ?? true;
 
   String? get _savedAccount => widget.initial?.accountNumberMasked;
+
+  /// True when the server sent the number back, so the fields start filled.
+  bool get _prefilled => (widget.initial?.accountNumberPlain ?? '').isNotEmpty;
   bool get _keepingSavedAccount =>
       _savedAccount != null && _account.text.trim().isEmpty;
   late final _ifsc = TextEditingController(text: widget.initial?.ifscCode);
@@ -146,11 +156,13 @@ class _BankStepState extends State<BankStep> {
           required: true,
           maxLength: 18,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          helper: _savedAccount == null
-              ? null
-              : _editable
-              ? 'Saved: $_savedAccount · leave blank to keep it'
-              : 'Saved: $_savedAccount · approved by our team',
+          helper: switch ((_savedAccount, _editable, _prefilled)) {
+            // Already on screen in full; saying "saved" as well is noise.
+            (_, _, true) => null,
+            (null, _, _) => null,
+            (final saved?, true, _) => 'Saved: $saved · leave blank to keep it',
+            (final saved?, false, _) => 'Saved: $saved · approved by our team',
+          },
           validator: _keepingSavedAccount ? null : Validators.accountNumber,
         ),
         const SizedBox(height: 16),
