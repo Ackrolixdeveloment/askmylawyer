@@ -15,6 +15,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AdminAlertsModule } from './modules/admin-alerts/admin-alerts.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminEditRequestsModule } from './modules/admin-edit-requests/admin-edit-requests.module';
+import { AdminCustomersModule } from './modules/admin-customers/admin-customers.module';
 import { AdminLawyersModule } from './modules/admin-lawyers/admin-lawyers.module';
 import { AdminNotificationsModule } from './modules/admin-notifications/admin-notifications.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
@@ -77,6 +78,7 @@ class HealthController {
     AdminAuthModule,
     AdminAlertsModule,
     AdminLawyersModule,
+    AdminCustomersModule,
     AdminEditRequestsModule,
     AdminNotificationsModule,
     AdminUsersModule,

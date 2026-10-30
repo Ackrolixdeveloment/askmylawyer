@@ -78,6 +78,19 @@ export async function api<T>(
         "The server is not responding. Please try again shortly.",
       );
     }
+    // Our own errors carry a `code` and a message written for a person.
+    // Anything else is the framework talking — "Cannot GET /api/v1/…" —
+    // which tells the admin nothing and hands out our routes. Log it for
+    // us, show something plain to them.
+    if (typeof data.code !== "string") {
+      console.error(`[api] ${path} → ${response.status}`, data);
+      throw new ApiError(
+        response.status,
+        "REQUEST_FAILED",
+        "Something went wrong. Please try again.",
+      );
+    }
+
     throw new ApiError(response.status, data.code, data.message, data.details);
   }
 

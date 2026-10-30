@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { MetricCards } from "@/components/common/metric-cards";
-import { CustomersTable } from "@/components/customers/customers-table";
-import { customerMetrics, customers } from "@/data/mock-customers";
+import { CustomersView } from "@/components/customers/customers-view";
 
 export const metadata: Metadata = {
   title: "Customer Management",
@@ -21,10 +19,7 @@ export default function CustomerManagementPage() {
           View and manage all registered customers.
         </p>
 
-        <div className="mt-6 space-y-4">
-          <MetricCards metrics={customerMetrics} />
-          <CustomersTable customers={customers} />
-        </div>
+        <CustomersView />
       </main>
     </>
   );
