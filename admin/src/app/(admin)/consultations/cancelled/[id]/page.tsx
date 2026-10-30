@@ -1,14 +1,13 @@
-import type { Metadata } from "next";
+"use client";
+
 import { RefreshCw } from "lucide-react";
-import { notFound } from "next/navigation";
+import { use, useMemo } from "react";
+import { ScreenState } from "@/components/common/screen-state";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton, Card } from "@/components/ui";
-import type { RefundState } from "@/data/mock-consultations";
-import { cancelledConsultations } from "@/data/mock-consultations";
-
-export const metadata: Metadata = {
-  title: "Cancelled Consultation",
-};
+import { fetchConsultation } from "@/lib/consultations";
+import { useApiData } from "@/lib/use-api-data";
+import type { RefundState } from "@/types/consultation-tables";
 
 /** Outlined pill, matching the design. */
 const refundPill: Record<RefundState, string> = {
@@ -29,13 +28,41 @@ interface Field {
   value: React.ReactNode;
 }
 
-export default async function CancelledConsultationPage({
+export default function CancelledConsultationPage({
   params,
 }: PageProps<"/consultations/cancelled/[id]">) {
-  const { id } = await params;
-  const call = cancelledConsultations.find((row) => row.id === id);
+  const { id } = use(params);
+  const load = useMemo(() => () => fetchConsultation(id), [id]);
+  const { data, loading, error, retry } = useApiData(load);
 
-  if (!call) notFound();
+  if (loading || error || !data) {
+    return (
+      <>
+        <Topbar title="Consultation Management" />
+        <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8">
+          <BackButton fallbackHref="/consultations/cancelled" />
+          <ScreenState loading={loading} error={error} onRetry={retry} loadingLabel="Loading booking…">
+            <></>
+          </ScreenState>
+        </main>
+      </>
+    );
+  }
+
+  const call = {
+    ...data,
+    customerId: data.customerId ?? "—",
+    lawyer: data.lawyer ?? "—",
+    lawyerId: data.lawyerId ?? "—",
+    cancelledAt: data.cancelledAt
+      ? new Date(data.cancelledAt).toLocaleString()
+      : "—",
+    reason:
+      data.reason ?? (data.status === "no_lawyer" ? "No lawyer available" : "Cancelled"),
+    refundStatus: (data.refundAmount > 0
+      ? "completed"
+      : "auto-processing") as RefundState,
+  };
 
   const reasonPill = (
     <span className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-ink">

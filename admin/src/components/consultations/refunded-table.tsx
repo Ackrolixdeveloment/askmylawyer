@@ -15,7 +15,7 @@ import {
 import type {
   RefundState,
   RefundedConsultation,
-} from "@/data/mock-consultations";
+} from "@/types/consultation-tables";
 import { formatInr } from "@/lib/format";
 
 const refundTone: Record<RefundState, BadgeTone> = {

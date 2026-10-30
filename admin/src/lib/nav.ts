@@ -134,15 +134,6 @@ export const navSections: NavSection[] = [
           { label: "Resolved", href: "/support/resolved" },
         ],
       },
-      {
-        label: "Admin Setting",
-        href: "/settings",
-        icon: Settings,
-        children: [
-          { label: "App Setting", href: "/settings/app" },
-          { label: "Integrations", href: "/settings/integrations" },
-        ],
-      },
     ],
   },
 ];

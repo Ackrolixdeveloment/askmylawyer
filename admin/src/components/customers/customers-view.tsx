@@ -9,6 +9,14 @@ import { fetchCustomerMetrics, fetchCustomers } from "@/lib/customers";
 import { useApiData } from "@/lib/use-api-data";
 import type { Customer } from "@/types/customer";
 
+/**
+ * "2026-10-21T09:03:34.083Z" -> "2026-10-21".
+ *
+ * The table's date helpers split on "-", so a full timestamp parses as an
+ * invalid date. The API sends timestamps; the table wants days.
+ */
+const asDay = (iso: string) => iso.slice(0, 10);
+
 /** Everyone who has registered through the app. */
 export function CustomersView() {
   const load = useMemo(
@@ -58,9 +66,9 @@ export function CustomersView() {
     name: row.name,
     contact: row.contact,
     city: row.city,
-    joinedOn: row.joinedOn,
+    joinedOn: asDay(row.joinedOn),
     consults: row.consults,
-    lastActiveOn: row.lastActiveOn ?? row.joinedOn,
+    lastActiveOn: asDay(row.lastActiveOn ?? row.joinedOn),
     status: row.status,
   }));
 

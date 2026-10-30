@@ -63,6 +63,12 @@ function Loaded({ customer }: { customer: CustomerDetail }) {
   );
 }
 
+/**
+ * "2026-10-21T09:03:34.083Z" -> "2026-10-21". The cards' date helpers split
+ * on "-", so a full timestamp parses as an invalid date.
+ */
+const asDay = (iso: string) => iso.slice(0, 10);
+
 /** Maps the API record onto the shape the existing cards already render. */
 function toDetail(record: CustomerRecord): CustomerDetail {
   const p = record.personal;
@@ -74,7 +80,7 @@ function toDetail(record: CustomerRecord): CustomerDetail {
       lawyer: row.lawyer ?? "—",
       category: row.category ?? "—",
       type: "Video",
-      date: row.date,
+      date: asDay(row.date),
       status:
         row.status === "completed"
           ? "completed"
@@ -131,13 +137,13 @@ function toDetail(record: CustomerRecord): CustomerDetail {
       type: row.type,
       amount: row.amount,
       method: row.method,
-      date: row.date,
+      date: asDay(row.date),
     })),
     refunds: record.refunds.map((row) => ({
       id: row.id.slice(0, 8),
       reason: row.reason,
       status: "processed",
-      requestedOn: row.requestedOn,
+      requestedOn: asDay(row.requestedOn),
     })),
     consultations,
     consultationTotal: record.consultationTotal,

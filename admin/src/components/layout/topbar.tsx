@@ -8,7 +8,14 @@ import type { DateRange, DateRangeValue } from "@/types/dashboard";
 import { NotificationBell } from "./notification-bell";
 import { useSidebar } from "./sidebar-context";
 
-export function Topbar({ title }: { title: string }) {
+export function Topbar({
+  title,
+  showDateRange = false,
+}: {
+  title: string;
+  /** Only the dashboard is filtered by date, so only it shows the tabs. */
+  showDateRange?: boolean;
+}) {
   const [range, setRange] = useState<DateRange>("today");
   const [customRange, setCustomRange] = useState<DateRangeValue | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -57,25 +64,27 @@ export function Topbar({ title }: { title: string }) {
         {/* <p className="truncate text-base text-ink sm:text-lg">{title}</p> */}
       </div>
 
-      <div className="relative -mx-4 w-[calc(100%+2rem)] px-4 sm:mx-0 sm:w-auto sm:px-0">
-        <div className="overflow-x-auto sm:overflow-visible">
-          <SegmentedControl
-            aria-label="Date range"
-            options={ranges}
-            value={range}
-            onChange={handleRangeChange}
-            className="w-max"
-            size="sm"
+      {showDateRange ? (
+        <div className="relative -mx-4 w-[calc(100%+2rem)] px-4 sm:mx-0 sm:w-auto sm:px-0">
+          <div className="overflow-x-auto sm:overflow-visible">
+            <SegmentedControl
+              aria-label="Date range"
+              options={ranges}
+              value={range}
+              onChange={handleRangeChange}
+              className="w-max"
+              size="sm"
+            />
+          </div>
+
+          <DateRangePicker
+            open={pickerOpen}
+            value={customRange}
+            onApply={handleApply}
+            onDismiss={() => setPickerOpen(false)}
           />
         </div>
-
-        <DateRangePicker
-          open={pickerOpen}
-          value={customRange}
-          onApply={handleApply}
-          onDismiss={() => setPickerOpen(false)}
-        />
-      </div>
+      ) : null}
 
       <NotificationBell />
     </header>

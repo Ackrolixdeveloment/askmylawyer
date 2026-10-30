@@ -43,10 +43,7 @@ export function CustomerDetailHeader({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" className="px-3 py-2 text-sm">
-          <SquarePen className="size-4" aria-hidden />
-          Edit
-        </Button>
+        {/* Edit is hidden until the form behind it is built. */}
         <Button
           variant="outline"
           className="border-red-200 px-3 py-2 text-sm text-negative hover:bg-red-50"

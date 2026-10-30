@@ -1,13 +1,12 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+"use client";
+
+import { use, useMemo } from "react";
+import { ScreenState } from "@/components/common/screen-state";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton, Card } from "@/components/ui";
-import { inProgressConsultations } from "@/data/mock-consultations";
+import { fetchConsultation } from "@/lib/consultations";
+import { useApiData } from "@/lib/use-api-data";
 import { formatInr } from "@/lib/format";
-
-export const metadata: Metadata = {
-  title: "In Progress Consultation",
-};
 
 /** One label/value pair; the right-hand column mirrors its alignment. */
 interface Field {
@@ -15,19 +14,46 @@ interface Field {
   value: React.ReactNode;
 }
 
-export default async function InProgressConsultationPage({
+export default function InProgressConsultationPage({
   params,
 }: PageProps<"/consultations/in-progress/[id]">) {
-  const { id } = await params;
-  const call = inProgressConsultations.find((row) => row.id === id);
+  const { id } = use(params);
+  const load = useMemo(() => () => fetchConsultation(id), [id]);
+  const { data, loading, error, retry } = useApiData(load);
 
-  if (!call) notFound();
+  if (loading || error || !data) {
+    return (
+      <>
+        <Topbar title="Consultation Management" />
+        <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8">
+          <BackButton fallbackHref="/consultations/in-progress" />
+          <ScreenState loading={loading} error={error} onRetry={retry} loadingLabel="Loading call…">
+            <></>
+          </ScreenState>
+        </main>
+      </>
+    );
+  }
 
-  const type = call.medium === "audio" ? "Audio" : "Video";
+  const call = {
+    ...data,
+    customerId: data.customerId ?? "—",
+    lawyer: data.lawyer ?? "—",
+    lawyerId: data.lawyerId ?? "—",
+    elapsed: `${Math.floor(data.talkedSeconds / 60)}:${String(data.talkedSeconds % 60).padStart(2, "0")}`,
+  };
+
+  // One plan today, so every call is a video call.
+  const type = "Video";
 
   const sessionRows: [Field, Field][] = [
     [
-      { label: "Started at", value: "8:42 PM" },
+      {
+        label: "Started at",
+        value: data.startedAt
+          ? new Date(data.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+          : "Not started",
+      },
       { label: "Type", value: type },
     ],
     [

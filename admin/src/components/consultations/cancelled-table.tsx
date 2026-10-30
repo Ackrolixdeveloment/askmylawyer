@@ -15,7 +15,7 @@ import {
 import type {
   CancelledConsultation,
   RefundState,
-} from "@/data/mock-consultations";
+} from "@/types/consultation-tables";
 
 const refundTone: Record<RefundState, BadgeTone> = {
   completed: "success",

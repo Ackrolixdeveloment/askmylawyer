@@ -1,14 +1,14 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+"use client";
+
+import { use, useMemo } from "react";
+import { ScreenState } from "@/components/common/screen-state";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton, Card } from "@/components/ui";
-import type { RefundState } from "@/data/mock-consultations";
-import { refundedConsultations } from "@/data/mock-consultations";
+import { fetchConsultation } from "@/lib/consultations";
+import { useApiData } from "@/lib/use-api-data";
+import type { RefundState } from "@/types/consultation-tables";
 import { formatInr } from "@/lib/format";
 
-export const metadata: Metadata = {
-  title: "Refund Detail",
-};
 
 /** Outlined pill, matching the design. */
 const statusPill: Record<RefundState, string> = {
@@ -29,13 +29,37 @@ interface Field {
   value: React.ReactNode;
 }
 
-export default async function RefundDetailPage({
+export default function RefundDetailPage({
   params,
 }: PageProps<"/consultations/refunded/[id]">) {
-  const { id } = await params;
-  const refund = refundedConsultations.find((row) => row.id === id);
+  const { id } = use(params);
+  const load = useMemo(() => () => fetchConsultation(id), [id]);
+  const { data, loading, error, retry } = useApiData(load);
 
-  if (!refund) notFound();
+  if (loading || error || !data) {
+    return (
+      <>
+        <Topbar title="Consultation Management" />
+        <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8">
+          <BackButton fallbackHref="/consultations/refunded" />
+          <ScreenState loading={loading} error={error} onRetry={retry} loadingLabel="Loading refund…">
+            <></>
+          </ScreenState>
+        </main>
+      </>
+    );
+  }
+
+  const refund = {
+    ...data,
+    refundId: data.consultationId,
+    percent: data.refundPercent,
+    reason: data.reason ?? "Refunded",
+    refundedAt: data.refundedAt ? new Date(data.refundedAt).toLocaleString() : "—",
+    refundStatus: (data.refundAmount > 0
+      ? "completed"
+      : "auto-processing") as RefundState,
+  };
 
   const refundRows: [Field, Field][] = [
     [

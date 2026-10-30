@@ -10,7 +10,7 @@ import {
   type Column,
   type SelectOption,
 } from "@/components/ui";
-import type { LiveConsultation } from "@/data/mock-consultations";
+import type { LiveConsultation } from "@/types/consultation-tables";
 
 /** "Video" / "Sched Video" / "Audio" — medium plus how it was booked. */
 function typeLabel(row: LiveConsultation) {

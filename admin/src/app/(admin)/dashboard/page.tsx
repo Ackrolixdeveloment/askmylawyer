@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default function DashboardPage() {
   return (
     <>
-      <Topbar title="Dashboard" />
+      <Topbar title="Dashboard" showDateRange />
 
       <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
         <DashboardHeader />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, SquarePen } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
@@ -70,7 +70,7 @@ function buildColumns(
         label={`Actions for ${row.name}`}
         actions={[
           { label: "View", icon: Eye, onSelect: () => onView(row) },
-          { label: "Edit", icon: SquarePen, onSelect: () => {} },
+          // Edit is hidden until the form behind it is built.
         ]}
       />
     ),

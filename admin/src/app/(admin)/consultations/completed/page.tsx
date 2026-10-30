@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
-import { ConsultationsTable } from "@/components/consultations/consultations-table";
-import {
-  completedConsultations,
-  consultationTypeOptions,
-} from "@/data/mock-consultations";
+import { CompletedConsultationsView } from "@/components/consultations/consultation-views";
 
 export const metadata: Metadata = {
   title: "Completed Consultations",
 };
 
-export default function CompletedConsultationsPage() {
+export default function Page() {
   return (
     <>
       <Topbar title="Consultation Management" />
@@ -21,10 +17,7 @@ export default function CompletedConsultationsPage() {
         </h1>
 
         <div className="mt-6">
-          <ConsultationsTable
-            consultations={completedConsultations}
-            typeOptions={consultationTypeOptions}
-          />
+          <CompletedConsultationsView />
         </div>
       </main>
     </>
