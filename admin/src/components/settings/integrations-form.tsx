@@ -32,14 +32,14 @@ export function IntegrationsForm({
   initialEmail,
 }: IntegrationsFormProps) {
   return (
-    <div className="space-y-4">
-      <CashfreeCard initial={initialGateway} />
+    <div className="grid items-start gap-5 xl:grid-cols-2">
+      <RazorpayCard initial={initialGateway} />
       <EmailSenderCard initial={initialEmail} />
     </div>
   );
 }
 
-function CashfreeCard({ initial }: { initial: GatewaySettings }) {
+function RazorpayCard({ initial }: { initial: GatewaySettings }) {
   const canEdit = canChange(useAdmin(), "settings.integrations");
 
   const [stored, setStored] = useState(initial);
@@ -86,7 +86,9 @@ function CashfreeCard({ initial }: { initial: GatewaySettings }) {
       setSaved(true);
     } catch (cause) {
       setError(
-        cause instanceof ApiError ? cause.message : "Could not save these keys.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not save these keys.",
       );
     } finally {
       setSaving(false);
@@ -106,7 +108,7 @@ function CashfreeCard({ initial }: { initial: GatewaySettings }) {
         {/* Wrapped: CardHeader is a justify-between row, so a bare title and
             description would sit side by side rather than stacked. */}
         <div>
-          <CardTitle>Cashfree</CardTitle>
+          <CardTitle>Razorpay</CardTitle>
           <CardDescription>
             Collects consultation payments. Sandbox keys never move real money,
             so use them until the flow is signed off.
@@ -120,7 +122,7 @@ function CashfreeCard({ initial }: { initial: GatewaySettings }) {
             Environment
           </span>
           <SegmentedControl<GatewayEnvironment>
-            aria-label="Cashfree environment"
+            aria-label="Razorpay environment"
             value={environment}
             onChange={switchTo}
             options={[
@@ -130,20 +132,20 @@ function CashfreeCard({ initial }: { initial: GatewaySettings }) {
           />
           <p className="mt-1.5 text-xs text-ink-muted">
             {stored.environment === environment
-              ? "The apps are charging through these keys."
+              ? (keys.configured ? "Saved credentials for the selected payment environment." : "Razorpay credentials have not been configured for this environment.")
               : `Saving switches the apps from ${stored.environment} to ${environment}.`}
           </p>
         </div>
 
         <TextField
-          label="App ID"
+          label="Key ID"
           value={appId}
           disabled={!canEdit}
           onChange={(event) => {
             setAppId(event.target.value);
             setSaved(false);
           }}
-          placeholder="CF‑XXXXXXXXXXXX"
+          placeholder="rzp_test_XXXXXXXXXXXX"
           autoComplete="off"
         />
 
@@ -199,7 +201,7 @@ function CashfreeCard({ initial }: { initial: GatewaySettings }) {
               ? "You have read-only access to this screen."
               : isComplete
                 ? undefined
-                : "An App ID, secret key and webhook secret are all needed."
+                : "An Key ID, secret key and webhook secret are all needed."
           }
         />
       </CardContent>
@@ -228,8 +230,8 @@ function EmailSenderCard({ initial }: { initial: EmailSenderSettings }) {
         <div>
           <CardTitle>Email Sender</CardTitle>
           <CardDescription>
-            Sends OTPs, receipts and consultation reports. The From address
-            must be on a domain verified with the provider.
+            Email settings preview. Changes here do not configure delivery yet.
+            The From address must be on a domain verified with the provider.
           </CardDescription>
         </div>
       </CardHeader>
@@ -276,10 +278,14 @@ function EmailSenderCard({ initial }: { initial: EmailSenderSettings }) {
 
         <SaveRow
           onSave={() => setSaved(true)}
+          label="Save preview"
+          savedLabel="Saved in preview only"
           disabled={!isComplete}
           saved={saved}
           hint={
-            isComplete ? undefined : "An API key and a valid From address are required."
+            isComplete
+              ? undefined
+              : "An API key and a valid From address are required."
           }
         />
       </CardContent>
@@ -292,6 +298,7 @@ function SaveRow({
   disabled,
   saved,
   label,
+  savedLabel = "Saved",
   hint,
 }: {
   onSave: () => void;
@@ -299,6 +306,7 @@ function SaveRow({
   saved: boolean;
   /** Overrides the button text, e.g. while saving. */
   label?: string;
+  savedLabel?: string;
   hint?: string;
 }) {
   return (
@@ -308,7 +316,7 @@ function SaveRow({
       </Button>
       {saved ? (
         <span role="status" className="text-sm text-positive">
-          Saved
+          {savedLabel}
         </span>
       ) : null}
       {hint ? <span className="text-sm text-ink-subtle">{hint}</span> : null}

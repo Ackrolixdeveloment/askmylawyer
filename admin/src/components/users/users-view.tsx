@@ -3,7 +3,7 @@
 import { ScreenState } from "@/components/common/screen-state";
 import { UserHeaderActions } from "@/components/users/user-header-actions";
 import { UsersTable } from "@/components/users/users-table";
-import { fetchAdminUsers, fetchRoles } from "@/lib/admin-users";
+import { fetchAdminUsers, fetchAssignableRoles } from "@/lib/admin-users";
 import { useApiData } from "@/lib/use-api-data";
 
 const statusOptions = [
@@ -14,7 +14,7 @@ const statusOptions = [
 /** The people who can sign in to this panel. */
 export function UsersView() {
   const { data, loading, error, retry } = useApiData(() =>
-    Promise.all([fetchAdminUsers(), fetchRoles()]),
+    Promise.all([fetchAdminUsers(), fetchAssignableRoles()]),
   );
 
   const [users, roles] = data ?? [];
@@ -25,7 +25,7 @@ export function UsersView() {
   const roleOptions = [
     { value: "", label: "Select a role" },
     ...roleList
-      .filter((role) => !role.isSystem)
+      .filter((role) => !role.isSystem && role.status === "active")
       .map((role) => ({ value: role.id, label: role.name })),
   ];
 

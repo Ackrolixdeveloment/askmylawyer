@@ -1,3 +1,4 @@
+import { ReportAiService } from '../../infrastructure/report-ai.service';
 import { Module } from '@nestjs/common';
 import { AdminSettingsModule } from '../admin-settings/admin-settings.module';
 import { CustomerAuthModule } from '../customer-auth/customer-auth.module';
@@ -11,7 +12,7 @@ import { ReportsService } from './reports.service';
 @Module({
   imports: [AdminSettingsModule, LawyerAuthModule, CustomerAuthModule, UserNotificationsModule],
   controllers: [LawyerReportsController, CustomerReportsController],
-  providers: [ReportsService, DraftingService],
+  providers: [ReportsService, DraftingService, ReportAiService],
   exports: [ReportsService],
 })
 export class ReportsModule {}

@@ -1,18 +1,19 @@
 "use client";
 
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import {
-  saveUserPermissions,
+  saveRolePermissions,
   type AccessLevel,
   type PermissionModule,
   type PermissionSet,
 } from "@/lib/admin-users";
 import { cn } from "@/lib/utils";
-import type { AdminUser } from "@/types/user";
 
 const levelLabels: Record<AccessLevel, string> = {
   none: "No Access",
@@ -21,7 +22,8 @@ const levelLabels: Record<AccessLevel, string> = {
 };
 
 interface PermissionMatrixProps {
-  user: AdminUser;
+  user: { id: string; name: string; email: string; isSystemRole: boolean };
+  affectedUsers?: number;
   /** Modules and actions, as the backend defines them. */
   modules: PermissionModule[];
   levels: AccessLevel[];
@@ -34,8 +36,11 @@ export function PermissionMatrix({
   modules: permissionModules,
   levels: accessLevelValues,
   permissions,
+  affectedUsers = 0,
 }: PermissionMatrixProps) {
   const router = useRouter();
+  const admin = useAdmin();
+  const readOnly = user.isSystemRole || !canChange(admin, "users.roles");
   const [levels, setLevels] = useState<PermissionSet>(permissions);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -48,12 +53,13 @@ export function PermissionMatrix({
   }));
 
   async function save() {
+    if (readOnly) return;
     setSaving(true);
     setError(null);
     setSaved(false);
 
     try {
-      await saveUserPermissions(user.id, levels);
+      await saveRolePermissions(user.id, levels);
       setSaved(true);
     } catch (cause) {
       setError(
@@ -87,6 +93,10 @@ export function PermissionMatrix({
 
   return (
     <div className="space-y-4">
+      <p className="rounded-xl bg-blue-50 p-3 text-sm text-ink-muted">
+        Role permissions · {affectedUsers} assigned users. Saving updates access
+        for everyone assigned to this role. Individual overrides are not used.
+      </p>
       <Card className="flex items-center gap-3 p-4">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sidebar-active text-sm font-semibold text-white">
           {initials}
@@ -99,84 +109,104 @@ export function PermissionMatrix({
         </div>
       </Card>
 
-      <Card className="overflow-hidden p-0">
-        <div className="border-b border-line px-4 py-3.5 text-sm font-semibold text-ink">
-          Permissions
-        </div>
+      {user.isSystemRole ? (
+        <p className="rounded-xl bg-blue-50 p-3 text-sm">
+          Super Admin has built-in full access. These permissions cannot be
+          changed.
+        </p>
+      ) : null}
+      <fieldset disabled={readOnly || saving} className="min-w-0">
+        <Card className="overflow-hidden p-0">
+          <div className="border-b border-line px-4 py-3.5 text-sm font-semibold text-ink">
+            Permissions
+          </div>
 
-        <div className="divide-y divide-line">
-          {permissionModules.map((group) => {
-            const isCollapsed = collapsed[group.id] ?? false;
+          <div className="divide-y divide-line">
+            {permissionModules.map((group) => {
+              const isCollapsed = collapsed[group.id] ?? false;
 
-            return (
-              <div key={group.id}>
-                <div className="flex flex-wrap items-center gap-3 bg-slate-50/60 px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCollapsed((prev) => ({
-                        ...prev,
-                        [group.id]: !isCollapsed,
-                      }))
-                    }
-                    aria-expanded={!isCollapsed}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "size-4 shrink-0 text-ink-muted transition-transform",
-                        isCollapsed && "-rotate-90",
-                      )}
-                      aria-hidden
-                    />
-                    <span className="truncate">{group.label}</span>
-                  </button>
-
-                  <LevelPicker
-                    label={group.label}
-                    accessLevels={accessLevels}
-                    value={levels[group.id] ?? "none"}
-                    onChange={(level) => setModuleLevel(group.id, level)}
-                  />
-                </div>
-
-                {!isCollapsed &&
-                  group.actions.map((action) => (
-                    <div
-                      key={action.id}
-                      className="flex flex-wrap items-center gap-3 px-4 py-3 pl-10"
+              return (
+                <div key={group.id}>
+                  <div className="flex flex-wrap items-center gap-3 bg-slate-50/60 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCollapsed((prev) => ({
+                          ...prev,
+                          [group.id]: !isCollapsed,
+                        }))
+                      }
+                      aria-expanded={!isCollapsed}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
                     >
-                      <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">
-                        {action.label}
-                      </span>
-                      <LevelPicker
-                        label={action.label}
-                        accessLevels={accessLevels}
-                        value={levels[action.id] ?? "none"}
-                        onChange={(level) => {
-                          setSaved(false);
-                          setLevels((prev) => ({ ...prev, [action.id]: level }));
-                        }}
+                      <ChevronDown
+                        className={cn(
+                          "size-4 shrink-0 text-ink-muted transition-transform",
+                          isCollapsed && "-rotate-90",
+                        )}
+                        aria-hidden
                       />
-                    </div>
-                  ))}
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+                      <span className="truncate">{group.label}</span>
+                    </button>
 
-      {error ? <p className="text-right text-sm text-negative">{error}</p> : null}
+                    <LevelPicker
+                      label={group.label}
+                      accessLevels={accessLevels}
+                      value={
+                        user.isSystemRole
+                          ? "full"
+                          : (levels[group.id] ?? "none")
+                      }
+                      onChange={(level) => setModuleLevel(group.id, level)}
+                    />
+                  </div>
+
+                  {!isCollapsed &&
+                    group.actions.map((action) => (
+                      <div
+                        key={action.id}
+                        className="flex flex-wrap items-center gap-3 px-4 py-3 pl-10"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">
+                          {action.label}
+                        </span>
+                        <LevelPicker
+                          label={action.label}
+                          accessLevels={accessLevels}
+                          value={
+                            user.isSystemRole
+                              ? "full"
+                              : (levels[action.id] ?? "none")
+                          }
+                          onChange={(level) => {
+                            setSaved(false);
+                            setLevels((prev) => ({
+                              ...prev,
+                              [action.id]: level,
+                            }));
+                          }}
+                        />
+                      </div>
+                    ))}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </fieldset>
+      {error ? (
+        <p className="text-right text-sm text-negative">{error}</p>
+      ) : null}
       {saved ? (
         <p className="text-right text-sm text-positive">
-          Saved. {user.name} sees this the next time they sign in.
+          Saved. All users assigned to this role inherit these permissions.
         </p>
       ) : null}
 
       <div className="flex flex-wrap justify-end gap-3">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push("/users/roles")}
           className="inline-flex items-center rounded-lg border border-line bg-surface px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
         >
           Cancel
@@ -184,10 +214,10 @@ export function PermissionMatrix({
         <button
           type="button"
           onClick={save}
-          disabled={saving}
+          disabled={saving || readOnly}
           className="inline-flex items-center rounded-lg bg-sidebar-active px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sidebar-active/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:opacity-60"
         >
-          {saving ? "Saving…" : "Save Permission"}
+          {saving ? "Saving…" : "Save permissions"}
         </button>
       </div>
     </div>

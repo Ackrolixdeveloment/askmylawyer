@@ -1,3 +1,4 @@
+import { ConsultationRecordView } from "@/components/consultations/consultation-record-view";
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton } from "@/components/ui";
@@ -25,6 +26,16 @@ export default async function ConsultationDetailPage({
 }: PageProps<"/consultations/[id]">) {
   const { id } = await params;
   const { mode } = await searchParams;
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) {
+    return (
+      <>
+        <Topbar title="Consultations" />
+        <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+          <ConsultationRecordView id={id} />
+        </main>
+      </>
+    );
+  }
 
   // Read-only unless explicitly opened for editing.
   const editable = mode === "edit";

@@ -28,8 +28,10 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div
       className={cn(
-        "flex border-t border-line py-4",
-        collapsed ? "flex-col items-center gap-2 px-2" : "items-center gap-3 px-4",
+        "aml-user-menu flex border-t border-line py-4",
+        collapsed
+          ? "flex-col items-center gap-2 px-2"
+          : "items-center gap-3 px-4",
       )}
       title={collapsed ? `${admin.name} · ${admin.email}` : undefined}
     >
@@ -41,7 +43,9 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
       </span>
       {collapsed ? null : (
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{admin.name}</p>
+          <p className="truncate text-sm font-semibold text-ink">
+            {admin.name}
+          </p>
           <p className="truncate text-xs text-ink-muted">{admin.email}</p>
         </div>
       )}

@@ -112,7 +112,21 @@ export class AdminEditRequestsService {
     });
     if (!row) throw notFound();
 
-    return this.toRequest(row);
+    const history = await this.prisma.lawyerEditRequest.findMany({
+      where: { userId: row.user.id },
+      select: { id: true, section: true, status: true, requestedAt: true, decidedAt: true,
+        decidedBy: { select: { name: true, employeeCode: true } } },
+      orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
+    });
+    return {
+      ...this.toRequest(row),
+      editHistory: history.map(item => ({
+        id: item.id, requestId: shortCode('REQ', item.id), section: item.section,
+        status: item.status, requestedAt: item.requestedAt.toISOString(),
+        decidedAt: item.decidedAt?.toISOString() ?? null,
+        decidedBy: item.decidedBy,
+      })),
+    };
   }
 
   /** Applies the change and points future payouts at the new account. */

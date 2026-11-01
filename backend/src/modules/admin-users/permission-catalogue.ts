@@ -40,9 +40,8 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     label: 'User Management',
     actions: [
       { id: 'users.departments', label: 'Departments' },
-      { id: 'users.categories', label: 'Category' },
-      { id: 'users.roles', label: 'Role' },
-      { id: 'users.users', label: 'Users & Permissions' },
+      { id: 'users.roles', label: 'Roles & Permissions' },
+      { id: 'users.users', label: 'Users' },
     ],
   },
   {
@@ -81,6 +80,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     id: 'support',
     label: 'Support & Help Desk',
     actions: [
+      { id: 'support.categories', label: 'Ticket Categories' },
       { id: 'support.new', label: 'New Tickets' },
       { id: 'support.in-progress', label: 'In Progress' },
       { id: 'support.resolved', label: 'Resolved' },

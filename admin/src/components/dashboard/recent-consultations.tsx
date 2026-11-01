@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Mic, Video } from "lucide-react";
 import { Badge, DataTable, type BadgeTone, type Column } from "@/components/ui";
 import { formatInr } from "@/lib/format";
@@ -23,7 +24,9 @@ const columns: Column<ConsultationRow>[] = [
   {
     key: "customer",
     header: "Customer",
-    cell: (row) => <span className="font-semibold text-ink">{row.customer}</span>,
+    cell: (row) => (
+      <span className="font-semibold text-ink">{row.customer}</span>
+    ),
   },
   {
     key: "lawyer",
@@ -67,7 +70,17 @@ const columns: Column<ConsultationRow>[] = [
 export function RecentConsultations({ rows }: { rows: ConsultationRow[] }) {
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold text-ink">Recent Consultations</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-ink">
+          Recent Consultations
+        </h2>
+        <Link
+          href="/consultations/completed"
+          className="text-xs font-semibold text-brand"
+        >
+          View consultations →
+        </Link>
+      </div>
       {/* A dashboard preview, so no pagination — the full list lives on its own page. */}
       <DataTable
         columns={columns}

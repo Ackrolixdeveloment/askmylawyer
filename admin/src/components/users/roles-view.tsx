@@ -1,6 +1,18 @@
 "use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
+import { StackedCell } from "@/components/common/table-cells";
+import { useConfirmation } from "@/components/ui/use-confirmation";
+
+import {
+  Eye,
+  ShieldCheck,
+  Plus,
+  RefreshCw,
+  SquarePen,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import {
   Badge,
@@ -15,7 +27,7 @@ import { ApiError } from "@/lib/api";
 import {
   createRole,
   deleteRole,
-  fetchDepartments,
+  fetchRoleDepartments,
   fetchRoles,
   updateRole,
 } from "@/lib/admin-users";
@@ -32,8 +44,9 @@ const statusOptions = [
 ];
 
 export function RolesView() {
+  const router = useRouter();
   const { data, loading, error, retry } = useApiData(() =>
-    Promise.all([fetchRoles(), fetchDepartments()]),
+    Promise.all([fetchRoles(), fetchRoleDepartments()]),
   );
   const [roles, departments] = data ?? [];
   const rows = roles?.data ?? [];
@@ -61,14 +74,27 @@ export function RolesView() {
     setActive(null);
   }
 
-  async function remove(id: string) {
+  const [confirmRemoval, removalDialog] = useConfirmation();
+  function remove(id: string) {
+    confirmRemoval(
+      "Delete role?",
+      "Review the selected role. Linked records may prevent deletion.",
+      () => performRemove(id),
+    );
+  }
+  async function performRemove(id: string) {
     setFailure(null);
 
     try {
       await deleteRole(id);
       retry();
     } catch (cause) {
-      setFailure(cause instanceof ApiError ? cause.message : "Could not delete this role.");
+      setFailure(
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not delete this role.",
+      );
+      throw cause;
     }
   }
 
@@ -82,95 +108,106 @@ export function RolesView() {
 
     try {
       if (active) await updateRole(active.id, input);
-      else await createRole(input);
+      else {
+        const created = await createRole(input);
+        router.push(`/users/roles/${created.id}/permissions`);
+      }
       close();
       retry();
     } catch (cause) {
-      setFailure(cause instanceof ApiError ? cause.message : "Could not save this role.");
+      setFailure(
+        cause instanceof ApiError ? cause.message : "Could not save this role.",
+      );
     }
   }
 
-
   // Rebuilt per render: the row actions close over the latest state.
   const columns: Column<Role>[] = [
-      {
-        key: "name",
-        header: "Role",
-        align: "left",
-        sortValue: (row) => row.name,
-        cell: (row) => <span className="text-ink">{row.name}</span>,
-      },
-      {
-        key: "department",
-        header: "Department",
-        align: "left",
-        sortValue: (row) => row.department,
-        cell: (row) => (
-          <span className="text-ink-muted">{row.department}</span>
-        ),
-      },
-      {
-        key: "users",
-        header: "Users",
-        align: "left",
-        sortValue: (row) => row.users,
-        cell: (row) => <span className="text-ink-muted">{row.users}</span>,
-      },
-      {
-        key: "status",
-        header: "Status",
-        align: "left",
-        sortValue: (row) => row.status,
-        cell: (row) => (
-          <Badge tone={row.status === "active" ? "success" : "neutral"}>
-            {row.status === "active" ? "Active" : "Inactive"}
-          </Badge>
-        ),
-      },
-      {
-        key: "actions",
-        header: "Actions",
-        align: "left",
-        cell: (row) => (
-          <div className="flex items-center gap-2">
-            <IconButton
-              label={`View ${row.name}`}
-              tone="muted"
-              onClick={() => open("view", row)}
-            >
-              <Eye className="size-4" aria-hidden />
-            </IconButton>
-            {/*
+    {
+      key: "name",
+      header: "Role",
+      align: "left",
+      sortValue: (row) => row.name,
+      textValue: (row) => `${row.name} ${row.department}`,
+      cell: (row) => (
+        <StackedCell
+          primary={row.name}
+          secondary={row.department || "No department"}
+        />
+      ),
+    },
+    {
+      key: "users",
+      header: "Users",
+      align: "left",
+      sortValue: (row) => row.users,
+      cell: (row) => <span className="text-ink-muted">{row.users}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "left",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <Badge tone={row.status === "active" ? "success" : "neutral"}>
+          {row.status === "active" ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "left",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <Link
+            className="table-tool"
+            href={`/users/roles/${row.id}/permissions`}
+            title="Role permissions"
+            aria-label={`Permissions for ${row.name}`}
+          >
+            <ShieldCheck className="size-4" />
+          </Link>
+          <IconButton
+            label={`View ${row.name}`}
+            tone="muted"
+            onClick={() => open("view", row)}
+          >
+            <Eye className="size-4" aria-hidden />
+          </IconButton>
+          {/*
               Super Admin is what keeps the panel running: it is read-only,
               and the backend refuses to change or remove it either.
             */}
-            {row.isSystem ? null : (
-              <>
-                <IconButton
-                  label={`Edit ${row.name}`}
-                  tone="brand"
-                  onClick={() => open("edit", row)}
-                >
-                  <SquarePen className="size-4" aria-hidden />
-                </IconButton>
-                <IconButton
-                  label={`Delete ${row.name}`}
-                  tone="danger"
-                  onClick={() => remove(row.id)}
-                >
-                  <Trash2 className="size-4" aria-hidden />
-                </IconButton>
-              </>
-            )}
-          </div>
-        ),
-      },
+          {row.isSystem ? null : (
+            <>
+              <IconButton
+                label={`Edit ${row.name}`}
+                tone="brand"
+                onClick={() => open("edit", row)}
+              >
+                <SquarePen className="size-4" aria-hidden />
+              </IconButton>
+              <IconButton
+                label={`Delete ${row.name}`}
+                tone="danger"
+                onClick={() => remove(row.id)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </IconButton>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl leading-8 font-bold text-ink">Role</h1>
+        <h1 className="text-2xl leading-8 font-bold text-ink">
+          Roles & Permissions
+        </h1>
 
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={retry} className={outlineAction}>
@@ -206,6 +243,7 @@ export function RolesView() {
       </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
+      {removalDialog}
       <RoleModal
         key={`${mode}-${active?.id ?? "new"}`}
         departmentOptions={departmentOptions}

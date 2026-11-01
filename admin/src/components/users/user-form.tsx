@@ -48,8 +48,8 @@ export function UserForm({
       setError("Fill in every required field.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (password.length < 8 || password.length > 72) {
+      setError("Password must be between 8 and 72 characters.");
       return;
     }
     if (password !== confirm) {
@@ -69,105 +69,108 @@ export function UserForm({
         password,
         status: status as "active" | "inactive",
       });
+      onCreated?.();
+      onDone?.();
+      router.push("/users");
     } catch (cause) {
       setError(
-        cause instanceof ApiError ? cause.message : "Could not create this user.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not create this user.",
       );
       setSaving(false);
       return;
     }
 
     setSaving(false);
-    onCreated?.();
-
-    if (onDone) {
-      onDone();
-      return;
-    }
-    router.push("/users");
   }
 
   const body = (
     <form onSubmit={handleSubmit} className="space-y-5">
-        <TextField
-          label="Full Name *"
-          placeholder="Enter full name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <TextField
-          label="Email Address *"
-          type="email"
-          autoComplete="email"
-          placeholder="Enter email address"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-        <TextField
-          label="Phone Number *"
-          inputMode="numeric"
-          placeholder="Enter phone number"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-        />
+      <p className="rounded-xl bg-blue-50 p-3 text-sm text-ink-muted">
+        Select a role to grant its configured permissions automatically. Access
+        is managed under Roles; this user will inherit future role permission
+        changes.
+      </p>
+      <TextField
+        label="Full Name *"
+        placeholder="Enter full name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
+      <TextField
+        label="Email Address *"
+        type="email"
+        autoComplete="email"
+        placeholder="Enter email address"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      <TextField
+        label="Phone Number *"
+        inputMode="numeric"
+        placeholder="Enter phone number"
+        value={phone}
+        onChange={(event) => setPhone(event.target.value)}
+      />
 
-        <div>
-          <p className="mb-1.5 text-sm font-medium text-ink">Role *</p>
-          <FilterSelect
-            size="sm"
-            aria-label="Role"
-            options={roleOptions}
-            value={role}
-            onChange={setRole}
-          />
-        </div>
-
-        <TextField
-          label="Password *"
-          reveal
-          autoComplete="new-password"
-          placeholder="Enter password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-ink">Role *</p>
+        <FilterSelect
+          size="sm"
+          aria-label="Role"
+          options={roleOptions}
+          value={role}
+          onChange={setRole}
         />
-        <TextField
-          label="Confirm Password *"
-          reveal
-          autoComplete="new-password"
-          placeholder="Confirm password"
-          value={confirm}
-          onChange={(event) => setConfirm(event.target.value)}
-          error={error || undefined}
+      </div>
+
+      <TextField
+        label="Password *"
+        reveal
+        autoComplete="new-password"
+        placeholder="Enter password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+      />
+      <TextField
+        label="Confirm Password *"
+        reveal
+        autoComplete="new-password"
+        placeholder="Confirm password"
+        value={confirm}
+        onChange={(event) => setConfirm(event.target.value)}
+        error={error || undefined}
+      />
+
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-ink">Status</p>
+        <FilterSelect
+          size="sm"
+          aria-label="Status"
+          options={statusOptions}
+          value={status}
+          onChange={setStatus}
         />
+      </div>
 
-        <div>
-          <p className="mb-1.5 text-sm font-medium text-ink">Status</p>
-          <FilterSelect
-            size="sm"
-            aria-label="Status"
-            options={statusOptions}
-            value={status}
-            onChange={setStatus}
-          />
-        </div>
-
-        <div className="flex flex-wrap justify-end gap-3 border-t border-line pt-5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => (onDone ? onDone() : router.push("/users"))}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={saving}
-            className="bg-sidebar-active hover:bg-sidebar-active/90"
-          >
-            {saving ? "Creating…" : "Create User"}
-          </Button>
-        </div>
-      </form>
+      <div className="flex flex-wrap justify-end gap-3 border-t border-line pt-5">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => (onDone ? onDone() : router.push("/users"))}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={saving}
+          className="bg-sidebar-active hover:bg-sidebar-active/90"
+        >
+          {saving ? "Creating…" : "Create user"}
+        </Button>
+      </div>
+    </form>
   );
 
   // In a dialog the surrounding panel already provides the card chrome.

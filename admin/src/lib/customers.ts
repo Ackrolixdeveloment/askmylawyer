@@ -2,6 +2,11 @@ import { api } from "./api";
 import type { CustomerStatus } from "@/types/customer";
 
 export interface CustomerRow {
+  phone?: string | null;
+  email?: string | null;
+  suspendedAt?: string | null;
+  consultationDates?: string[];
+  paidDates?: string[];
   id: string;
   name: string;
   contact: string;
@@ -66,7 +71,7 @@ export interface CustomerRefund {
   id: string;
   reason: string;
   amount: number;
-  requestedOn: string;
+  requestedOn: string | null;
 }
 
 export interface CustomerRecord {
@@ -112,10 +117,18 @@ export function fetchCustomer(id: string) {
   return api<CustomerRecord>(`/admin/customers/${id}`);
 }
 
-export function saveCustomer(id: string, changes: Partial<CustomerPersonal & { status: CustomerStatus }>) {
-  return api<CustomerRecord>(`/admin/customers/${id}`, { method: "PUT", body: changes });
+export function saveCustomer(
+  id: string,
+  changes: Partial<CustomerPersonal & { status: CustomerStatus }>,
+) {
+  return api<CustomerRecord>(`/admin/customers/${id}`, {
+    method: "PUT",
+    body: changes,
+  });
 }
 
 export function deleteCustomer(id: string) {
-  return api<{ deleted: boolean }>(`/admin/customers/${id}`, { method: "DELETE" });
+  return api<{ deleted: boolean }>(`/admin/customers/${id}`, {
+    method: "DELETE",
+  });
 }

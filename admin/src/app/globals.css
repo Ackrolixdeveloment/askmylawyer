@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-canvas: #f2f6fb;
+  --color-canvas: #f5f7fb;
   --color-surface: #ffffff;
   --color-line: #e8edf4;
 
-  --color-ink: #0f172a;
+  --color-ink: #010e23;
   --color-ink-muted: #64748b;
   --color-ink-subtle: #94a3b8;
 
@@ -23,7 +23,8 @@
   --color-accent: #7c5cf5;
 
   /* One elevation for every card/box on the dashboard. */
-  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-card:
+    0 2px 4px rgba(15, 23, 42, 0.025), 0 8px 30px rgba(15, 23, 42, 0.035);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
@@ -50,4 +51,273 @@ body {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* Shared desktop language and typography derived from both mobile apps. */
+body {
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss01";
+}
+button,
+summary,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  border-radius: 4px;
+}
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+.table-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #e8edf4;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: white;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.table-tool:hover {
+  background: #eff4ff;
+  border-color: #c7d7fe;
+  color: #2563eb;
+}
+.table-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.table-workbench {
+  background: linear-gradient(110deg, #fff, #fafcff);
+  border-radius: 16px 16px 0 0;
+}
+.aml-sidebar {
+  background: linear-gradient(180deg, #fff 65%, #f8faff);
+}
+.aml-sidebar nav {
+  scrollbar-width: thin;
+  scrollbar-color: #dbe3ef transparent;
+}
+.aml-sidebar nav :is(a, button) {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.aml-sidebar nav [aria-current="page"] {
+  font-weight: 600;
+}
+main {
+  animation: aml-page-in 0.22s ease-out;
+}
+main h1[class] {
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+main h2[class] {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+@keyframes aml-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (max-width: 640px) {
+  main h1[class] {
+    font-size: 24px;
+  }
+}
+@media print {
+  aside,
+  header,
+  .table-workbench,
+  nav[aria-label="Pagination"] {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  header button[aria-label="Open menu"] {
+    display: none;
+  }
+}
+
+/* Second design pass: distinct navigation, calmer work surfaces and denser records. */
+.aml-sidebar {
+  background: #0b1930;
+  border-color: #192a45;
+  color: #f8fafc;
+}
+.aml-sidebar > div:first-child {
+  border-bottom: 1px solid #20314b;
+  margin-bottom: 16px;
+}
+.aml-sidebar > div:first-child a {
+  color: white;
+}
+.aml-sidebar > div:first-child button,
+.aml-sidebar > div:first-child .text-ink-muted {
+  color: #93a8c7;
+}
+.aml-sidebar nav :is(a, button) {
+  color: #b7c6dc;
+}
+.aml-sidebar nav :is(a, button):hover {
+  background: #182d4a;
+  color: white;
+}
+.aml-sidebar nav a[aria-current="page"] {
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 6px 18px #0002;
+}
+.aml-sidebar nav button[aria-expanded="true"] {
+  color: white;
+  background: #182b46;
+}
+.aml-sidebar nav ul ul {
+  border-color: #2b3d57;
+}
+.aml-sidebar nav {
+  scrollbar-color: #304460 transparent;
+}
+.aml-user-menu {
+  border-color: #22334d;
+  background: #09162a;
+}
+.aml-user-menu .text-ink {
+  color: #f1f5f9;
+}
+.aml-user-menu :is(.text-ink-muted, .text-ink-subtle) {
+  color: #a7b8d1;
+}
+main {
+  width: 100%;
+  max-width: 1720px;
+  margin-inline: auto;
+}
+.page-intro {
+  padding-block: 4px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.aml-record-table th {
+  white-space: nowrap;
+  font-weight: 700;
+  color: #334155;
+}
+.aml-record-table th button {
+  font-weight: inherit;
+  color: inherit;
+}
+.aml-record-table td {
+  vertical-align: middle;
+  font-size: 13px;
+}
+.aml-record-table td:first-of-type a {
+  white-space: nowrap;
+}
+.aml-record-table tbody tr {
+  background: white;
+}
+.aml-record-table tbody tr:nth-child(even) {
+  background: #fbfcfe;
+}
+.aml-record-table tbody tr:hover {
+  background: #f0f5ff;
+}
+.aml-record-table td:last-child,
+.aml-record-table th:last-child {
+  position: sticky;
+  right: 0;
+  background: inherit;
+}
+.aml-record-table thead tr {
+  background: #f4f7fc;
+}
+.aml-record-table time,
+.aml-record-table .tabular-nums {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.aml-mobile-record :is(a, .inline-flex) {
+  min-width: 0;
+  max-width: 100%;
+}
+.aml-mobile-record :is(dd, dt) {
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  .table-workbench {
+    padding: 12px;
+  }
+  .table-workbench .table-tool {
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+  .page-intro {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 639px) {
+  .aml-metric-card > div {
+    gap: 6px;
+  }
+  .aml-metric-card > div p {
+    font-size: 11px;
+  }
+  .aml-metric-card > div svg {
+    width: 16px;
+    height: 16px;
+    padding: 5px;
+  }
+  .aml-metric-card > p {
+    font-size: 24px;
+  }
+}
+
+.table-workbench input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
 }

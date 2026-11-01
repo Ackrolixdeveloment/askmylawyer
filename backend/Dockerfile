@@ -14,5 +14,6 @@ RUN npm ci --omit=dev && npm install --no-save prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
+COPY assets ./assets
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

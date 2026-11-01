@@ -63,19 +63,20 @@ export function SidebarNavItem({
   const Icon = item.icon;
 
   const rowClasses = cn(
-    "flex w-full items-center gap-2.5 rounded-lg py-3 text-base font-medium transition-colors",
+    "flex w-full items-center gap-2.5 rounded-xl py-3 text-[13px] font-medium transition-colors",
     collapsed ? "justify-center px-0" : "px-3",
     "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
     branchActive && !item.children
-      ? "bg-sidebar-highlight font-semibold text-sidebar-active"
+      ? "bg-ink font-semibold text-white shadow-md shadow-slate-900/10"
       : "text-sidebar-fg hover:bg-sidebar-highlight hover:text-sidebar-active",
-    branchActive && item.children && "text-sidebar-active",
+    branchActive && item.children && "bg-brand-soft text-brand",
   );
 
   if (!item.children) {
     return (
       <Link
         href={item.href}
+        aria-current={branchActive ? "page" : undefined}
         onClick={onNavigate}
         className={rowClasses}
         title={collapsed ? item.label : undefined}
@@ -111,7 +112,10 @@ export function SidebarNavItem({
           <>
             <span className="flex-1 truncate text-left">{item.label}</span>
             <ChevronDown
-              className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-180")}
+              className={cn(
+                "size-4 shrink-0 transition-transform",
+                expanded && "rotate-180",
+              )}
               aria-hidden
             />
           </>
@@ -144,13 +148,13 @@ function ItemChildren({
     item.children?.find(
       (child) =>
         isNavGroup(child) &&
-        child.children.some((leaf) =>
-          isActive(pathname, leaf.href, siblings),
-        ),
+        child.children.some((leaf) => isActive(pathname, leaf.href, siblings)),
     )?.label ?? null;
 
   // `undefined` means "follow the route"; clicking pins a specific group.
-  const [openGroup, setOpenGroup] = useState<string | null | undefined>(undefined);
+  const [openGroup, setOpenGroup] = useState<string | null | undefined>(
+    undefined,
+  );
   const effectiveOpen = openGroup === undefined ? activeGroup : openGroup;
 
   return (
@@ -225,13 +229,16 @@ function NavSubGroup({
       >
         <span className="flex-1 truncate text-left">{group.label}</span>
         <ChevronDown
-          className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-180")}
+          className={cn(
+            "size-4 shrink-0 transition-transform",
+            expanded && "rotate-180",
+          )}
           aria-hidden
         />
       </button>
 
       {expanded ? (
-        <ul className="ml-3 space-y-0.5 border-l border-line pl-3">
+        <ul className="ml-3 mt-2 mb-2 space-y-1.5 border-l border-line pl-3">
           {group.children.map((leaf) => (
             <li key={leaf.href}>
               <SubLink
@@ -268,7 +275,7 @@ function SubLink({
         "block truncate rounded-lg px-3 py-2.5 text-[15px] transition-colors",
         "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
         active
-          ? "bg-sidebar-highlight font-semibold text-sidebar-active"
+          ? "bg-ink font-semibold text-white shadow-md shadow-slate-900/10"
           : "text-sidebar-fg hover:bg-sidebar-highlight hover:text-sidebar-active",
       )}
     >

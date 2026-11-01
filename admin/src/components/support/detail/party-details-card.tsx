@@ -4,7 +4,13 @@ import { Card } from "@/components/ui";
 import type { PartyDetails } from "@/types/ticket-detail";
 
 /** Two-column label/value row, left label and right value. */
-function Row({ left, right }: { left: [string, string]; right: [string, string] }) {
+function Row({
+  left,
+  right,
+}: {
+  left: [string, string];
+  right: [string, string];
+}) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="min-w-0">
@@ -31,16 +37,25 @@ export function PartyDetailsCard({
       <h2 className="text-base font-semibold text-ink">{title}</h2>
 
       <div className="mt-4 space-y-3">
-        <Row left={[party.idLabel, party.idValue]} right={["Name", party.name]} />
-        <Row left={["Mobile No", party.mobile]} right={["Email", party.email]} />
-        <Row left={["City", party.city]} right={["Last Active", party.lastActive]} />
+        <Row
+          left={[party.idLabel, party.idValue]}
+          right={["Name", party.name]}
+        />
+        <Row
+          left={["Mobile No", party.mobile]}
+          right={["Email", party.email]}
+        />
+        <Row
+          left={["City", party.city]}
+          right={["Last Active", party.lastActive]}
+        />
       </div>
 
       <Link
         href={party.profileHref}
         className="mt-4 flex items-center justify-center gap-1.5 rounded-lg bg-brand-soft px-4 py-2.5 text-sm font-medium text-brand transition-colors hover:bg-brand/10 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
       >
-        View full profile
+        Browse profiles
         <ArrowRight className="size-4" aria-hidden />
       </Link>
     </Card>

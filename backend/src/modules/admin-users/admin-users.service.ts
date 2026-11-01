@@ -76,6 +76,11 @@ export class AdminUsersService {
 
   // ---- Departments ----
 
+  async departmentChoices() {
+    const data=await this.prisma.department.findMany({select:{id:true,name:true,status:true},orderBy:{name:'asc'}});
+    return {data};
+  }
+
   async listDepartments() {
     const rows = await this.prisma.department.findMany({
       orderBy: { name: 'asc' },
@@ -229,7 +234,7 @@ export class AdminUsersService {
     if (dto.departmentId) await this.findDepartment(dto.departmentId);
 
     try {
-      const row = await this.prisma.role.create({ data: { ...dto } });
+      const row = await this.prisma.role.create({ data: { ...dto, permissions: emptyPermissions() } });
       return { id: row.id };
     } catch (error) {
       if (isDuplicate(error)) throw duplicate('A role with that name already exists.');
@@ -247,6 +252,9 @@ export class AdminUsersService {
 
     try {
       await this.prisma.role.update({ where: { id }, data: { ...dto } });
+      const members = await this.prisma.adminUser.findMany({where:{roleId:id,deletedAt:null},select:{id:true}});
+      if(dto.status === AdminStatus.inactive) await this.prisma.adminSession.updateMany({where:{adminUser:{roleId:id},revokedAt:null},data:{revokedAt:new Date()}});
+      this.events.publishMany(members.map(user=>user.id),'permissions');
       return { id };
     } catch (error) {
       if (isDuplicate(error)) throw duplicate('A role with that name already exists.');
@@ -275,7 +283,7 @@ export class AdminUsersService {
     const rows = await this.prisma.adminUser.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
-      include: { role: { select: { id: true, name: true, isSystem: true } } },
+      include: { createdBy: { select: { name: true, employeeCode: true } }, role: { select: { id: true, name: true, isSystem: true } } },
     });
 
     return { data: rows.map((row) => this.toUser(row)) };
@@ -284,14 +292,14 @@ export class AdminUsersService {
   async getUser(id: string) {
     const row = await this.prisma.adminUser.findFirst({
       where: { id, deletedAt: null },
-      include: { role: { select: { id: true, name: true, isSystem: true } } },
+      include: { createdBy: { select: { name: true, employeeCode: true } }, role: { select: { id: true, name: true, isSystem: true } } },
     });
     if (!row) throw notFound('User');
 
     return this.toUser(row);
   }
 
-  async createUser(dto: CreateAdminUserDto) {
+  async createUser(dto: CreateAdminUserDto, createdById?: string) {
     const role = await this.prisma.role.findUnique({ where: { id: dto.roleId } });
     if (!role) throw notFound('Role');
     await this.assertRoleAssignable(role);
@@ -299,6 +307,7 @@ export class AdminUsersService {
     try {
       const row = await this.prisma.adminUser.create({
         data: {
+          createdById,
           employeeCode: await this.nextEmployeeCode(),
           name: dto.name,
           email: dto.email,
@@ -306,10 +315,10 @@ export class AdminUsersService {
           roleId: dto.roleId,
           status: dto.status ?? AdminStatus.active,
           passwordHash: await hash(dto.password),
-          // Access is granted afterwards, on the permissions screen.
+          // Legacy per-user grants are unused; effective access comes from the role.
           permissions: emptyPermissions(),
         },
-        include: { role: { select: { id: true, name: true, isSystem: true } } },
+        include: { createdBy: { select: { name: true, employeeCode: true } }, role: { select: { id: true, name: true, isSystem: true } } },
       });
 
       return this.toUser(row);
@@ -319,12 +328,16 @@ export class AdminUsersService {
     }
   }
 
-  async updateUser(id: string, dto: UpdateAdminUserDto) {
+  async updateUser(id: string, dto: UpdateAdminUserDto, actorId?: string) {
     const user = await this.prisma.adminUser.findFirst({
       where: { id, deletedAt: null },
-      include: { role: { select: { id: true, name: true, isSystem: true } } },
+      include: { createdBy: { select: { name: true, employeeCode: true } }, role: { select: { id: true, name: true, isSystem: true } } },
     });
     if (!user) throw notFound('User');
+
+    if (dto.status === AdminStatus.inactive && (user.role.isSystem || actorId === id)) {
+      throw inUse('You cannot deactivate the Super Admin or your own account.');
+    }
 
     if (dto.roleId && dto.roleId !== user.roleId) {
       // The Super Admin keeps the keys: their own role cannot be swapped out,
@@ -349,7 +362,7 @@ export class AdminUsersService {
           status: dto.status,
           ...(dto.password ? { passwordHash: await hash(dto.password) } : {}),
         },
-        include: { role: { select: { id: true, name: true, isSystem: true } } },
+        include: { createdBy: { select: { name: true, employeeCode: true } }, role: { select: { id: true, name: true, isSystem: true } } },
       });
 
       // A suspended admin should not stay signed in.
@@ -403,20 +416,15 @@ export class AdminUsersService {
     return { modules: PERMISSION_MODULES, levels: ACCESS_LEVELS };
   }
 
-  async getPermissions(id: string) {
-    const user = await this.getUser(id);
-    const row = await this.prisma.adminUser.findUnique({
-      where: { id },
-      select: { permissions: true },
-    });
-
-    return { user, permissions: normalisePermissions(row?.permissions) };
+  async getRolePermissions(id: string) {
+    const role=await this.prisma.role.findUnique({where:{id},include:{department:true,_count:{select:{admins:{where:{deletedAt:null}}}}}});
+    if(!role) throw notFound('Role');
+    return {role:{id:role.id,name:role.name,isSystem:role.isSystem,department:role.department?.name ?? '',users:role._count.admins}, permissions:role.isSystem ? Object.fromEntries([...PERMISSION_KEYS].map(key=>[key,'full'])) : normalisePermissions(role.permissions)};
   }
 
-  /** Access is set per person, so this replaces the whole matrix. */
-  async setPermissions(id: string, submitted: Record<string, string>) {
-    await this.getUser(id);
-
+  async setRolePermissions(id: string, submitted: Record<string,string>) {
+    const {role}=await this.getRolePermissions(id);
+    if(role.isSystem) throw inUse('Super Admin permissions cannot be changed.');
     const unknown = Object.keys(submitted).filter((key) => !PERMISSION_KEYS.has(key));
     if (unknown.length > 0) {
       throw new AppException(
@@ -437,25 +445,28 @@ export class AdminUsersService {
       );
     }
 
-    const permissions = normalisePermissions(submitted);
-    await this.prisma.adminUser.update({ where: { id }, data: { permissions } });
+    const permissions=normalisePermissions(submitted);
+    await this.prisma.role.update({where:{id},data:{permissions}});
+    const users=await this.prisma.adminUser.findMany({where:{roleId:id,deletedAt:null},select:{id:true}});
+    this.events.publishMany(users.map(user=>user.id),'permissions');
+    return {id,permissions};
+  }
 
-    // Their open panel picks the change up without a refresh.
-    this.events.publish(id, 'permissions');
-    await this.alerts.notifyOne(id, {
-      module: 'dashboard',
-      title: 'Your access was updated',
-      body: 'An administrator changed which parts of the panel you can open.',
-      link: '/notifications/alerts',
-    });
-
-    return { id, permissions };
+  /** Compatibility: effective access is inherited, never edited per user. */
+  async getPermissions(id:string) {
+    const user=await this.getUser(id);
+    const {permissions}=await this.getRolePermissions(user.roleId);
+    return {user,permissions,inherited:true};
+  }
+  async setPermissions(_id:string,_submitted:Record<string,string>) {
+    throw new AppException(HttpStatus.CONFLICT,'ROLE_PERMISSIONS_REQUIRED','Permissions are inherited from the role. Manage access under Roles.');
   }
 
   // ---- Helpers ----
 
   /** Only one person may hold a built-in role such as Super Admin. */
-  private async assertRoleAssignable(role: { id: string; name: string; isSystem: boolean }) {
+  private async assertRoleAssignable(role: { id: string; name: string; isSystem: boolean; status?: AdminStatus }) {
+    if (role.status === AdminStatus.inactive) throw inUse("Inactive roles cannot be assigned to users.");
     if (!role.isSystem) return;
 
     const holder = await this.prisma.adminUser.findFirst({
@@ -498,6 +509,7 @@ export class AdminUsersService {
     email: string;
     phone: string | null;
     status: AdminStatus;
+    createdBy?: {name: string; employeeCode: string} | null;
     lastLoginAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
@@ -514,6 +526,8 @@ export class AdminUsersService {
       /** Built-in roles (Super Admin) are protected from deletion. */
       isSystemRole: row.role.isSystem,
       lastActive: lastActive(row.lastLoginAt),
+      lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
+      addedBy: row.createdBy ?? null,
       createdAt: isoDate(row.createdAt),
       lastUpdated: isoDate(row.updatedAt),
       status: row.status,

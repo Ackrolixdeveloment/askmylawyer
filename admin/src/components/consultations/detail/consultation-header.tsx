@@ -1,5 +1,6 @@
 "use client";
 
+import { PreviewAction } from "@/components/ui/preview-action";
 import { Clock, Flag, Smartphone, SquarePen, Video } from "lucide-react";
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
@@ -56,10 +57,14 @@ export function ConsultationHeader({
 
         {editable ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="px-3 py-2 text-sm">
+            <PreviewAction
+              title="Request consultation correction"
+              requireReason
+              className="table-tool"
+            >
               <SquarePen className="size-4" aria-hidden />
-              Edit
-            </Button>
+              Request correction
+            </PreviewAction>
             <Button
               variant="outline"
               onClick={() => setFlagOpen(true)}

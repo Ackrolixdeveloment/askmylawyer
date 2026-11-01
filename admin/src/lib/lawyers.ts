@@ -11,15 +11,37 @@ import type {
 
 /** The onboarding screens in the sidebar. */
 export type OnboardingBucket =
-  | "new"
-  | "correction"
-  | "resubmission"
-  | "rejected"
-  | "draft";
+  "new" | "correction" | "resubmission" | "rejected" | "draft";
 
 export interface Paginated<T> {
   data: T[];
   meta: { page: number; limit: number; total: number };
+}
+
+/** Load each existing API page before applying client-side search/date filters. */
+export async function fetchLawyerPages<T>(
+  endpoint: string,
+): Promise<Paginated<T>> {
+  const data: T[] = [];
+  let page = 1;
+  let total = Infinity;
+  while (data.length < total) {
+    const response = await api<Paginated<T>>(
+      `${endpoint}${endpoint.includes("?") ? "&" : "?"}page=${page}&limit=100`,
+    );
+    total = response.meta.total;
+    if (!response.data.length) break;
+    data.push(...response.data);
+    page++;
+  }
+  return {
+    data,
+    meta: {
+      page: 1,
+      limit: data.length,
+      total: Number.isFinite(total) ? total : 0,
+    },
+  };
 }
 
 /** Headline counts shown above the lawyer tables. */
@@ -35,26 +57,26 @@ export interface LawyerSummary {
 
 /** New requests and rejected lawyers. */
 export function fetchOnboardingRequests(status: "new" | "rejected") {
-  return api<Paginated<LawyerRequest>>(
+  return fetchLawyerPages<LawyerRequest>(
     `/admin/lawyers/onboarding?status=${status}`,
   );
 }
 
 /** Correction and resubmission queues. */
 export function fetchCorrections(status: "correction" | "resubmission") {
-  return api<Paginated<CorrectionRequest>>(
+  return fetchLawyerPages<CorrectionRequest>(
     `/admin/lawyers/corrections?status=${status}`,
   );
 }
 
 /** Registrations started but never submitted. */
 export function fetchDrafts() {
-  return api<Paginated<DraftProfile>>("/admin/lawyers/drafts");
+  return fetchLawyerPages<DraftProfile>("/admin/lawyers/drafts");
 }
 
 /** Approved lawyers. */
 export function fetchVerifiedLawyers() {
-  return api<Paginated<Lawyer>>("/admin/lawyers/verified");
+  return fetchLawyerPages<Lawyer>("/admin/lawyers/verified");
 }
 
 /** Accounts that were removed, kept for the audit trail. */
@@ -71,17 +93,23 @@ export function deleteDraftLawyer(id: string) {
 
 /** Takes the lawyer off the marketplace and signs them out of the app. */
 export function suspendLawyer(id: string, reason: string) {
-  return api<{ id: string; status: LawyerStatus }>(`/admin/lawyers/${id}/suspend`, {
-    method: "POST",
-    body: { reason },
-  });
+  return api<{ id: string; status: LawyerStatus }>(
+    `/admin/lawyers/${id}/suspend`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
 }
 
 /** Puts a suspended lawyer back on the marketplace. */
 export function reactivateLawyer(id: string) {
-  return api<{ id: string; status: LawyerStatus }>(`/admin/lawyers/${id}/reactivate`, {
-    method: "POST",
-  });
+  return api<{ id: string; status: LawyerStatus }>(
+    `/admin/lawyers/${id}/reactivate`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export function fetchLawyerSummary() {

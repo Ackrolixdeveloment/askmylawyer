@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../reports/report_screen.dart';
 import 'chat_sheet.dart';
 import 'consultation_repository.dart';
+import 'payment_service.dart';
 
 /// The consultation itself, over Agora.
 ///
@@ -41,7 +42,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _joined = false;
   bool _otherSideHere = false;
   bool _muted = false;
-  bool _cameraOff = false;
+  bool _cameraOff = true;
 
   /// Follows the actual route, which the SDK reports — a headset or a
   /// Bluetooth earpiece takes over whatever we asked for.
@@ -69,6 +70,10 @@ class _CallScreenState extends State<CallScreen> {
   /// both sides count down to the same instant.
   Duration _left = Duration.zero;
   bool _timeUp = false;
+  bool _paymentPaused = false;
+  bool _videoUsageReported = false;
+  bool _remoteVideoOn = false;
+  DateTime? _preparingUntil;
 
   @override
   void initState() {
@@ -87,6 +92,33 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _start() async {
     try {
+      while (mounted) {
+        final state = await ApiClient.instance.get(
+          '/api/v1/customer/consultations/${widget.consultationId}/preparation',
+        );
+        if (!mounted) return;
+        if (state['ended'] == true) {
+          throw const ApiException(
+            409,
+            'CONSULTATION_ENDED',
+            'This consultation has ended.',
+          );
+        }
+        final readyAt = DateTime.tryParse(state['readyAt'] as String? ?? '')
+            ?.toLocal();
+        if (readyAt == null || !readyAt.isAfter(DateTime.now())) break;
+        setState(() => _preparingUntil = readyAt);
+        for (
+          var second = 0;
+          second < 5 && mounted && readyAt.isAfter(DateTime.now());
+          second++
+        ) {
+          await Future<void>.delayed(const Duration(seconds: 1));
+          if (mounted) setState(() {});
+        }
+      }
+      if (!mounted) return;
+      setState(() => _preparingUntil = null);
       final credentials = await _consultations.callCredentials(
         widget.consultationId,
       );
@@ -112,14 +144,22 @@ class _CallScreenState extends State<CallScreen> {
     }
   }
 
-  Future<bool> _askForDevices({required bool video}) async {
-    final wanted = <Permission>[
-      Permission.microphone,
-      if (video) Permission.camera,
-    ];
+  Future<void> _renewCallToken() async {
+    try {
+      final credentials = await _consultations.callCredentials(
+        widget.consultationId,
+      );
+      if (!mounted) return;
+      await _engine?.renewToken(credentials.token);
+      setState(() => _credentials = credentials);
+    } on ApiException {
+      /* The next backend heartbeat keeps the session state accurate. */
+    }
+  }
 
-    final results = await wanted.request();
-    return results.values.every((status) => status.isGranted);
+  Future<bool> _askForDevices({required bool video}) async {
+    // Audio remains available even when the customer declines camera access.
+    return (await Permission.microphone.request()).isGranted;
   }
 
   Future<void> _join(CallCredentials credentials) async {
@@ -133,12 +173,24 @@ class _CallScreenState extends State<CallScreen> {
         onJoinChannelSuccess: (connection, elapsed) {
           if (!mounted) return;
           setState(() => _joined = true);
+          _beat();
+        },
+        onTokenPrivilegeWillExpire: (connection, token) {
+          _renewCallToken();
         },
         onUserJoined: (connection, remoteUid, elapsed) {
-          if (mounted) setState(() => _otherSideHere = true);
+          if (mounted && remoteUid == 2) setState(() => _otherSideHere = true);
+        },
+        onUserMuteVideo: (connection, remoteUid, muted) {
+          if (mounted &&
+              remoteUid != 1001 &&
+              remoteUid != 1002 &&
+              remoteUid != 1003) {
+            setState(() => _remoteVideoOn = !muted);
+          }
         },
         onUserOffline: (connection, remoteUid, reason) {
-          if (mounted) setState(() => _otherSideHere = false);
+          if (mounted && remoteUid == 2) setState(() => _otherSideHere = false);
         },
         // Plugging in a headset or connecting Bluetooth changes the route
         // behind our back, so the button follows the device rather than
@@ -156,7 +208,8 @@ class _CallScreenState extends State<CallScreen> {
 
     if (credentials.isVideo) {
       await engine.enableVideo();
-      await engine.startPreview();
+      await engine.enableLocalVideo(false);
+      await engine.muteLocalVideoStream(true);
     } else {
       await engine.enableAudio();
     }
@@ -164,7 +217,7 @@ class _CallScreenState extends State<CallScreen> {
     // A video call is held at arm's length, so it belongs on the speaker; a
     // voice call is held to the ear. Without this the SDK picks for us, and
     // it picks the speaker once video has ever been enabled.
-    _speakerOn = credentials.isVideo;
+    _speakerOn = false;
     await engine.setDefaultAudioRouteToSpeakerphone(_speakerOn);
 
     await engine.joinChannel(
@@ -191,8 +244,28 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _beat() async {
+    if (!_joined) return;
     try {
       final attendance = await _consultations.ping(widget.consultationId);
+      if (!_cameraOff &&
+          !_videoUsageReported &&
+          attendance.customerPresent &&
+          attendance.lawyerPresent) {
+        final usage = await ApiClient.instance.post(
+          '/api/v1/customer/consultations/${widget.consultationId}/media/video',
+          auth: true,
+        );
+        _videoUsageReported = usage['recorded'] == true;
+      }
+      if (attendance.ended && mounted && !_timeUp) {
+        _timeUp = true;
+        if (attendance.expiresAt == null) {
+          Navigator.of(context).pop();
+          return;
+        }
+        _hangUp();
+        return;
+      }
       if (mounted) setState(() => _attendance = attendance);
     } on ApiException {
       // A dropped beat is not worth showing; the next one will do.
@@ -200,7 +273,7 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   void _tick() {
-    final endsAt = _credentials?.expiresAt;
+    final endsAt = _attendance?.expiresAt ?? _credentials?.expiresAt;
     if (endsAt == null || !mounted) return;
 
     final left = endsAt.difference(DateTime.now());
@@ -208,6 +281,24 @@ class _CallScreenState extends State<CallScreen> {
 
     // The backend closes the consultation at the same moment; leaving here
     // keeps the screen honest rather than sitting on a dead channel.
+    final expired = left.isNegative || left.inSeconds == 0;
+    if (expired && !_paymentPaused) {
+      _paymentPaused = true;
+      _engine?.muteLocalAudioStream(true);
+      _engine?.muteAllRemoteAudioStreams(true);
+      _engine?.muteLocalVideoStream(true);
+      _engine?.muteAllRemoteVideoStreams(true);
+    } else if (!expired && _paymentPaused) {
+      _paymentPaused = false;
+      _engine?.muteLocalAudioStream(_muted);
+      _engine?.muteAllRemoteAudioStreams(false);
+      _engine?.muteLocalVideoStream(_cameraOff);
+      _engine?.muteAllRemoteVideoStreams(false);
+    }
+    if ((left.isNegative || left.inSeconds == 0) &&
+        (_attendance?.pendingExtension != null || _answering)) {
+      return;
+    }
     if (left.isNegative || left.inSeconds == 0) {
       _clock?.cancel();
       if (!_timeUp) {
@@ -218,6 +309,7 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _toggleMute() async {
+    if (_paymentPaused) return;
     final next = !_muted;
     await _engine?.muteLocalAudioStream(next);
     if (mounted) setState(() => _muted = next);
@@ -230,7 +322,9 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _toggleCamera() async {
+    if (_paymentPaused) return;
     final next = !_cameraOff;
+    if (!next && !(await Permission.camera.request()).isGranted) return;
 
     // Both are needed: muting stops the stream reaching the other side,
     // while disabling actually turns the camera off. Muting alone leaves
@@ -256,12 +350,26 @@ class _CallScreenState extends State<CallScreen> {
       );
       // The deadline has moved; take the new one rather than waiting for
       // the next heartbeat, so the countdown jumps straight away.
+      if (accept && pending.amount > 0) {
+        final added = await PaymentService.instance.payExtension(
+          widget.consultationId,
+          pending.id,
+        );
+        if (!added && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Extra time has not been added. If payment arrived after expiry, a refund will be processed.',
+              ),
+            ),
+          );
+        }
+      }
       if (accept) await _refreshDeadline();
     } on ApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       if (mounted) setState(() => _answering = false);
@@ -294,9 +402,8 @@ class _CallScreenState extends State<CallScreen> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _leaving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
       return;
     }
 
@@ -310,7 +417,7 @@ class _CallScreenState extends State<CallScreen> {
       SnackBar(
         content: Text(
           result.refundAmount > 0
-              ? '${result.reason} ₹${result.refundAmount} is on its way back.'
+              ? '${result.reason} ₹${result.refundAmount} has been requested for refund.'
               : result.reason,
         ),
       ),
@@ -358,10 +465,46 @@ class _CallScreenState extends State<CallScreen> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
+    final preparing = _preparingUntil;
+    if (preparing != null) {
+      final seconds = preparing
+          .difference(DateTime.now())
+          .inSeconds
+          .clamp(0, 86400);
+      return Scaffold(
+        appBar: AppBar(title: const Text('Get ready')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.timer_outlined, size: 48),
+                const SizedBox(height: 20),
+                const Text(
+                  'Your consultation starts in',
+                  style: TextStyle(fontSize: 18),
+                ),
+                Text(
+                  '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Keep your microphone and documents ready. Paid time begins once both participants join.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final credentials = _credentials;
 
     return PopScope(
@@ -376,9 +519,22 @@ class _CallScreenState extends State<CallScreen> {
               else
                 _voice(),
 
+              if (_joined &&
+                  (_attendance?.expiresAt ?? _credentials?.expiresAt) == null)
+                const Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Center(
+                    child: Text(
+                      'Waiting for both participants · Timer has not started',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
               // Above everything else, so the time left is never buried by
               // the video or the other person's tile.
-              if (_credentials?.expiresAt != null)
+              if ((_attendance?.expiresAt ?? _credentials?.expiresAt) != null)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -386,6 +542,17 @@ class _CallScreenState extends State<CallScreen> {
                   child: Center(child: _CountdownPill(left: _left)),
                 ),
 
+              if (_paymentPaused)
+                const Positioned(
+                  bottom: 145,
+                  left: 16,
+                  right: 16,
+                  child: Text(
+                    'Session paused · Waiting for extension payment or decision',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
               // The lawyer has asked for more time. Sits over the call
               // rather than blocking it — they are still talking while
               // they read it.
@@ -451,7 +618,7 @@ class _CallScreenState extends State<CallScreen> {
     return Stack(
       children: [
         Positioned.fill(
-          child: _otherSideHere
+          child: _otherSideHere && _remoteVideoOn
               ? AgoraVideoView(
                   controller: VideoViewController.remote(
                     rtcEngine: engine,
@@ -466,7 +633,7 @@ class _CallScreenState extends State<CallScreen> {
                     useFlutterTexture: true,
                   ),
                 )
-              : _waitingForOther(),
+              : (_otherSideHere ? _voice() : _waitingForOther()),
         ),
         Positioned(
           top: 16,
@@ -496,12 +663,7 @@ class _CallScreenState extends State<CallScreen> {
                   ),
           ),
         ),
-        Positioned(
-          left: 20,
-          right: 20,
-          top: 20,
-          child: _header(onDark: true),
-        ),
+        Positioned(left: 20, right: 20, top: 20, child: _header(onDark: true)),
       ],
     );
   }
@@ -664,8 +826,9 @@ class _ExtensionPrompt extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹${extension.amount}, added to your bill and paid when you '
-            'download your consultation report.',
+            extension.amount == 0
+                ? 'Free extension. Accept to add these minutes.'
+                : '₹${extension.amount}. Time is added only after payment succeeds.',
             style: const TextStyle(
               fontSize: 12,
               height: 1.4,
@@ -775,7 +938,9 @@ class _AbandonedNotice extends StatelessWidget {
               child: Text(
                 busy
                     ? 'Ending…'
-                    : (refund > 0 ? 'End & get ₹$refund back' : 'End consultation'),
+                    : (refund > 0
+                          ? 'End & get ₹$refund back'
+                          : 'End consultation'),
               ),
             ),
           ),

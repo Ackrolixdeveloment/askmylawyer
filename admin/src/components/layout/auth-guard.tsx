@@ -69,6 +69,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
         const fingerprint = JSON.stringify({
           permissions: current.permissions,
+          role: current.role,
           isSuperAdmin: current.isSuperAdmin,
           status: current.status,
         });
@@ -113,8 +114,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // Typing the URL of a module they were not granted gets them this rather
   // than the screen. The API refuses the calls behind it either way.
   const required = keyForPath(pathname);
-  const body =
-    required && !canSee(admin, required) ? <NoAccess /> : children;
+  const body = required && !canSee(admin, required) ? <NoAccess /> : children;
 
   return (
     <AdminContext value={admin}>

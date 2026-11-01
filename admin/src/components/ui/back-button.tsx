@@ -20,7 +20,7 @@ export function BackButton({
   const router = useRouter();
 
   function handleClick() {
-    if (fallbackHref && window.history.length <= 1) {
+    if (fallbackHref) {
       router.push(fallbackHref);
       return;
     }

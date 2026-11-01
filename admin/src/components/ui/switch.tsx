@@ -27,7 +27,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
         "focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         checked ? "bg-positive" : "bg-slate-300",
@@ -36,8 +36,8 @@ export function Switch({
     >
       <span
         className={cn(
-          "inline-block size-5 rounded-full bg-white shadow transition-transform",
-          checked ? "translate-x-[22px]" : "translate-x-0.5",
+          "inline-block size-4 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-[18px]" : "translate-x-0.5",
         )}
         aria-hidden
       />

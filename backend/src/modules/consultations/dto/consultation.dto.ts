@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsISO8601,
   IsIn,
   IsLatitude,
   IsLongitude,
@@ -34,6 +35,9 @@ export class HeartbeatDto {
 
 /** What the customer is asking for. */
 export class CreateConsultationDto {
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  scheduledFor?: string;
   /**
    * Which plan to book. Optional, and normally left out: the customer no
    * longer chooses between audio, video and chat, so the backend uses
@@ -68,6 +72,9 @@ export class CreateConsultationDto {
 
 /** What the customer chose when nobody accepted. */
 export class ResolveConsultationDto {
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  scheduledFor?: string;
   @IsIn(['refund', 'reschedule'])
   choice: 'refund' | 'reschedule';
 }

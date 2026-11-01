@@ -49,61 +49,81 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
       {
-        label: "Lawyer Management",
+        label: "Lawyers",
         href: "/lawyers",
         icon: Briefcase,
         children: [
+          { label: "All Registered Lawyers", href: "/lawyers/all" },
           { label: "Verified Lawyers", href: "/lawyers/verified" },
           {
             label: "Onboarding Requests",
             children: [
-              { label: "New Requests", href: "/lawyers/onboarding/new" },
-              { label: "Correction", href: "/lawyers/onboarding/correction" },
-              { label: "Resubmission", href: "/lawyers/onboarding/resubmission" },
-              { label: "Rejected Lawyers", href: "/lawyers/onboarding/rejected" },
+              { label: "Awaiting Review", href: "/lawyers/onboarding/new" },
+              {
+                label: "Changes Requested",
+                href: "/lawyers/onboarding/correction",
+              },
+              {
+                label: "Resubmitted",
+                href: "/lawyers/onboarding/resubmission",
+              },
+              {
+                label: "Rejected Lawyers",
+                href: "/lawyers/onboarding/rejected",
+              },
               { label: "Draft Profiles", href: "/lawyers/onboarding/drafts" },
             ],
           },
           {
             label: "Edit Approvals",
             children: [
-              { label: "Pending Requests", href: "/lawyers/edit-approvals/pending" },
-              { label: "Approval Requests", href: "/lawyers/edit-approvals/approved" },
-              { label: "Rejected Requests", href: "/lawyers/edit-approvals/rejected" },
-              { label: "Lawyer History", href: "/lawyers/edit-approvals/history" },
+              {
+                label: "Pending Requests",
+                href: "/lawyers/edit-approvals/pending",
+              },
+              {
+                label: "Approved Requests",
+                href: "/lawyers/edit-approvals/approved",
+              },
+              {
+                label: "Rejected Requests",
+                href: "/lawyers/edit-approvals/rejected",
+              },
             ],
           },
           { label: "Deleted Lawyers", href: "/lawyers/deleted" },
         ],
       },
-      { label: "Customer Management", href: "/customers", icon: User },
+      { label: "Customers", href: "/customers", icon: User },
       {
-        label: "User Management",
+        label: "Team & access",
         href: "/users",
         icon: Users,
         children: [
           { label: "Departments", href: "/users/departments" },
-          { label: "Category", href: "/users/category" },
-          { label: "Role", href: "/users/roles" },
+          { label: "Roles & Permissions", href: "/users/roles" },
           { label: "Users", href: "/users" },
         ],
       },
       {
-        label: "Consultation Management",
+        label: "Consultations",
         href: "/consultations",
         icon: UsersRound,
         children: [
+          { label: "All Consultations", href: "/consultations/all" },
+          { label: "Scheduled", href: "/consultations/scheduled" },
+          { label: "Reports Pending", href: "/consultations/reports" },
           { label: "Completed", href: "/consultations/completed" },
-          { label: "Refunded", href: "/consultations/refunded" },
+          { label: "Refunds", href: "/consultations/refunded" },
           { label: "Disputed", href: "/consultations/disputed" },
           { label: "Cancelled", href: "/consultations/cancelled" },
           { label: "In Progress", href: "/consultations/in-progress" },
         ],
       },
-      { label: "Billing Management", href: "/billing", icon: CreditCard },
+      { label: "Billing & payouts", href: "/billing", icon: CreditCard },
       { label: "Referral", href: "/referral", icon: Gift },
       {
-        label: "Push Notifications",
+        label: "Notifications",
         href: "/notifications",
         icon: Bell,
         children: [
@@ -129,6 +149,7 @@ export const navSections: NavSection[] = [
         href: "/support",
         icon: Headset,
         children: [
+          { label: "Ticket Categories", href: "/support/categories" },
           { label: "New Tickets", href: "/support/new" },
           { label: "In Progress", href: "/support/in-progress" },
           { label: "Resolved", href: "/support/resolved" },

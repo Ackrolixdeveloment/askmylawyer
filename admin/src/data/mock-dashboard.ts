@@ -18,7 +18,7 @@ import type {
 export const statCards: StatCard[] = [
   {
     id: "consultations",
-    label: "Total Connsultation",
+    label: "Total Consultations",
     value: "12,458",
     note: "86 payouts pending",
     noteTone: "warn",

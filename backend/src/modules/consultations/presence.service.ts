@@ -135,6 +135,7 @@ export class PresenceService {
         ...approved,
         presence: {
           isOnline: true,
+          activeSessions: 0,
           lastHeartbeat: { gte: freshAfter },
           OR: [{ busyUntil: null }, { busyUntil: { lte: new Date() } }],
         },

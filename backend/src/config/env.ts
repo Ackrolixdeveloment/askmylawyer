@@ -154,6 +154,16 @@ const schema = z.object({
   /** How long to wait for Agora's file before giving the lawyer a blank report. */
   TRANSCRIPT_WAIT_SECONDS: z.coerce.number().int().positive().default(180),
 
+  OPENAI_API_KEY: z.string().optional().transform((value) => value || undefined),
+  OPENAI_REPORT_MODEL: z.string().default('gpt-4.1-mini').transform((value) => value || 'gpt-4.1-mini'),
+  REPORT_AI_MAX_INPUT_CHARS: z.coerce.number().int().positive().default(120000),
+  AGORA_RECORDING_ENABLED: bool,
+  AGORA_RECORDING_MODE: z.enum(['audio', 'audio_video']).default('audio'),
+  AGORA_RECORDING_BUCKET: z.string().optional(),
+  AGORA_RECORDING_REGION: z.string().default('ap-south-1'),
+  AGORA_RECORDING_ACCESS_KEY: z.string().optional(),
+  AGORA_RECORDING_SECRET_KEY: z.string().optional(),
+
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./storage'),
   S3_BUCKET: z.string().optional(),

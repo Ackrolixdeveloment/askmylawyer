@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentPreview } from "@/components/ui/document-preview";
 import { Copy, FileText } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ export function TranscriptCard({ lines }: { lines: TranscriptLine[] }) {
     <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-ink">Full transcript</h2>
-        <Badge tone="neutral">Sarvam AI generated</Badge>
+        <Badge tone="neutral">Sample transcript</Badge>
       </div>
 
       <ul className="mt-4 space-y-3">
@@ -50,17 +51,21 @@ export function TranscriptCard({ lines }: { lines: TranscriptLine[] }) {
           <Copy className="size-3.5" aria-hidden />
           Copy
         </button>
-        <button
-          type="button"
+        <DocumentPreview
+          title="Consultation transcript"
+          content={lines
+            .map((line) => `${line.speaker} (${line.timestamp}): ${line.text}`)
+            .join("\n\n")}
           className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-ink/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
         >
           <FileText className="size-3.5" aria-hidden />
-          Full transcript PDF
-        </button>
+          Full transcript
+        </DocumentPreview>
       </div>
 
       <p className="mt-2 text-xs text-ink-subtle">
-        Transcript is admin-only — neither the customer nor the lawyer can see it.
+        Sample transcript preview. Access controls and original-file downloads
+        will follow backend integration.
       </p>
     </Card>
   );

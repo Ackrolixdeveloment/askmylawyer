@@ -125,6 +125,17 @@ export class LawyerConsultationsController {
     return this.consultations.ping(request.lawyer.id, id);
   }
 
+  @Post('consultations/:id/media/video')
+  @HttpCode(200)
+  recordVideo(@Req() request: LawyerRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.consultations.recordVideo(request.lawyer.id, id);
+  }
+
+  @Get('consultations/:id/preparation')
+  preparation(@Req() request: LawyerRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.consultations.preparation(request.lawyer.id, id);
+  }
+
   @Post('consultations/:id/call-token')
   @HttpCode(200)
   callToken(@Req() request: LawyerRequest, @Param('id', ParseUUIDPipe) id: string) {

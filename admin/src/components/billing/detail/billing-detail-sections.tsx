@@ -1,9 +1,15 @@
-import { ArrowRight, Check, Download } from "lucide-react";
+import { PrintPageButton } from "@/components/ui/document-preview";
+import { PreviewAction } from "@/components/ui/preview-action";
+import { ArrowRight, Check } from "lucide-react";
 import Link from "next/link";
 import { Badge, Card, type BadgeTone } from "@/components/ui";
 import { formatInr } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { BillingDetail, BillingParty, BillingStatus } from "@/types/billing";
+import type {
+  BillingDetail,
+  BillingParty,
+  BillingStatus,
+} from "@/types/billing";
 
 const statusTone: Record<BillingStatus, BadgeTone> = {
   paid: "success",
@@ -39,19 +45,21 @@ export function BillingDetailHeader({
       {editable ? (
         <div className="flex flex-wrap gap-2">
           {/* TODO: wire both actions to the payouts API. */}
-          <button
-            type="button"
+          <PreviewAction
+            title="Request payout corrections"
+            requireReason
             className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-warn transition-colors hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
           >
-            resubmission
-          </button>
-          <button
-            type="button"
+            Request corrections
+          </PreviewAction>
+          <PreviewAction
+            title="Review payout approval"
+            description="Confirm the payout amount, beneficiary and review notes before approval."
             className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
           >
             <Check className="size-4" aria-hidden />
             Approve payout
-          </button>
+          </PreviewAction>
         </div>
       ) : null}
     </Card>
@@ -78,10 +86,19 @@ function Pair({
 export function ConsultationDetailsCard({ record }: { record: BillingDetail }) {
   return (
     <Card className="p-5">
-      <h2 className="text-base font-semibold text-ink">Consultations details</h2>
+      <h2 className="text-base font-semibold text-ink">
+        Consultations details
+      </h2>
 
       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-        <Pair label="Booking ID">{record.bookingId}</Pair>
+        <Pair label="Booking ID">
+          <Link
+            href={`/consultations/preview-${record.id}`}
+            className="font-medium text-brand hover:underline"
+          >
+            {record.bookingId} ↗
+          </Link>
+        </Pair>
         <Pair label="Date & Time" align="right">
           {record.dateTime}
         </Pair>
@@ -225,13 +242,9 @@ export function InvoicePreviewCard({ record }: { record: BillingDetail }) {
         </div>
       </div>
 
-      <button
-        type="button"
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-      >
-        <Download className="size-4" aria-hidden />
-        Download pdf
-      </button>
+      <PrintPageButton className="table-tool mt-4 w-full">
+        Print / save page as PDF
+      </PrintPageButton>
     </Card>
   );
 }

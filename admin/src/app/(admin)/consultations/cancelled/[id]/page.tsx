@@ -1,22 +1,31 @@
 "use client";
 
+import { PreviewAction } from "@/components/ui/preview-action";
 import { RefreshCw } from "lucide-react";
 import { use, useMemo } from "react";
 import { ScreenState } from "@/components/common/screen-state";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton, Card } from "@/components/ui";
-import { fetchConsultation } from "@/lib/consultations";
+import { fetchConsultation, refundState } from "@/lib/consultations";
 import { useApiData } from "@/lib/use-api-data";
 import type { RefundState } from "@/types/consultation-tables";
 
 /** Outlined pill, matching the design. */
 const refundPill: Record<RefundState, string> = {
+  requested: "border-amber-300 text-amber-600",
+  processing: "border-amber-300 text-amber-600",
+  needs_review: "border-amber-300 text-amber-600",
+  none: "border-slate-300 text-ink-muted",
   completed: "border-emerald-300 text-emerald-600",
   failed: "border-red-300 text-negative",
   "auto-processing": "border-amber-300 text-amber-600",
 };
 
 const refundLabel: Record<RefundState, string> = {
+  requested: "Requested",
+  processing: "Processing",
+  needs_review: "Needs review",
+  none: "No refund",
   completed: "Refunded",
   failed: "Failed",
   "auto-processing": "Processing",
@@ -41,7 +50,12 @@ export default function CancelledConsultationPage({
         <Topbar title="Consultation Management" />
         <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8">
           <BackButton fallbackHref="/consultations/cancelled" />
-          <ScreenState loading={loading} error={error} onRetry={retry} loadingLabel="Loading booking…">
+          <ScreenState
+            loading={loading}
+            error={error}
+            onRetry={retry}
+            loadingLabel="Loading booking…"
+          >
             <></>
           </ScreenState>
         </main>
@@ -58,10 +72,9 @@ export default function CancelledConsultationPage({
       ? new Date(data.cancelledAt).toLocaleString()
       : "—",
     reason:
-      data.reason ?? (data.status === "no_lawyer" ? "No lawyer available" : "Cancelled"),
-    refundStatus: (data.refundAmount > 0
-      ? "completed"
-      : "auto-processing") as RefundState,
+      data.reason ??
+      (data.status === "no_lawyer" ? "No lawyer available" : "Cancelled"),
+    refundStatus: refundState(data),
   };
 
   const reasonPill = (
@@ -73,7 +86,7 @@ export default function CancelledConsultationPage({
   const cancellationRows: [Field, Field][] = [
     [
       { label: "Consultation ID", value: call.consultationId },
-      { label: "Scheduled for", value: "Today 10:00 AM" },
+      { label: "Scheduled for", value: "Instant consultation" },
     ],
     [
       { label: "Cancelled at", value: call.cancelledAt },
@@ -113,13 +126,14 @@ export default function CancelledConsultationPage({
 
             {/* Only a failed refund is worth retrying. */}
             {call.refundStatus === "failed" ? (
-              <button
-                type="button"
+              <PreviewAction
+                title="Review refund retry"
+                requireReason
                 className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-surface px-4 py-2.5 text-sm font-medium text-negative transition-colors hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
               >
                 <RefreshCw className="size-4" aria-hidden />
                 Retry Refund
-              </button>
+              </PreviewAction>
             ) : null}
           </div>
         </Card>

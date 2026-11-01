@@ -1,5 +1,7 @@
 "use client";
 
+import { PersonCell } from "@/components/common/person-cell";
+import { DocumentPreview } from "@/components/ui/document-preview";
 import { CircleCheck } from "lucide-react";
 import { Badge, DataTable, type BadgeTone, type Column } from "@/components/ui";
 import { formatDayMonthYear, formatInr } from "@/lib/format";
@@ -22,24 +24,28 @@ const columns: Column<Referral>[] = [
     key: "referralId",
     header: "Referral ID",
     sortValue: (row) => row.referralId,
-    cell: (row) => <span className="font-medium text-brand">{row.referralId}</span>,
+    cell: (row) => (
+      <DocumentPreview
+        title={row.referralId}
+        content={`Referrer: ${row.referrerName} (${row.referrerEmail})\nReferred user: ${row.referredUser}\nUser type: ${row.userType}\nDate: ${row.date}\nReward: ${formatInr(row.reward)}\nStatus: ${row.status}\n\nDemonstration record. No reward has been issued by this preview.`}
+        className="whitespace-nowrap font-medium text-brand hover:underline"
+      >
+        {row.referralId} ↗
+      </DocumentPreview>
+    ),
   },
   {
     key: "referrer",
     header: "Referrer",
     sortValue: (row) => row.referrerName,
+    textValue: (row) =>
+      `${row.referrerName} ${row.referrerEmail} ${row.userType}`,
     cell: (row) => (
-      <>
-        <p className="font-medium text-ink">{row.referrerName}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.referrerEmail}</p>
-      </>
+      <PersonCell
+        name={row.referrerName}
+        detail={`${row.userType} · ${row.referrerEmail}`}
+      />
     ),
-  },
-  {
-    key: "userType",
-    header: "User Type",
-    sortValue: (row) => row.userType,
-    cell: (row) => <span className="text-ink">{row.userType}</span>,
   },
   {
     key: "referredUser",
@@ -58,6 +64,7 @@ const columns: Column<Referral>[] = [
   {
     key: "reward",
     header: "Reward",
+    align: "right",
     sortValue: (row) => row.reward,
     cell: (row) => (
       <span className="font-medium text-positive">{formatInr(row.reward)}</span>

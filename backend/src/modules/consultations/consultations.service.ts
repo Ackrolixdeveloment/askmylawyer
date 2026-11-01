@@ -1,7 +1,8 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConsultationStatus, EarningStatus, OfferOutcome, Prisma } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
 import { consultationCode } from '../../common/consultation-code';
+import { AgoraRecordingService } from '../../infrastructure/agora/agora-recording.service';
 import { AgoraService } from '../../infrastructure/agora/agora.service';
 import { AgoraSttService } from '../../infrastructure/agora/agora-stt.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -43,10 +44,18 @@ export class ConsultationsService {
     private readonly stt: AgoraSttService,
     private readonly notifications: UserNotificationsService,
     private readonly presence: PresenceService,
+    @Optional() private readonly recording?: AgoraRecordingService,
   ) {}
 
   /** The customer asks for a consultation; the search starts immediately. */
   async create(customerId: string, dto: CreateConsultationDto) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`customer-booking:${customerId}`}))`;
+      return this.createLocked(customerId, dto);
+    }, { timeout: 60_000 });
+  }
+
+  private async createLocked(customerId: string, dto: CreateConsultationDto) {
     // There is one consultation on sale; the app does not pick one. A plan
     // code is still honoured if an older build sends it.
     const plan = dto.planCode
@@ -65,16 +74,31 @@ export class ConsultationsService {
     }
 
     const engine = await this.settings.forEngine();
+    const scheduledFor = dto.scheduledFor ? new Date(dto.scheduledFor) : null;
+    if (scheduledFor && (scheduledFor.getTime() < Date.now() + 60_000 || scheduledFor.getTime() > Date.now() + 90 * 86400000)) {
+      throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_SLOT', 'Choose a slot between one minute and 90 days from now.');
+    }
+    if (scheduledFor) {
+      const bookings = await this.prisma.consultationRequest.findMany({ where: {
+        customerId, status: { in: ['scheduled', 'pending_payment', 'searching', 'assigned', 'active'] }, scheduledFor: { not: null },
+      } });
+      const begin = scheduledFor.getTime() - engine.preparationMinutes * 60000;
+      const end = scheduledFor.getTime() + (plan.durationMinutes + plan.extensionMinutes * plan.maxExtensions) * 60000;
+      const overlap = bookings.some((row) => row.scheduledFor && begin < row.scheduledFor.getTime() + (row.durationMinutes + row.extensionMinutes * row.maxExtensions) * 60000 && end > row.scheduledFor.getTime() - row.preparationMinutes * 60000);
+      if (overlap) throw new AppException(HttpStatus.CONFLICT, 'SLOT_OVERLAP', 'You already have a booking around this time.');
+    }
+    const tax = await this.prisma.platformSettings.findUnique({ where: { id: 1 } });
 
     // One at a time: a customer waiting on a lawyer cannot ask again.
     const open = await this.prisma.consultationRequest.findFirst({
       where: {
         customerId,
-        status: { in: [ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] },
+        status: { in: [ConsultationStatus.pending_payment, ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] },
+        scheduledFor: null,
       },
       select: { id: true },
     });
-    if (open) {
+    if (open && !scheduledFor) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'CONSULTATION_IN_PROGRESS',
@@ -82,6 +106,7 @@ export class ConsultationsService {
       );
     }
 
+    const skipPayment = engine.skipPayment || plan.amount === 0;
     const request = await this.prisma.consultationRequest.create({
       data: {
         number: await this.nextNumber(),
@@ -90,19 +115,26 @@ export class ConsultationsService {
         planName: plan.type,
         amount: plan.amount,
         durationMinutes: plan.durationMinutes,
+        preparationMinutes: engine.preparationMinutes,
+        extensionMinutes: plan.extensionMinutes,
+        extensionAmount: plan.extensionAmount,
+        maxExtensions: plan.maxExtensions,
+        gst: Math.round(plan.amount * (tax?.gstPercent ?? 0) / 100),
+        scheduledFor,
+        paymentBypassed: engine.skipPayment && plan.amount > 0,
         category: dto.category,
         description: dto.description,
         latitude: dto.latitude,
         longitude: dto.longitude,
         // Payment is skipped in demo mode; otherwise it waits to be paid.
-        status: engine.skipPayment
-          ? ConsultationStatus.searching
+        status: skipPayment
+          ? (scheduledFor ? ConsultationStatus.scheduled : ConsultationStatus.searching)
           : ConsultationStatus.pending_payment,
       },
       select: requestSelect,
     });
 
-    if (engine.skipPayment) await this.dispatch.start(request.id);
+    if (skipPayment && !scheduledFor) await this.dispatch.start(request.id);
 
     return this.detail(request.id);
   }
@@ -117,13 +149,27 @@ export class ConsultationsService {
 
   /** Called once payment lands. Starts the search. */
   async markPaid(requestId: string) {
+    const request = await this.prisma.consultationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw notFound();
+    if (request.status === 'cancelled') {
+      const payment = await this.prisma.consultationPayment.findUnique({ where: { requestId } });
+      if (payment?.status === 'paid' && payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN') await this.prisma.consultationPayment.updateMany({ where: { id: payment.id, refundStatus: null }, data: { refundStatus: 'requested', refundRequestedAt: new Date(), refundAmount: payment.amount, refundReason: 'Payment arrived after booking cancellation or expiry.' } });
+      return this.detail(requestId);
+    }
     const updated = await this.prisma.consultationRequest.updateMany({
       where: { id: requestId, status: ConsultationStatus.pending_payment },
-      data: { status: ConsultationStatus.searching },
+      data: { status: request.scheduledFor ? ConsultationStatus.scheduled : ConsultationStatus.searching },
     });
-    if (updated.count > 0) await this.dispatch.start(requestId);
-
+    if ((updated.count > 0 || request.status === 'searching') && !request.scheduledFor) await this.dispatch.start(requestId);
     return this.detail(requestId);
+  }
+
+  async upcoming(customerId: string) {
+    const rows = await this.prisma.consultationRequest.findMany({
+      where: { customerId, scheduledFor: { not: null }, status: { in: ['scheduled', 'pending_payment', 'searching', 'assigned', 'active', 'no_lawyer'] } },
+      orderBy: { scheduledFor: 'asc' }, take: 100,
+    });
+    return Promise.all(rows.map((row) => this.detail(row.id)));
   }
 
   /** What the customer's waiting screen polls. */
@@ -148,6 +194,8 @@ export class ConsultationsService {
       createdAt: request.createdAt,
       searchEndsAt: request.searchEndsAt,
       assignedAt: request.assignedAt,
+      scheduledFor: request.scheduledFor,
+      readyAt: request.session?.readyAt ?? null,
       lawyer: request.lawyer
         ? {
             id: request.lawyer.id,
@@ -300,6 +348,7 @@ export class ConsultationsService {
     const cancellable: ConsultationStatus[] = [
       ConsultationStatus.searching,
       ConsultationStatus.pending_payment,
+      ConsultationStatus.scheduled,
     ];
     if (!cancellable.includes(request.status)) {
       throw new AppException(
@@ -309,13 +358,28 @@ export class ConsultationsService {
       );
     }
 
-    await this.prisma.consultationRequest.update({
-      where: { id: requestId },
-      data: { status: ConsultationStatus.cancelled },
-    });
-    await this.prisma.consultationOffer.updateMany({
-      where: { requestId, outcome: OfferOutcome.ringing },
-      data: { outcome: OfferOutcome.cancelled, answeredAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.consultationRequest.updateMany({
+        where: { id: requestId, status: { in: cancellable } },
+        data: { status: ConsultationStatus.cancelled, cancelledBy: 'customer', cancellationReason: 'Customer cancelled before assignment.' },
+      });
+      if (changed.count !== 1) {
+        throw new AppException(HttpStatus.CONFLICT, 'TOO_LATE', 'This consultation can no longer be cancelled.');
+      }
+      await tx.consultationOffer.updateMany({
+        where: { requestId, outcome: OfferOutcome.ringing },
+        data: { outcome: OfferOutcome.cancelled, answeredAt: new Date() },
+      });
+      const payment = await tx.consultationPayment.findUnique({ where: { requestId } });
+      if (payment?.status === 'paid' && payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN' && !payment.refundStatus) {
+        await tx.consultationPayment.update({
+          where: { id: payment.id },
+          data: {
+            refundStatus: 'requested', refundRequestedAt: new Date(),
+            refundAmount: payment.amount, refundReason: 'Customer cancelled before a lawyer accepted.',
+          },
+        });
+      }
     });
 
     return this.detail(requestId);
@@ -335,17 +399,40 @@ export class ConsultationsService {
       );
     }
 
-    await this.prisma.consultationRequest.update({
-      where: { id: requestId },
-      data: {
-        status:
-          dto.choice === 'refund' ? ConsultationStatus.refunded : ConsultationStatus.searching,
-        ...(dto.choice === 'reschedule' ? { searchEndsAt: null } : {}),
-      },
+    const slot = dto.scheduledFor ? new Date(dto.scheduledFor) : null;
+    if (slot && (dto.choice !== 'reschedule' || slot.getTime() < Date.now() + 60000 || slot.getTime() > Date.now() + 90 * 86400000)) throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_SLOT', 'Choose a future slot within 90 days.');
+    await this.prisma.$transaction(async (tx) => {
+      // Claim this terminal decision atomically so simultaneous retries cannot
+      // reopen a booking after a refund request was recorded.
+      const changed = await tx.consultationRequest.updateMany({
+        where: { id: requestId, status: ConsultationStatus.no_lawyer },
+        data: {
+          status: dto.choice === 'refund' ? ConsultationStatus.cancelled : slot ? ConsultationStatus.scheduled : ConsultationStatus.searching,
+          ...(dto.choice === 'refund' ? { cancelledBy: 'customer', cancellationReason: 'Customer requested a refund after no lawyer was available.' } : {}),
+          ...(dto.choice === 'reschedule' ? { scheduledFor: slot } : {}),
+          ...(dto.choice === 'reschedule' ? { searchEndsAt: null } : {}),
+        },
+      });
+      if (changed.count !== 1) {
+        throw new AppException(HttpStatus.CONFLICT, 'NOTHING_TO_RESOLVE', 'This consultation has already been resolved.');
+      }
+      if (dto.choice === 'reschedule') await tx.consultationOffer.updateMany({ where: { requestId }, data: { outcome: 'expired' } });
+      if (dto.choice === 'refund') {
+        const payment = await tx.consultationPayment.findUnique({ where: { requestId } });
+        if (payment?.status === 'paid' && payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN' && !payment.refundStatus) {
+          await tx.consultationPayment.update({
+            where: { id: payment.id },
+            data: {
+              refundStatus: 'requested', refundRequestedAt: new Date(),
+              refundAmount: payment.amount, refundReason: 'No lawyer accepted the consultation.',
+            },
+          });
+        }
+      }
     });
 
     // "Try again" simply starts a fresh search on the same request.
-    if (dto.choice === 'reschedule') await this.dispatch.start(requestId);
+    if (dto.choice === 'reschedule' && !slot) await this.dispatch.start(requestId);
 
     return this.detail(requestId);
   }
@@ -545,6 +632,12 @@ export class ConsultationsService {
     };
   }
 
+  async preparation(userId: string, requestId: string) {
+    const row = await this.prisma.consultationRequest.findFirst({ where: { id: requestId, OR: [{ customerId: userId }, { lawyerId: userId }] }, include: { session: true } });
+    if (!row?.session) throw notFound();
+    return { readyAt: row.session.readyAt, status: row.status, ended: Boolean(row.session.endedAt), serverNow: new Date() };
+  }
+
   /**
    * Credentials for joining the call. Issued per person, per consultation,
    * and only to the two people in it.
@@ -575,55 +668,15 @@ export class ConsultationsService {
 
     const engine = await this.settings.forEngine();
 
-    // The paid time is fixed the moment the first person joins, so a rejoin
-    // resumes the same window rather than starting a fresh one.
     const now = new Date();
-    const expiresAt =
-      request.session.expiresAt ?? new Date(now.getTime() + request.durationMinutes * 60_000);
-
-    if (expiresAt <= now) {
-      throw new AppException(
-        HttpStatus.CONFLICT,
-        'CONSULTATION_ENDED',
-        'This consultation has finished.',
-      );
+    if (request.session.readyAt && request.session.readyAt > now) {
+      throw new AppException(HttpStatus.CONFLICT, 'PREPARING', 'Your preparation countdown is running.');
     }
-
-    // The token outlives the call by the grace period, so a rejoin in the
-    // last seconds does not fail on an expired token.
-    const seconds =
-      Math.ceil((expiresAt.getTime() - now.getTime()) / 1000) + engine.tokenGraceMinutes * 60;
-
-    const credentials = this.agora.issue(
-      request.session.channel,
-      isCustomer ? CUSTOMER_UID : LAWYER_UID,
-      seconds,
-    );
-
-    // Joining marks this side present, and the first person in starts the
-    // clock. Attendance is what a refund is judged on later.
-    await this.prisma.$transaction([
-      this.prisma.consultationSession.update({
-        where: { id: request.session.id },
-        data: {
-          ...(request.session.startedAt ? {} : { startedAt: now, expiresAt }),
-          ...(isCustomer
-            ? { customerInCall: true, customerLastSeenAt: now }
-            : { lawyerInCall: true, lawyerLastSeenAt: now }),
-        },
-      }),
-      this.prisma.consultationRequest.updateMany({
-        where: { id: requestId, status: ConsultationStatus.assigned },
-        data: { status: ConsultationStatus.active },
-      }),
-    ]);
-
-    // The first person in starts the transcription. It is deliberately not
-    // awaited: Agora takes a second or two to put its bot in the channel,
-    // and nobody should wait on their side of a call for that.
-    if (!request.session.startedAt) {
-      void this.beginTranscription(request.session.id, request.session.channel, requestId);
-    }
+    const expiresAt = request.session.expiresAt;
+    if (request.session.endedAt || (expiresAt && expiresAt <= now)) throw new AppException(HttpStatus.CONFLICT, 'CONSULTATION_ENDED', 'This consultation has finished.');
+    const seconds = (expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / 1000) : request.durationMinutes * 60 + engine.absenceGraceSeconds) + engine.tokenGraceMinutes * 60;
+    const credentials = this.agora.issue(request.session.channel, isCustomer ? CUSTOMER_UID : LAWYER_UID, seconds);
+    // Credentials are permission to join, not proof of attendance. Ping after RTC join starts the timer.
 
     return {
       ...credentials,
@@ -633,6 +686,14 @@ export class ConsultationsService {
       expiresAt,
       role: isCustomer ? 'customer' : 'lawyer',
     };
+  }
+
+  async recordVideo(userId: string, requestId: string) {
+    const request = await this.prisma.consultationRequest.findFirst({ where: { id: requestId, OR: [{ customerId: userId }, { lawyerId: userId }] }, include: { session: true } });
+    if (!request?.session) throw notFound();
+    if (request.status !== 'active' || !request.session.startedAt || request.session.endedAt || !request.session.expiresAt || request.session.expiresAt <= new Date()) return { recorded: false };
+    await this.prisma.consultationSession.updateMany({ where: { id: request.session.id, NOT: { usedModes: { has: 'video' } } }, data: { usedModes: { push: 'video' } } });
+    return { recorded: true };
   }
 
   /**
@@ -678,7 +739,7 @@ export class ConsultationsService {
         'Not your consultation.',
       );
     }
-    if (!request.session || request.session.endedAt) {
+    if (!request.session || request.session.endedAt || request.session.readyAt && request.session.readyAt > new Date() || request.session.expiresAt && request.session.expiresAt <= new Date()) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'CONSULTATION_ENDED',
@@ -758,6 +819,9 @@ export class ConsultationsService {
     const now = new Date();
     const engine = await this.settings.forEngine();
 
+    if (session.endedAt || !['assigned', 'active'].includes(request.status) || (session.readyAt && session.readyAt > now)) {
+      throw new AppException(HttpStatus.CONFLICT, 'CONSULTATION_NOT_LIVE', 'The consultation is not ready or has ended.');
+    }
     // Only count time when the other side was here too, and only since our
     // own last check-in — so a phone that slept does not bank the gap.
     const mine = isCustomer ? session.customerLastSeenAt : session.lawyerLastSeenAt;
@@ -772,7 +836,7 @@ export class ConsultationsService {
       // Both fresh, and no longer ago than one grace period: anything more
       // is a gap we cannot vouch for.
       if (theirAge <= engine.absenceGraceSeconds) {
-        talked = Math.max(0, Math.min(sinceMine, engine.absenceGraceSeconds));
+        talked = Math.max(0, Math.min(sinceMine, engine.absenceGraceSeconds, session.expiresAt ? Math.floor((session.expiresAt.getTime() - mine.getTime()) / 1000) : 0));
       }
     }
 
@@ -787,6 +851,18 @@ export class ConsultationsService {
       },
     });
 
+    const current = await this.prisma.consultationSession.findUniqueOrThrow({ where: { id: session.id } });
+    if (current.customerInCall && current.lawyerInCall && current.customerLastSeenAt && current.lawyerLastSeenAt &&
+        now.getTime() - current.customerLastSeenAt.getTime() <= engine.absenceGraceSeconds * 1000 &&
+        now.getTime() - current.lawyerLastSeenAt.getTime() <= engine.absenceGraceSeconds * 1000) {
+      const started = await this.prisma.consultationSession.updateMany({ where: { id: session.id, startedAt: null, endedAt: null },
+        data: { startedAt: now, expiresAt: new Date(now.getTime() + request.durationMinutes * 60000), mediaUsageKnown: true, usedModes: ['audio'] } });
+      if (started.count) {
+        await this.prisma.consultationRequest.updateMany({ where: { id: requestId, status: 'assigned' }, data: { status: 'active' } });
+        void this.beginTranscription(session.id, session.channel, requestId);
+        void this.recording?.start(requestId).catch(() => this.logger.warn(`Recording unavailable for ${requestId}`));
+      }
+    }
     return this.attendance(requestId);
   }
 
@@ -798,6 +874,13 @@ export class ConsultationsService {
    * later price change cannot alter a bill already agreed to.
    */
   async requestExtension(lawyerId: string, requestId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${requestId}))`;
+      return this.requestExtensionLocked(lawyerId, requestId);
+    });
+  }
+
+  private async requestExtensionLocked(lawyerId: string, requestId: string) {
     const [request, engine] = await Promise.all([
       this.prisma.consultationRequest.findFirst({
         where: { id: requestId, lawyerId },
@@ -807,7 +890,7 @@ export class ConsultationsService {
     ]);
     if (!request?.session) throw notFound();
 
-    if (request.session.endedAt || request.status !== ConsultationStatus.active) {
+    if (request.session.endedAt || request.status !== ConsultationStatus.active || !request.session.expiresAt || request.session.expiresAt <= new Date()) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'CONSULTATION_NOT_LIVE',
@@ -817,7 +900,7 @@ export class ConsultationsService {
 
     // One question at a time, or the customer gets a queue of prompts.
     const pending = request.extensions.find(
-      (row) => row.status === 'pending' && row.promptEndsAt > new Date(),
+      (row) => ['pending', 'payment_pending'].includes(row.status) && row.promptEndsAt > new Date(),
     );
     if (pending) {
       throw new AppException(
@@ -829,10 +912,7 @@ export class ConsultationsService {
 
     // The plan this consultation was booked on sets the limit, so a change
     // of pricing cannot alter what a client already agreed to.
-    const plan = await this.prisma.servicePlan.findUnique({
-      where: { code: request.planCode },
-    });
-
+    const plan = { maxExtensions: request.maxExtensions, extensionMinutes: request.extensionMinutes, extensionAmount: request.extensionAmount };
     const accepted = request.extensions.filter((row) => row.status === 'accepted').length;
     if (plan && accepted >= plan.maxExtensions) {
       throw new AppException(
@@ -888,7 +968,7 @@ export class ConsultationsService {
     });
     if (!extension) throw notFound();
 
-    if (extension.status !== 'pending') {
+    if (!['pending', 'payment_pending'].includes(extension.status)) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'EXTENSION_CLOSED',
@@ -908,41 +988,53 @@ export class ConsultationsService {
     }
 
     if (!accept) {
-      const declined = await this.prisma.consultationExtension.update({
-        where: { id: extension.id },
-        data: { status: 'declined', answeredAt: new Date() },
-      });
-      return this.toExtension(declined);
+      await this.prisma.consultationExtension.updateMany({ where: { id: extension.id, status: { in: ['pending', 'payment_pending'] } }, data: { status: 'declined', answeredAt: new Date() } });
+      return this.toExtension(await this.prisma.consultationExtension.findUniqueOrThrow({ where: { id: extension.id } }));
     }
+    if (extension.status === 'payment_pending') return this.toExtension(extension);
 
-    // The clock moves from wherever it is now, not from when the lawyer
-    // asked — a slow answer should not eat the minutes being bought. If the
-    // call has already run past its end while the prompt was open, the extra
-    // time starts from this moment instead.
-    const now = new Date();
-    const from =
-      request.session.expiresAt && request.session.expiresAt > now
-        ? request.session.expiresAt
-        : now;
+    if (request.session.endedAt || request.status !== 'active') throw new AppException(HttpStatus.CONFLICT, 'CONSULTATION_ENDED', 'The consultation has ended.');
+    if (extension.amount > 0) {
+      const engine = await this.settings.forEngine();
+      const changed = await this.prisma.consultationExtension.updateMany({ where: { id: extension.id, status: 'pending' },
+        data: { status: 'payment_pending', answeredAt: new Date(), promptEndsAt: new Date(Date.now() + engine.extensionPaymentSeconds * 1000) } });
+      if (!changed.count) throw new AppException(HttpStatus.CONFLICT, 'EXTENSION_CLOSED', 'That request has already been answered.');
+      return this.toExtension(await this.prisma.consultationExtension.findUniqueOrThrow({ where: { id: extension.id } }));
+    }
+    return this.activateExtension(extension.id);
+  }
 
-    const [accepted] = await this.prisma.$transaction([
-      this.prisma.consultationExtension.update({
-        where: { id: extension.id },
-        data: { status: 'accepted', answeredAt: now },
-      }),
-      this.prisma.consultationSession.update({
-        where: { id: request.session.id },
-        data: { expiresAt: new Date(from.getTime() + extension.minutes * 60_000) },
-      }),
-    ]);
-
-    return this.toExtension(accepted);
+  /** Free consent or verified captured payment: extend once under a DB transaction. */
+  async activateExtension(extensionId: string, payment?: { reference: string }) {
+    const owner = await this.prisma.consultationExtension.findUniqueOrThrow({ where: { id: extensionId }, select: { requestId: true } });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${owner.requestId}))`;
+      const extension = await tx.consultationExtension.findUniqueOrThrow({ where: { id: extensionId }, include: { request: { include: { session: true } } } });
+      if (extension.status === 'accepted') return this.toExtension(extension);
+      const request = extension.request;
+      const session = request.session;
+      const used = await tx.consultationExtension.count({ where: { requestId: owner.requestId, status: 'accepted' } });
+      const eligible = used < request.maxExtensions && session && !session.endedAt && request.status === 'active' && extension.promptEndsAt > new Date() &&
+        (extension.amount === 0 ? extension.status === 'pending' : extension.status === 'payment_pending' && Boolean(payment));
+      if (!eligible) {
+        if (payment) await tx.consultationExtension.update({ where: { id: extension.id }, data: { status: 'expired', reference: payment.reference, paidAt: new Date(), refundStatus: 'requested' } });
+        return this.toExtension(extension);
+      }
+      const now = new Date();
+      const changed = await tx.consultationExtension.updateMany({ where: { id: extension.id, status: extension.status },
+        data: { status: 'accepted', answeredAt: now, paidAt: now, reference: payment?.reference } });
+      if (changed.count) {
+        await tx.consultationSession.update({ where: { id: session.id }, data: {
+          expiresAt: new Date(Math.max(session.expiresAt?.getTime() ?? now.getTime(), now.getTime()) + extension.minutes * 60000) } });
+      }
+      return this.toExtension(await tx.consultationExtension.findUniqueOrThrow({ where: { id: extension.id } }));
+    });
   }
 
   /** The question currently in front of the customer, if there is one. */
   private async pendingExtension(requestId: string) {
     const row = await this.prisma.consultationExtension.findFirst({
-      where: { requestId, status: 'pending', promptEndsAt: { gt: new Date() } },
+      where: { requestId, status: { in: ['pending', 'payment_pending'] }, promptEndsAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -993,16 +1085,16 @@ export class ConsultationsService {
     const customerPresent = present(session.customerInCall, session.customerLastSeenAt);
 
     // Nothing to be owed if they never paid — a demo, or a free plan.
-    const paid = request.payment?.status === 'paid' ? request.payment.amount : 0;
+    const paid = request.payment?.status === 'paid' && request.payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN'
+      ? request.payment.amount : 0;
     const agreed = request.extensions.filter((row) => row.status === 'accepted');
-    const plan = await this.prisma.servicePlan.findUnique({
-      where: { code: request.planCode },
-      select: { maxExtensions: true },
-    });
+    const plan = { maxExtensions: request.maxExtensions };
 
     return {
       lawyerPresent,
       customerPresent,
+      expiresAt: session.expiresAt,
+      ended: session.endedAt !== null,
       /** Null if they have never joined at all. */
       lawyerLastSeenAt: session.lawyerLastSeenAt,
       talkedSeconds: session.talkedSeconds,
@@ -1041,10 +1133,10 @@ export class ConsultationsService {
         .reduce((total, row) => total + row.amount, 0),
       /** Whether the lawyer may ask for more. */
       canAskForMore:
-        session.endedAt === null &&
+        session.endedAt === null && request.status === 'active' && session.expiresAt !== null && session.expiresAt > new Date() &&
         agreed.length < (plan?.maxExtensions ?? 0) &&
         !request.extensions.some(
-          (row) => row.status === 'pending' && row.promptEndsAt > new Date(),
+          (row) => ['pending', 'payment_pending'].includes(row.status) && row.promptEndsAt > new Date(),
         ),
     };
   }
@@ -1144,21 +1236,21 @@ export class ConsultationsService {
 
     await this.dispatch.close(requestId, 'customer');
 
-    if (request.payment && wasPaid) {
+    if (request.payment && wasPaid && refund > 0 && !request.payment.refundStatus) {
       // Recorded, not sent: the gateway refund is raised by the admin team,
       // who can see the reason and the figure here.
       await this.prisma.consultationPayment.update({
         where: { id: request.payment.id },
         data: {
-          status: 'refunded',
-          refundedAt: new Date(),
+          refundStatus: 'requested',
+          refundRequestedAt: new Date(),
           refundAmount: refund,
           refundReason: reason,
         },
       });
       await this.prisma.consultationRequest.update({
         where: { id: requestId },
-        data: { status: ConsultationStatus.refunded },
+        data: { status: ConsultationStatus.cancelled, cancelledBy: 'customer', cancellationReason: reason },
       });
     }
 
@@ -1166,8 +1258,8 @@ export class ConsultationsService {
       await this.notifications
         .notify(
           customerId,
-          'Refund on its way',
-          `₹${refund} is being returned to you. ${reason}`,
+          'Refund requested',
+          `Your refund request for ₹${refund} is awaiting processing. ${reason}`,
           'payment',
         )
         .catch(() => undefined);
@@ -1243,6 +1335,7 @@ const requestSelect = {
   createdAt: true,
   searchEndsAt: true,
   assignedAt: true,
+  scheduledFor: true,
   customer: { select: { id: true, fullName: true } },
   lawyer: {
     select: {
@@ -1251,6 +1344,6 @@ const requestSelect = {
       lawyerProfile: { select: { specialisations: true } },
     },
   },
-  session: { select: { id: true, startedAt: true, expiresAt: true, endedAt: true } },
+  session: { select: { id: true, readyAt: true, startedAt: true, expiresAt: true, endedAt: true } },
   _count: { select: { offers: true } },
 } satisfies Prisma.ConsultationRequestSelect;

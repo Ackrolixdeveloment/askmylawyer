@@ -84,9 +84,8 @@ class LiveConsultation {
         durationMinutes: json['durationMinutes'] as int? ?? 15,
         withName: json['withName'] as String? ?? '',
         started: json['started'] as bool? ?? false,
-        expiresAt: DateTime.tryParse(
-          json['expiresAt'] as String? ?? '',
-        )?.toLocal(),
+        expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? '')
+            ?.toLocal(),
       );
 
   final String id;
@@ -130,7 +129,8 @@ class PendingExtension {
         minutes: json['minutes'] as int? ?? 5,
         amount: json['amount'] as int? ?? 0,
         promptEndsAt:
-            DateTime.tryParse(json['promptEndsAt'] as String? ?? '')?.toLocal() ??
+            DateTime.tryParse(json['promptEndsAt'] as String? ?? '')
+                ?.toLocal() ??
             DateTime.now(),
       );
 
@@ -162,7 +162,8 @@ class ChatMessage {
     id: json['id'] as String,
     senderRole: json['senderRole'] as String? ?? 'customer',
     body: json['body'] as String? ?? '',
-    at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+    at:
+        DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
         DateTime.now(),
   );
 
@@ -197,9 +198,13 @@ class CallAttendance {
     required this.canAskForMore,
     required this.messageCount,
     this.pendingExtension,
+    this.expiresAt,
+    this.ended = false,
   });
 
   factory CallAttendance.fromJson(Map<String, dynamic> json) => CallAttendance(
+    expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? '')?.toLocal(),
+    ended: json['ended'] as bool? ?? false,
     lawyerPresent: json['lawyerPresent'] as bool? ?? false,
     customerPresent: json['customerPresent'] as bool? ?? false,
     talkedSeconds: json['talkedSeconds'] as int? ?? 0,
@@ -216,6 +221,8 @@ class CallAttendance {
           ),
   );
 
+  final DateTime? expiresAt;
+  final bool ended;
   final bool lawyerPresent;
   final bool customerPresent;
 
@@ -256,15 +263,17 @@ class CallCredentials {
     this.expiresAt,
   });
 
-  factory CallCredentials.fromJson(Map<String, dynamic> json) => CallCredentials(
-    appId: json['appId'] as String,
-    channel: json['channel'] as String,
-    uid: json['uid'] as int,
-    token: json['token'] as String,
-    planCode: json['planCode'] as String? ?? 'video',
-    durationMinutes: json['durationMinutes'] as int? ?? 15,
-    expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? '')?.toLocal(),
-  );
+  factory CallCredentials.fromJson(Map<String, dynamic> json) =>
+      CallCredentials(
+        appId: json['appId'] as String,
+        channel: json['channel'] as String,
+        uid: json['uid'] as int,
+        token: json['token'] as String,
+        planCode: json['planCode'] as String? ?? 'video',
+        durationMinutes: json['durationMinutes'] as int? ?? 15,
+        expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? '')
+            ?.toLocal(),
+      );
 
   final String appId;
   final String channel;
@@ -277,7 +286,7 @@ class CallCredentials {
   /// count down to the same moment however late one of them joined.
   final DateTime? expiresAt;
 
-  bool get isVideo => planCode == 'video';
+  bool get isVideo => true;
 }
 
 /// Being available, answering offers, and joining the call.
@@ -322,9 +331,8 @@ class ConsultationRepository {
   /// needs to say so rather than let them think it did.
   Future<DateTime?> liveConsultationEndsAt() async {
     final data = await _api.get('/api/v1/lawyer/presence');
-    return DateTime.tryParse(
-      data['liveConsultationEndsAt'] as String? ?? '',
-    )?.toLocal();
+    return DateTime.tryParse(data['liveConsultationEndsAt'] as String? ?? '')
+        ?.toLocal();
   }
 
   Future<void> goOffline() async {
@@ -415,7 +423,10 @@ class ConsultationRepository {
   /// Sent every few seconds while in the call. Keeps this side marked
   /// present, and reports who else is there.
   Future<CallAttendance> ping(String id) async {
-    final data = await _api.post('/api/v1/lawyer/consultations/$id/ping', auth: true);
+    final data = await _api.post(
+      '/api/v1/lawyer/consultations/$id/ping',
+      auth: true,
+    );
     return CallAttendance.fromJson(data);
   }
 

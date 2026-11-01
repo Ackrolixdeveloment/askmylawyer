@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../home/home_screen.dart';
-import 'choose_time_screen.dart';
 import 'consult_draft.dart';
 import 'consultation_repository.dart';
 import 'finding_lawyer_screen.dart';
@@ -33,7 +32,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
   String? _problem;
 
   /// Sends the decision, and hands back the consultation it produced.
-  Future<Consultation?> _resolve(String choice) async {
+  Future<Consultation?> _resolve(String choice, {DateTime? slot}) async {
     setState(() {
       _busy = true;
       _problem = null;
@@ -43,6 +42,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
       return await _consultations.resolve(
         widget.consultation.id,
         choice: choice,
+        scheduledFor: slot,
       );
     } on ApiException catch (error) {
       if (mounted) setState(() => _problem = error.message);
@@ -67,15 +67,32 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
     );
   }
 
-  /// Takes the money back, then picks a slot. Scheduled bookings are not on
-  /// the backend yet, so this leaves off at the slot picker.
+  /// Keep the existing payment and move this booking to a future slot.
   Future<void> _reschedule() async {
-    final consultation = await _resolve('refund');
-    if (consultation == null || !mounted) return;
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const ChooseTimeScreen()),
+    final now = DateTime.now();
+    final day = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
     );
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (time == null || !mounted) return;
+    final slot = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    final consultation = await _resolve('reschedule', slot: slot);
+    if (consultation == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Booking rescheduled. No additional booking payment is needed.',
+        ),
+      ),
+    );
+    HomeScreen.openTab(context, 0);
   }
 
   Future<void> _refund() async {
@@ -122,7 +139,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
                     const SizedBox(height: 8),
                     const Text(
                       'Nobody was free to take it. Try again shortly, pick a '
-                      'scheduled time, or cancel with instant refund.',
+                      'scheduled time, or cancel and request a refund.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -168,7 +185,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
                   foregroundColor: AppColors.negative,
                 ),
                 child: const Text(
-                  'Cancel request & get instant refund',
+                  'Cancel & request refund',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -463,7 +480,7 @@ class _CancelRequestSheet extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             const Text(
-              'Your booking will be cancelled and payment refunded. '
+              'Your booking will be cancelled and a refund requested for any payment taken. '
               'You can rebook anytime.',
               textAlign: TextAlign.center,
               style: TextStyle(

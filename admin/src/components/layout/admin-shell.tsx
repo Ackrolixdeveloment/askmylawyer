@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { PreviewFlowHost } from "./preview-flow-host";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
@@ -8,6 +10,38 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { open, closeSidebar, collapsed, toggleCollapsed, expandSidebar } =
     useSidebar();
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const drawer = document.querySelector<HTMLElement>(
+      "[data-mobile-navigation]",
+    );
+    const controls = () =>
+      Array.from(
+        drawer?.querySelectorAll<HTMLElement>("button, a[href]") ?? [],
+      ).filter((el) => el.offsetParent !== null);
+    controls()[0]?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") closeSidebar();
+      if (event.key === "Tab") {
+        const items = controls();
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
+    };
+  }, [open, closeSidebar]);
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
       {/* Persistent sidebar from lg up. */}
@@ -35,13 +69,24 @@ function Shell({ children }: { children: React.ReactNode }) {
             open ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <Sidebar onNavigate={closeSidebar} />
+          <div
+            data-mobile-navigation
+            role={open ? "dialog" : undefined}
+            aria-modal={open ? true : undefined}
+            aria-label="Mobile navigation"
+          >
+            <Sidebar onNavigate={closeSidebar} />
+          </div>
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <div
+        className="flex min-w-0 flex-1 flex-col overflow-y-auto"
+        inert={open}
+      >
         <DemoModeBanner />
         {children}
+        <PreviewFlowHost />
       </div>
     </div>
   );

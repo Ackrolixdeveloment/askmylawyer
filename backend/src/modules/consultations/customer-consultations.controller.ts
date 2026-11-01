@@ -39,6 +39,11 @@ export class CustomerConsultationsController {
   }
 
   /** The call the customer can still join, for the home screen's card. */
+  @Get('upcoming')
+  async upcoming(@Req() request: CustomerRequest) {
+    return { data: await this.consultations.upcoming(request.customer.id) };
+  }
+
   @Get('live')
   live(@Req() request: CustomerRequest) {
     return this.consultations.liveFor(request.customer.id);
@@ -126,6 +131,17 @@ export class CustomerConsultationsController {
   }
 
   /** Credentials for joining the call.  */
+  @Post(':id/media/video')
+  @HttpCode(200)
+  recordVideo(@Req() request: CustomerRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.consultations.recordVideo(request.customer.id, id);
+  }
+
+  @Get(':id/preparation')
+  preparation(@Req() request: CustomerRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.consultations.preparation(request.customer.id, id);
+  }
+
   @Post(':id/call-token')
   @HttpCode(200)
   callToken(@Req() request: CustomerRequest, @Param('id', ParseUUIDPipe) id: string) {

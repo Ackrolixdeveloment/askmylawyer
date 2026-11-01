@@ -8,7 +8,12 @@ import { useState } from "react";
 import { useAdmin } from "@/components/layout/auth-guard";
 import { canSee } from "@/lib/auth";
 import { keyForPath } from "@/lib/modules";
-import { collectHrefs, isNavGroup, navSections, type NavChild } from "@/lib/nav";
+import {
+  collectHrefs,
+  isNavGroup,
+  navSections,
+  type NavChild,
+} from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { SidebarNavItem } from "./sidebar-nav-item";
 import { UserMenu } from "./user-menu";
@@ -51,11 +56,18 @@ export function Sidebar({
           const children: NavChild[] = item.children
             .map((child) =>
               isNavGroup(child)
-                ? { ...child, children: child.children.filter((leaf) => allowed(leaf.href)) }
+                ? {
+                    ...child,
+                    children: child.children.filter((leaf) =>
+                      allowed(leaf.href),
+                    ),
+                  }
                 : child,
             )
             .filter((child) =>
-              isNavGroup(child) ? child.children.length > 0 : allowed(child.href),
+              isNavGroup(child)
+                ? child.children.length > 0
+                : allowed(child.href),
             );
 
           return { ...item, children };
@@ -72,18 +84,26 @@ export function Sidebar({
   const activeItem =
     visibleSections
       .flatMap((section) => section.items)
-      .find((item) => collectHrefs(item).some(isBranchActive))?.href ?? null;
+      .find(
+        (item) =>
+          collectHrefs(item).some(isBranchActive) ||
+          (item.children && isBranchActive(item.href)),
+      )?.href ?? null;
 
   // Accordion: one expandable item at a time. `undefined` means "follow the
   // route", so the active branch opens on navigation until the user clicks.
-  const [openItem, setOpenItem] = useState<string | null | undefined>(undefined);
-  const expandedItem = openItem === undefined ? activeItem : openItem;
+  const [manualOpen, setManualOpen] = useState<{
+    path: string;
+    href: string | null;
+  } | null>(null);
+  const expandedItem =
+    manualOpen?.path === pathname ? manualOpen.href : activeItem;
 
   return (
     <aside
       className={cn(
-        "flex h-dvh max-w-[85vw] shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-200",
-        collapsed ? "w-[76px]" : "w-[328px]",
+        "flex h-dvh max-w-[85vw] shrink-0 flex-col border-r border-line bg-surface aml-sidebar transition-[width] duration-200",
+        collapsed ? "w-[76px]" : "w-[276px]",
       )}
     >
       <div
@@ -104,11 +124,16 @@ export function Sidebar({
             alt=""
             width={34}
             height={36}
-            className="h-9 w-auto"
+            className="h-10 w-10 rounded-xl bg-white p-1.5 object-contain"
             priority
           />
           {collapsed ? null : (
-            <span className="text-[20px] font-semibold ">ASK MY LAWYER</span>
+            <span className="text-[15px] font-bold tracking-tight">
+              Ask My Lawyer
+              <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                Operations workspace
+              </span>
+            </span>
           )}
         </Link>
 
@@ -122,7 +147,10 @@ export function Sidebar({
             className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
           >
             <PanelLeft
-              className={cn("size-5 transition-transform", collapsed && "rotate-180")}
+              className={cn(
+                "size-5 transition-transform",
+                collapsed && "rotate-180",
+              )}
               aria-hidden
             />
           </button>
@@ -161,10 +189,16 @@ export function Sidebar({
                   <SidebarNavItem
                     item={item}
                     pathname={pathname}
-                    branchActive={collectHrefs(item).some(isBranchActive)}
+                    branchActive={
+                      collectHrefs(item).some(isBranchActive) ||
+                      Boolean(item.children && isBranchActive(item.href))
+                    }
                     expanded={expandedItem === item.href}
                     onToggle={() =>
-                      setOpenItem(expandedItem === item.href ? null : item.href)
+                      setManualOpen({
+                        path: pathname,
+                        href: expandedItem === item.href ? null : item.href,
+                      })
                     }
                     onNavigate={onNavigate}
                     collapsed={collapsed}

@@ -1,6 +1,8 @@
 export type UserStatus = "active" | "inactive";
 
 export interface AdminUser {
+  lastLoginAt?: string | null;
+  addedBy?: { name: string; employeeCode: string } | null;
   id: string;
   /** Which role the person holds; the id drives the form's select. */
   roleId: string;

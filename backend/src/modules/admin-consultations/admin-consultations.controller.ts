@@ -1,14 +1,17 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from '../admin-auth/admin-auth.guard';
 import { AdminConsultationsService, type Bucket } from './admin-consultations.service';
-import { ListConsultationsDto } from './dto/consultation.dto';
+import { ConsultationPeopleDto, ListConsultationsDto } from './dto/consultation.dto';
 
-const BUCKETS: Bucket[] = ['completed', 'in-progress', 'cancelled', 'refunded'];
+const BUCKETS: Bucket[] = ['all', 'scheduled', 'reports', 'completed', 'in-progress', 'cancelled', 'refunded'];
 
 @Controller('admin/consultations')
 @UseGuards(AdminAuthGuard)
 export class AdminConsultationsController {
   constructor(private readonly consultations: AdminConsultationsService) {}
+
+  @Get('people')
+  people(@Query() dto: ConsultationPeopleDto) { return this.consultations.people(dto.role, dto.q); }
 
   @Get('metrics')
   metrics() {

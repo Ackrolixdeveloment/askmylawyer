@@ -1,19 +1,16 @@
 "use client";
 
+import { ContactCell } from "@/components/common/table-cells";
+import { PersonCell } from "@/components/common/person-cell";
+import { useConfirmation } from "@/components/ui/use-confirmation";
+import { canChange, canSee } from "@/lib/auth";
 import { Eye, ShieldCheck, SquarePen, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import {
-  Badge,
-  Card,
-  DataTable,
-  FilterSelect,
-  SearchInput,
-  type Column,
-} from "@/components/ui";
+import { useState } from "react";
+import { DataTable, Switch, Modal, Button, type Column } from "@/components/ui";
 import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
-import { deleteAdminUser } from "@/lib/admin-users";
+import { deleteAdminUser, updateAdminUser } from "@/lib/admin-users";
 import type { AdminUser, Role } from "@/types/user";
 import { EditUserModal, ViewUserModal } from "./user-modals";
 
@@ -24,51 +21,44 @@ interface UsersTableProps {
   onChanged: () => void;
 }
 
-const statusFilterOptions = [
-  { value: "all", label: "Status" },
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-];
-
-const dateFilterOptions = [
-  { value: "all", label: "Last active" },
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "week", label: "This week" },
-];
-
-/** "Last active" is a phrase, so the date filter matches on the phrase. */
-function matchesDate(lastActive: string, filter: string) {
-  const value = lastActive.toLowerCase();
-
-  switch (filter) {
-    case "today":
-      return value === "today";
-    case "yesterday":
-      return value === "yesterday";
-    case "week":
-      return value === "today" || value === "yesterday" || value.includes("day");
-    default:
-      return true;
-  }
-}
-
 export function UsersTable({ users, roles, onChanged }: UsersTableProps) {
   const admin = useAdmin();
-  const [query, setQuery] = useState("");
-  const [role, setRole] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [date, setDate] = useState("all");
+  const canEditUsers = canChange(admin, "users.users");
+  const [confirmRemoval, removalDialog] = useConfirmation();
   const [viewUser, setViewUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const roleFilterOptions = [
-    { value: "all", label: "Role" },
-    ...roles.map((item) => ({ value: item.name, label: item.name })),
-  ];
-
-  async function remove(user: AdminUser) {
+  const [statusTarget, setStatusTarget] = useState<AdminUser | null>(null);
+  const [savingStatus, setSavingStatus] = useState(false);
+  async function confirmStatus() {
+    if (!statusTarget || savingStatus) return;
+    setSavingStatus(true);
+    setFailure(null);
+    try {
+      await updateAdminUser(statusTarget.id, {
+        status: statusTarget.status === "active" ? "inactive" : "active",
+      });
+      setStatusTarget(null);
+      onChanged();
+    } catch (error) {
+      setFailure(
+        error instanceof ApiError
+          ? error.message
+          : "Could not change account status.",
+      );
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+  function remove(user: AdminUser) {
+    confirmRemoval(
+      `Delete ${user.name}?`,
+      `${user.employeeCode} · ${user.email}. This removes the administrator account.`,
+      () => performRemove(user),
+    );
+  }
+  async function performRemove(user: AdminUser) {
     setFailure(null);
 
     try {
@@ -76,80 +66,141 @@ export function UsersTable({ users, roles, onChanged }: UsersTableProps) {
       onChanged();
     } catch (cause) {
       setFailure(
-        cause instanceof ApiError ? cause.message : "Could not delete this user.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not delete this user.",
       );
+      throw cause;
     }
   }
 
   // Rebuilt per render: the row actions close over the latest state.
   const columns: Column<AdminUser>[] = [
-      {
-        key: "name",
-        header: "Name",
-        align: "left",
-        sortValue: (row) => row.name,
-        cell: (row) => (
-          <div className="leading-tight">
-            <div className="font-medium text-ink">{row.name}</div>
-            <div className="mt-0.5 text-xs text-ink-subtle">
-              {row.employeeCode}
-            </div>
+    {
+      key: "name",
+      header: "Name",
+      align: "left",
+      sortValue: (row) => row.name,
+      textValue: (row) => `${row.name} ${row.employeeCode}`,
+      cell: (row) => (
+        <PersonCell
+          showInitials={false}
+          name={row.name}
+          detail={row.employeeCode}
+        />
+      ),
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      align: "left",
+      sortValue: (row) => row.email,
+      textValue: (row) => `${row.email} ${row.phone}`,
+      cell: (row) => <ContactCell email={row.email} phone={row.phone} />,
+    },
+    {
+      key: "role",
+      header: "Role",
+      align: "left",
+      sortValue: (row) => row.role,
+      textValue: (row) =>
+        `${row.role} ${roles.find((role) => role.id === row.roleId)?.department || ""}`,
+      filterValue: (row) => row.role,
+      cell: (row) => (
+        <div>
+          <p className="text-sm font-medium text-ink">{row.role}</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            {roles.find((role) => role.id === row.roleId)?.department ||
+              "No department"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "lastActive",
+      header: "Last Active",
+      align: "left",
+      sortValue: (row) => row.lastLoginAt ?? "",
+      dateValue: (row) => row.lastLoginAt ?? null,
+      cell: (row) => <span className="text-ink-muted">{row.lastActive}</span>,
+    },
+    {
+      key: "addedBy",
+      header: "Added by",
+      sortValue: (row) => row.addedBy?.name ?? "",
+      textValue: (row) =>
+        row.addedBy
+          ? `${row.addedBy.name} ${row.addedBy.employeeCode}`
+          : "Not recorded",
+      cell: (row) =>
+        row.addedBy ? (
+          <div>
+            <p className="text-sm text-ink">{row.addedBy.name}</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {row.addedBy.employeeCode}
+            </p>
           </div>
+        ) : (
+          <span
+            className="text-xs text-ink-subtle"
+            title="Creator information was not recorded for this account"
+          >
+            Not recorded
+          </span>
         ),
-      },
-      {
-        key: "email",
-        header: "Email",
-        align: "left",
-        sortValue: (row) => row.email,
-        cell: (row) => <span className="text-ink-muted">{row.email}</span>,
-      },
-      {
-        key: "role",
-        header: "Role",
-        align: "left",
-        sortValue: (row) => row.role,
-        cell: (row) => <span className="text-ink-muted">{row.role}</span>,
-      },
-      {
-        key: "lastActive",
-        header: "Last Active",
-        align: "left",
-        sortValue: (row) => row.lastActive,
-        cell: (row) => <span className="text-ink-muted">{row.lastActive}</span>,
-      },
-      {
-        key: "status",
-        header: "Status",
-        align: "left",
-        sortValue: (row) => row.status,
-        cell: (row) => (
-          <Badge tone={row.status === "active" ? "success" : "neutral"}>
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
+      filterValue: (row) => (row.status === "active" ? "Active" : "Inactive"),
+      textValue: (row) => (row.status === "active" ? "Active" : "Inactive"),
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={row.status === "active"}
+            disabled={
+              !canEditUsers ||
+              row.isSystemRole ||
+              row.id === admin.id ||
+              savingStatus
+            }
+            aria-label={`Change status for ${row.name}`}
+            onChange={() => {
+              setFailure(null);
+              setStatusTarget(row);
+            }}
+          />
+          <span className="text-xs text-ink-muted">
             {row.status === "active" ? "Active" : "Inactive"}
-          </Badge>
-        ),
-      },
-      {
-        key: "actions",
-        header: "Actions",
-        align: "left",
-        cell: (row) => (
-          <div className="flex items-center gap-2">
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "left",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          {canSee(admin, "users.roles") && (
             <Link
-              href={`/users/${row.id}/permissions`}
-              aria-label={`Manage permissions for ${row.name}`}
-              title={`Manage permissions for ${row.name}`}
+              href={`/users/roles/${row.roleId}/permissions`}
+              aria-label={`View role permissions for ${row.name}`}
+              title={`View role permissions for ${row.name}`}
               className={`rounded-lg border border-line p-2 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${tones.accent}`}
             >
               <ShieldCheck className="size-4" aria-hidden />
             </Link>
-            <IconButton
-              label={`View ${row.name}`}
-              tone="muted"
-              onClick={() => setViewUser(row)}
-            >
-              <Eye className="size-4" aria-hidden />
-            </IconButton>
+          )}
+          <IconButton
+            label={`View ${row.name}`}
+            tone="muted"
+            onClick={() => setViewUser(row)}
+          >
+            <Eye className="size-4" aria-hidden />
+          </IconButton>
+          {canEditUsers && (
             <IconButton
               label={`Edit ${row.name}`}
               tone="brand"
@@ -157,87 +208,38 @@ export function UsersTable({ users, roles, onChanged }: UsersTableProps) {
             >
               <SquarePen className="size-4" aria-hidden />
             </IconButton>
-            {/*
+          )}
+          {/*
               A Super Admin keeps the panel running, and nobody deletes the
               account they are signed in with. Both are refused server-side
               too; the button is simply not offered.
             */}
-            {row.isSystemRole || row.id === admin.id ? null : (
-              <IconButton
-                label={`Delete ${row.name}`}
-                tone="danger"
-                onClick={() => remove(row)}
-              >
-                <Trash2 className="size-4" aria-hidden />
-              </IconButton>
-            )}
-          </div>
-        ),
-      },
+          {!canEditUsers || row.isSystemRole || row.id === admin.id ? null : (
+            <IconButton
+              label={`Delete ${row.name}`}
+              tone="danger"
+              onClick={() => remove(row)}
+            >
+              <Trash2 className="size-4" aria-hidden />
+            </IconButton>
+          )}
+        </div>
+      ),
+    },
   ];
-
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    return users.filter((user) => {
-      const matchesQuery =
-        !needle ||
-        [user.name, user.email, user.phone, user.role, user.employeeCode].some(
-          (field) => field.toLowerCase().includes(needle),
-        );
-
-      return (
-        matchesQuery &&
-        (role === "all" || user.role === role) &&
-        (status === "all" || user.status === status) &&
-        matchesDate(user.lastActive, date)
-      );
-    });
-  }, [users, query, role, status, date]);
 
   return (
     <div className="space-y-4">
-      {failure ? <p className="text-sm text-negative">{failure}</p> : null}
-      <Card className="p-4">
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <div className="min-w-0 flex-1">
-            <SearchInput
-              placeholder="Search User by Name, Email or phone no."
-              aria-label="Search users"
-              onValueChange={setQuery}
-              className="shadow-none"
-            />
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <FilterSelect
-              options={roleFilterOptions}
-              value={role}
-              onChange={setRole}
-              aria-label="Filter by role"
-              className="sm:w-40"
-            />
-            <FilterSelect
-              options={statusFilterOptions}
-              value={status}
-              onChange={setStatus}
-              aria-label="Filter by status"
-              className="sm:w-32"
-            />
-            <FilterSelect
-              options={dateFilterOptions}
-              value={date}
-              onChange={setDate}
-              aria-label="Filter by last active date"
-              align="right"
-              className="sm:w-32"
-            />
-          </div>
-        </div>
-      </Card>
-
+      {failure ? (
+        <p role="alert" className="text-sm text-negative">
+          {failure}
+        </p>
+      ) : null}
       <DataTable
+        totalCount={users.length}
+        totalLabel="Total users"
         columns={columns}
-        rows={rows}
+        rows={users}
         getRowId={(row) => row.id}
         minWidth={980}
         defaultSort={{ key: "name" }}
@@ -245,6 +247,48 @@ export function UsersTable({ users, roles, onChanged }: UsersTableProps) {
         emptyMessage="No users match your search."
       />
 
+      <Modal
+        open={Boolean(statusTarget)}
+        onClose={() => {
+          if (!savingStatus) setStatusTarget(null);
+        }}
+        title={
+          statusTarget?.status === "active"
+            ? "Deactivate administrator?"
+            : "Activate administrator?"
+        }
+        description={
+          statusTarget
+            ? `${statusTarget.name} · ${statusTarget.employeeCode}`
+            : ""
+        }
+        footer={
+          <>
+            <Button
+              variant="outline"
+              disabled={savingStatus}
+              onClick={() => setStatusTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button disabled={savingStatus} onClick={confirmStatus}>
+              {savingStatus ? "Saving…" : "Confirm status change"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-muted">
+          {statusTarget?.status === "active"
+            ? "This administrator will be signed out and cannot sign in until reactivated."
+            : "This administrator can sign in again with their existing permissions."}
+        </p>
+        {failure && (
+          <p role="alert" className="mt-3 text-sm text-negative">
+            {failure}
+          </p>
+        )}
+      </Modal>
+      {removalDialog}
       <ViewUserModal user={viewUser} onClose={() => setViewUser(null)} />
       {/* Keyed so each row opens the form seeded with its own values. */}
       <EditUserModal

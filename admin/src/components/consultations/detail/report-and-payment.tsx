@@ -1,3 +1,4 @@
+import { DocumentPreview } from "@/components/ui/document-preview";
 import { Download } from "lucide-react";
 import { Badge, Card, type BadgeTone } from "@/components/ui";
 import { formatInr } from "@/lib/format";
@@ -11,7 +12,9 @@ export function ReportCard({ report }: { report: ConsultationReport }) {
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-ink">Consultation report</h2>
+        <h2 className="text-base font-semibold text-ink">
+          Consultation report
+        </h2>
         <Badge tone={report.reviewed ? "success" : "refunded"}>
           {report.reviewed ? "Report reviewed" : "Pending review"}
         </Badge>
@@ -33,13 +36,20 @@ export function ReportCard({ report }: { report: ConsultationReport }) {
         <p className="text-xs text-ink-subtle">
           Report submitted by {report.submittedBy} on {report.submittedAt}
         </p>
-        <button
-          type="button"
+        <DocumentPreview
+          title="Consultation report"
+          content={[
+            report.caseSummary,
+            "Legal guidance",
+            ...report.legalGuidance,
+            "Next steps",
+            ...report.nextSteps,
+          ].join("\n\n")}
           className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-ink/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
         >
           <Download className="size-3.5" aria-hidden />
-          Download
-        </button>
+          View / download
+        </DocumentPreview>
       </div>
     </Card>
   );
@@ -55,7 +65,10 @@ function Bullets({ title, items }: { title: string; items: string[] }) {
             key={index}
             className="flex gap-2 text-sm leading-relaxed text-ink-muted"
           >
-            <span className="mt-2 size-1 shrink-0 rounded-full bg-ink-subtle" aria-hidden />
+            <span
+              className="mt-2 size-1 shrink-0 rounded-full bg-ink-subtle"
+              aria-hidden
+            />
             {item}
           </li>
         ))}
@@ -81,7 +94,10 @@ export function PaymentTrailCard({ rows }: { rows: PaymentTrailRow[] }) {
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="bg-slate-50 text-xs text-ink-muted">
-              <th scope="col" className="rounded-l-lg px-4 py-3 text-left font-medium">
+              <th
+                scope="col"
+                className="rounded-l-lg px-4 py-3 text-left font-medium"
+              >
                 Item
               </th>
               <th scope="col" className="px-4 py-3 text-left font-medium">
@@ -96,7 +112,10 @@ export function PaymentTrailCard({ rows }: { rows: PaymentTrailRow[] }) {
               <th scope="col" className="px-4 py-3 text-left font-medium">
                 Method
               </th>
-              <th scope="col" className="rounded-r-lg px-4 py-3 text-left font-medium">
+              <th
+                scope="col"
+                className="rounded-r-lg px-4 py-3 text-left font-medium"
+              >
                 Timestamp
               </th>
             </tr>

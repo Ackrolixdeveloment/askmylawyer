@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const variants = {
-  primary: "bg-ink text-white hover:bg-ink/90",
+  primary: "bg-ink text-white shadow-sm shadow-slate-900/15 hover:bg-brand",
   ghost: "text-ink-muted hover:bg-slate-100",
   outline: "border border-line bg-surface text-ink hover:bg-slate-50",
 } as const;
@@ -14,7 +14,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
         "focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
         variants[variant],

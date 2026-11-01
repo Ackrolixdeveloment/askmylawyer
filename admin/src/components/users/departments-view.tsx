@@ -1,5 +1,7 @@
 "use client";
 
+import { useConfirmation } from "@/components/ui/use-confirmation";
+
 import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -66,12 +68,22 @@ export function DepartmentsView() {
       retry();
     } catch (cause) {
       setFailure(
-        cause instanceof ApiError ? cause.message : "Could not save this department.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not save this department.",
       );
     }
   }
 
-  async function remove(id: string) {
+  const [confirmRemoval, removalDialog] = useConfirmation();
+  function remove(id: string) {
+    confirmRemoval(
+      "Delete department?",
+      "Review the selected department. Linked records may prevent deletion.",
+      () => performRemove(id),
+    );
+  }
+  async function performRemove(id: string) {
     setFailure(null);
 
     try {
@@ -79,68 +91,71 @@ export function DepartmentsView() {
       retry();
     } catch (cause) {
       setFailure(
-        cause instanceof ApiError ? cause.message : "Could not delete this department.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not delete this department.",
       );
+      throw cause;
     }
   }
 
   // Rebuilt per render: the row actions close over the latest state.
   const columns: Column<Department>[] = [
-      {
-        key: "name",
-        header: "Name",
-        align: "left",
-        sortValue: (row) => row.name,
-        cell: (row) => <span className="text-ink">{row.name}</span>,
-      },
-      {
-        key: "members",
-        header: "Members",
-        align: "left",
-        sortValue: (row) => row.members,
-        cell: (row) => <span className="text-ink-muted">{row.members}</span>,
-      },
-      {
-        key: "status",
-        header: "Status",
-        align: "left",
-        sortValue: (row) => row.status,
-        cell: (row) => (
-          <Badge tone={row.status === "active" ? "success" : "neutral"}>
-            {row.status === "active" ? "Active" : "Inactive"}
-          </Badge>
-        ),
-      },
-      {
-        key: "actions",
-        header: "Actions",
-        align: "left",
-        cell: (row) => (
-          <div className="flex items-center gap-2">
-            <IconButton
-              label={`View ${row.name}`}
-              tone="muted"
-              onClick={() => open("view", row)}
-            >
-              <Eye className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton
-              label={`Edit ${row.name}`}
-              tone="brand"
-              onClick={() => open("edit", row)}
-            >
-              <SquarePen className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton
-              label={`Delete ${row.name}`}
-              tone="danger"
-              onClick={() => remove(row.id)}
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </IconButton>
-          </div>
-        ),
-      },
+    {
+      key: "name",
+      header: "Name",
+      align: "left",
+      sortValue: (row) => row.name,
+      cell: (row) => <span className="text-ink">{row.name}</span>,
+    },
+    {
+      key: "members",
+      header: "Members",
+      align: "left",
+      sortValue: (row) => row.members,
+      cell: (row) => <span className="text-ink-muted">{row.members}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "left",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <Badge tone={row.status === "active" ? "success" : "neutral"}>
+          {row.status === "active" ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "left",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <IconButton
+            label={`View ${row.name}`}
+            tone="muted"
+            onClick={() => open("view", row)}
+          >
+            <Eye className="size-4" aria-hidden />
+          </IconButton>
+          <IconButton
+            label={`Edit ${row.name}`}
+            tone="brand"
+            onClick={() => open("edit", row)}
+          >
+            <SquarePen className="size-4" aria-hidden />
+          </IconButton>
+          <IconButton
+            label={`Delete ${row.name}`}
+            tone="danger"
+            onClick={() => remove(row.id)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </IconButton>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -183,6 +198,7 @@ export function DepartmentsView() {
       </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
+      {removalDialog}
       <DepartmentModal
         key={`${mode}-${active?.id ?? "new"}`}
         mode={mode}
@@ -327,4 +343,3 @@ function DepartmentModal({
     </Modal>
   );
 }
-

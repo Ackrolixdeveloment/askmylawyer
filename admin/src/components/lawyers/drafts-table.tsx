@@ -1,22 +1,18 @@
 "use client";
 
-import { Eye, Filter, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Eye, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   Button,
-  Card,
   DataTable,
   DropdownMenu,
-  FilterSelect,
   Modal,
-  SearchInput,
   type Column,
-  type SelectOption,
 } from "@/components/ui";
 import {
-  lawyerDetailsColumn,
-  lawyerIdColumn,
+  lawyerContactColumn,
+  lawyerIdentityColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
 import { useAdmin } from "@/components/layout/auth-guard";
@@ -41,7 +37,12 @@ function StoppedAt({ row }: { row: DraftProfile }) {
 
   return (
     <div className="min-w-40">
-      <p className={cn("font-medium", row.stoppedAt ? "text-ink" : "text-positive")}>
+      <p
+        className={cn(
+          "font-medium",
+          row.stoppedAt ? "text-ink" : "text-positive",
+        )}
+      >
         {row.stoppedAt ?? "Ready to submit"}
       </p>
       <p className="mt-0.5 text-xs text-ink-subtle">
@@ -51,7 +52,10 @@ function StoppedAt({ row }: { row: DraftProfile }) {
       </p>
       <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
         <div
-          className={cn("h-full rounded-full", row.stoppedAt ? "bg-warn" : "bg-positive")}
+          className={cn(
+            "h-full rounded-full",
+            row.stoppedAt ? "bg-warn" : "bg-positive",
+          )}
           style={{ width: `${Math.round(filled * 100)}%` }}
         />
       </div>
@@ -61,65 +65,61 @@ function StoppedAt({ row }: { row: DraftProfile }) {
 
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
-  onView: (row: DraftProfile) => void,
   onDelete: (row: DraftProfile) => void,
   canChangeLawyers: boolean,
 ): Column<DraftProfile>[] {
   return [
-    lawyerIdColumn((row: DraftProfile) => identity(row)),
-    lawyerDetailsColumn((row: DraftProfile) => identity(row)),
+    lawyerIdentityColumn((row: DraftProfile) => identity(row)),
+    lawyerContactColumn((row: DraftProfile) => identity(row)),
     {
       key: "stoppedAt",
-      header: "STOPPED AT",
+      header: "Completion stage",
       align: "left",
+      textValue: (row) =>
+        `${row.stoppedAt || "Ready to submit"} ${row.completedSteps}/${row.totalSteps} completed`,
+      filterValue: (row) => row.stoppedAt || "Ready to submit",
       sortValue: (row) => row.stoppedAtStep ?? row.totalSteps + 1,
       cell: (row) => <StoppedAt row={row} />,
     },
     {
       key: "lastUpdated",
-      header: "LAST UPDATED",
+      header: "Last updated",
       align: "left",
       sortValue: (row) => row.lastUpdated,
       cell: (row) => (
-        <span className="text-ink-muted">{formatDdMmYyyy(row.lastUpdated)}</span>
+        <span className="text-ink-muted">
+          {formatDdMmYyyy(row.lastUpdated)}
+        </span>
       ),
     },
     {
-      key: "referredBy",
-      header: "REFERRED BY",
-      align: "left",
-      sortValue: (row) => row.referredByName ?? "",
-      cell: (row) =>
-        row.referredByName ? (
-          <>
-            <p className="font-semibold text-ink">{row.referredByName}</p>
-            <p className="mt-0.5 text-xs text-ink-subtle">{row.referredByCode}</p>
-          </>
-        ) : (
-          <span className="text-ink-subtle">-</span>
-        ),
-    },
-    {
       key: "actions",
-      header: "Action",
+      header: "Actions",
       align: "left",
       cell: (row) => (
-        <DropdownMenu
-          label={`Actions for ${row.name}`}
-          actions={[
-            { label: "View", icon: Eye, onSelect: () => onView(row) },
-            ...(canChangeLawyers
-              ? [
-                  {
-                    label: "Delete",
-                    icon: Trash2,
-                    onSelect: () => onDelete(row),
-                    destructive: true,
-                  },
-                ]
-              : []),
-          ]}
-        />
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/lawyers/onboarding/drafts/${row.id}`}
+            aria-label={`View ${row.name || row.lawyerId}`}
+            title="View detail"
+            className="table-tool"
+          >
+            <Eye className="size-4" />
+          </Link>
+          {canChangeLawyers && (
+            <DropdownMenu
+              label={`Actions for ${row.name || row.lawyerId}`}
+              actions={[
+                {
+                  label: "Delete draft",
+                  icon: Trash2,
+                  onSelect: () => onDelete(row),
+                  destructive: true,
+                },
+              ]}
+            />
+          )}
+        </div>
       ),
     },
   ];
@@ -127,24 +127,12 @@ function buildColumns(
 
 interface DraftsTableProps {
   drafts: DraftProfile[];
-  typeOptions: SelectOption[];
-  periodOptions: SelectOption[];
   /** Reloads the list once a draft is deleted. */
   onChanged?: () => void;
 }
 
-export function DraftsTable({
-  drafts,
-  typeOptions,
-  periodOptions,
-  onChanged,
-}: DraftsTableProps) {
-  const router = useRouter();
+export function DraftsTable({ drafts, onChanged }: DraftsTableProps) {
   const canChangeLawyers = canChange(useAdmin(), "lawyers");
-  const [query, setQuery] = useState("");
-  const [practiceType, setPracticeType] = useState("all");
-  const [period, setPeriod] = useState("all");
-
   /** The draft waiting on a confirmed delete. */
   const [target, setTarget] = useState<DraftProfile | null>(null);
   const [busy, setBusy] = useState(false);
@@ -152,15 +140,11 @@ export function DraftsTable({
 
   const columns = useMemo(
     () =>
-      buildColumns(
-        (row) => router.push(`/lawyers/onboarding/drafts/${row.id}`),
-        (row) => {
-          setTarget(row);
-          setError(null);
-        },
-        canChangeLawyers,
-      ),
-    [router, canChangeLawyers],
+      buildColumns((row) => {
+        setTarget(row);
+        setError(null);
+      }, canChangeLawyers),
+    [canChangeLawyers],
   );
 
   async function confirmDelete() {
@@ -183,63 +167,13 @@ export function DraftsTable({
     }
   }
 
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    return drafts.filter((row) => {
-      const matchesQuery =
-        !needle ||
-        [row.lawyerId, row.name, row.email].some((field) =>
-          field.toLowerCase().includes(needle),
-        );
-
-      return (
-        matchesQuery &&
-        (practiceType === "all" || row.practiceType === practiceType)
-      );
-    });
-  }, [drafts, query, practiceType]);
-
   return (
     <div className="space-y-4">
-      <Card className="p-4">
-        <p className="mb-3 flex items-center gap-2 text-sm font-medium text-ink">
-          <Filter className="size-4" aria-hidden />
-          Filters
-        </p>
-
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <div className="min-w-0 flex-1">
-            <SearchInput
-              placeholder="Search by lawyer ID, name, email..."
-              aria-label="Search drafts"
-              onValueChange={setQuery}
-              className="shadow-none"
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto lg:shrink-0">
-            <FilterSelect
-              aria-label="Filter by lawyer type"
-              options={typeOptions}
-              value={practiceType}
-              onChange={setPracticeType}
-              className="lg:w-44"
-            />
-            <FilterSelect
-              aria-label="Filter by period"
-              options={periodOptions}
-              value={period}
-              onChange={setPeriod}
-              align="right"
-              className="lg:w-40"
-            />
-          </div>
-        </div>
-      </Card>
-
       <DataTable
+        totalCount={drafts.length}
+        totalLabel="Total lawyers"
         columns={columns}
-        rows={rows}
+        rows={drafts}
         getRowId={(row) => row.id}
         minWidth={1080}
         defaultSort={{ key: "lastUpdated", direction: "desc" }}
@@ -253,7 +187,11 @@ export function DraftsTable({
         description={`${target?.name || target?.lawyerId} has not finished signing up.`}
         footer={
           <>
-            <Button variant="outline" onClick={() => setTarget(null)} disabled={busy}>
+            <Button
+              variant="outline"
+              onClick={() => setTarget(null)}
+              disabled={busy}
+            >
               Cancel
             </Button>
             <Button

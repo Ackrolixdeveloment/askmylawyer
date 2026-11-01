@@ -3,7 +3,11 @@ import { Badge, Card, EmptyState } from "@/components/ui";
 import { formatInr } from "@/lib/format";
 import type { ReferralSummary } from "@/types/customer";
 
-export function ReferralsCard({ referral }: { referral: ReferralSummary | null }) {
+export function ReferralsCard({
+  referral,
+}: {
+  referral: ReferralSummary | null;
+}) {
   return (
     <Card className="p-5">
       <h2 className="text-base font-semibold text-ink">Referrals</h2>
@@ -44,8 +48,8 @@ export function ReferralsCard({ referral }: { referral: ReferralSummary | null }
       ) : (
         <EmptyState
           icon={Gift}
-          title="No transaction yet"
-          description="Once this customer books their first consultation, it will appear here with the lawyer, category, type, date, status, and amount."
+          title="Referral data unavailable"
+          description="Customer referral history will appear here once referral tracking is connected."
         />
       )}
     </Card>
@@ -62,7 +66,7 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-4">
       <dt className="text-xs text-ink-muted">{label}</dt>
-      <dd className="text-right">{children}</dd>
+      <dd className="min-w-0 break-words text-right">{children}</dd>
     </div>
   );
 }

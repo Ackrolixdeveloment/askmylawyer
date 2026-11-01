@@ -14,7 +14,7 @@ const ENVIRONMENTS: GatewayEnvironment[] = [
 ];
 
 /**
- * Cashfree credentials, kept per environment so the test and live keys can
+ * Razorpay credentials, kept per environment so the test and live keys can
  * both be stored and switched between.
  *
  * Secrets are encrypted at rest and never sent to the browser — the panel
@@ -34,7 +34,7 @@ export class PaymentGatewayService {
 
     const byEnvironment = Object.fromEntries(
       ENVIRONMENTS.map((environment) => {
-        const row = rows.find((entry) => entry.environment === environment);
+        const row = rows.find((entry) => entry.environment === environment && entry.provider === 'razorpay');
 
         return [
           environment,
@@ -57,13 +57,17 @@ export class PaymentGatewayService {
   /**
    * Saves one environment's keys and makes it the one the apps charge
    * through. A blank secret keeps whatever is already stored, so the form
-   * never has to show a key to save the App ID beside it.
+   * never has to show a key to save the Key ID beside it.
    */
   async save(dto: SaveGatewayDto) {
-    const existing = await this.prisma.paymentGateway.findUnique({
+    const stored = await this.prisma.paymentGateway.findUnique({
       where: { environment: dto.environment },
     });
 
+    const existing = stored?.provider === 'razorpay' ? stored : null;
+    const expectedPrefix = dto.environment === 'production' ? 'rzp_live_' : 'rzp_test_';
+    if (!dto.appId.startsWith(expectedPrefix)) throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_KEY_MODE', 'Razorpay Key ID does not match the selected mode.');
+    if (!existing && (!dto.secretKey || !dto.webhookSecret)) throw new AppException(HttpStatus.BAD_REQUEST, 'GATEWAY_INCOMPLETE', 'Enter the Razorpay key secret and webhook secret.');
     const secret = dto.secretKey
       ? { secretKeyEnc: encryptField(dto.secretKey), secretKeyLast4: last4(dto.secretKey) }
       : {};
@@ -82,15 +86,15 @@ export class PaymentGatewayService {
       throw new AppException(
         HttpStatus.BAD_REQUEST,
         'GATEWAY_INCOMPLETE',
-        'Production needs the App ID, the secret key and the webhook secret.',
+        'Production needs the Key ID, the secret key and the webhook secret.',
       );
     }
 
     await this.prisma.$transaction([
       this.prisma.paymentGateway.upsert({
         where: { environment: dto.environment },
-        create: { environment: dto.environment, appId: dto.appId, ...secret, ...webhook },
-        update: { appId: dto.appId, ...secret, ...webhook },
+        create: { provider: 'razorpay', environment: dto.environment, appId: dto.appId, ...secret, ...webhook },
+        update: { provider: 'razorpay', appId: dto.appId, ...secret, ...webhook },
       }),
       this.prisma.platformSettings.upsert({
         where: { id: SETTINGS_ID },
@@ -107,13 +111,13 @@ export class PaymentGatewayService {
    * is the one place the secrets are decrypted, for the payment flow to use
    * when it is built.
    */
-  async activeCredentials() {
+  async activeCredentials(environment?: GatewayEnvironment) {
     const settings = await this.settings();
     const row = await this.prisma.paymentGateway.findUnique({
-      where: { environment: settings.gateway },
+      where: { environment: environment ?? settings.gateway },
     });
 
-    if (!row?.appId || !row.secretKeyEnc || !row.webhookSecretEnc) {
+    if (row?.provider !== 'razorpay' || !row?.appId || !row.secretKeyEnc || !row.webhookSecretEnc) {
       throw new AppException(
         HttpStatus.SERVICE_UNAVAILABLE,
         'GATEWAY_NOT_CONFIGURED',
@@ -122,7 +126,7 @@ export class PaymentGatewayService {
     }
 
     return {
-      environment: settings.gateway,
+      environment: row.environment,
       appId: row.appId,
       secretKey: decryptField(row.secretKeyEnc),
       webhookSecret: decryptField(row.webhookSecretEnc),

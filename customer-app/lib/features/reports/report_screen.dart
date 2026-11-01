@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../profile/profile_screen.dart';
+import '../consultation/payment_service.dart';
 import 'report_repository.dart';
 
 /// The client's consultation report.
@@ -26,6 +28,8 @@ class _ReportScreenState extends State<ReportScreen> {
   Timer? _poll;
   CustomerReport? _report;
   String? _error;
+  bool _downloading = false;
+  bool _paying = false;
 
   @override
   void initState() {
@@ -59,12 +63,70 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _completeProfile() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ProfileScreen(
-          onClose: () => Navigator.of(context).maybePop(),
-        ),
+        builder: (_) =>
+            ProfileScreen(onClose: () => Navigator.of(context).maybePop()),
       ),
     );
     if (mounted) _refresh();
+  }
+
+  Future<void> _payOutstanding(CustomerReport report) async {
+    setState(() => _paying = true);
+    try {
+      for (final id in report.unpaidExtensionIds) {
+        if (!await PaymentService.instance.payExtension(
+          widget.consultationId,
+          id,
+        )) {
+          break;
+        }
+      }
+      await _refresh();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment could not be completed. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
+  }
+
+  Future<void> _download() async {
+    setState(() => _downloading = true);
+    try {
+      final bytes = await ApiClient.instance.bytes(
+        '/api/v1/customer/consultations/${widget.consultationId}/report/pdf',
+      );
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
+          fileNameOverrides: [
+            'consultation-report-${widget.consultationId}.pdf',
+          ],
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The report could not be downloaded. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   @override
@@ -176,14 +238,14 @@ class _ReportScreenState extends State<ReportScreen> {
                 width: double.infinity,
                 height: 48,
                 child: FilledButton(
-                  // The gateway is not wired to this yet; the amount and the
-                  // reason are recorded against the consultation.
-                  onPressed: null,
+                  onPressed: _paying ? null : () => _payOutstanding(report),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.ink,
                     foregroundColor: Colors.white,
                   ),
-                  child: Text('Pay ₹${report.owed}'),
+                  child: Text(
+                    _paying ? 'Opening payment…' : 'Pay ₹${report.owed}',
+                  ),
                 ),
               ),
             ],
@@ -198,6 +260,12 @@ class _ReportScreenState extends State<ReportScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
       children: [
+        FilledButton.icon(
+          onPressed: _downloading ? null : _download,
+          icon: const Icon(Icons.download_outlined),
+          label: Text(_downloading ? 'Preparing PDF…' : 'Download report PDF'),
+        ),
+        const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(

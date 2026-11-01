@@ -1,3 +1,4 @@
+import { DocumentPreview } from "@/components/ui/document-preview";
 import {
   AudioLines,
   Download,
@@ -29,7 +30,9 @@ function PartyCard({ role, party }: { role: string; party: PartySummary }) {
           <User className="size-4" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">{party.name}</p>
+          <p className="truncate text-sm font-semibold text-ink">
+            {party.name}
+          </p>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-muted">
             <MapPin className="size-3" aria-hidden />
             {party.location}
@@ -104,7 +107,9 @@ export function ConsultationDetailsCard({
 }) {
   return (
     <Card className="p-5">
-      <h2 className="text-base font-semibold text-ink">Consultations details</h2>
+      <h2 className="text-base font-semibold text-ink">
+        Consultations details
+      </h2>
 
       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
         <Pair label="Date">{consultation.date}</Pair>
@@ -163,7 +168,8 @@ export function AudioPlaybackCard({ audioUrl }: { audioUrl: string | null }) {
             <div className="min-w-0">
               <p className="text-sm font-medium">Recording not available</p>
               <p className="mt-0.5 text-xs text-white/60">
-                Audio is retained for 90 days after the consultation, then deleted.
+                Audio is retained for 90 days after the consultation, then
+                deleted.
               </p>
             </div>
           </div>
@@ -205,13 +211,13 @@ export function DocumentsCard({
                 {document.meta}
               </p>
             </div>
-            <button
-              type="button"
+            <DocumentPreview
+              title={document.name}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
             >
               <Download className="size-3.5" aria-hidden />
               View
-            </button>
+            </DocumentPreview>
           </li>
         ))}
       </ul>

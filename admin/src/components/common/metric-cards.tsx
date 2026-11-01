@@ -1,13 +1,10 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export type MetricTone =
-  | "brand"
-  | "positive"
-  | "negative"
-  | "accent"
-  | "neutral";
+  "brand" | "positive" | "negative" | "accent" | "neutral";
 
 export interface Metric {
   readonly id: string;
@@ -16,6 +13,7 @@ export interface Metric {
   readonly tone: MetricTone;
   readonly icon: LucideIcon;
   /** Tints the whole card, for counts that need to stand out. */
+  readonly href?: string;
   readonly tinted?: boolean;
   /** Adds a coloured left edge instead of tinting the card. */
   readonly accented?: boolean;
@@ -52,36 +50,62 @@ const toneClasses: Record<MetricTone, string> = {
 export function MetricCards({
   metrics,
   className,
+  onSelect,
+  activeId,
 }: {
   metrics: readonly Metric[];
   className?: string;
+  onSelect?: (id: string) => void;
+  activeId?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4",
-        className,
-      )}
-    >
+    <div className={cn("grid grid-cols-2 gap-3 xl:grid-cols-4", className)}>
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (
           <Card
             key={metric.id}
             className={cn(
-              "p-5",
+              "aml-metric-card relative overflow-hidden p-3.5 sm:p-4 transition-colors hover:border-blue-200",
               metric.tinted && tintClasses[metric.tone],
               metric.accented && accentClasses[metric.tone],
+              activeId === metric.id && "border-brand bg-blue-50/50",
             )}
           >
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(metric.id)}
+                aria-pressed={activeId === metric.id}
+                aria-label={`${metric.label}: ${metric.value}. Filter records`}
+                className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-brand"
+              />
+            ) : null}
+            {metric.href ? (
+              <Link
+                href={metric.href}
+                className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-brand"
+                aria-label={`${metric.label}: ${metric.value}. View records`}
+              />
+            ) : null}
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-ink">{metric.label}</p>
+              <p className="text-xs font-medium leading-5 text-ink-muted">
+                {metric.label}
+              </p>
               <Icon
-                className={cn("size-[18px] shrink-0", toneClasses[metric.tone])}
+                className={cn(
+                  "box-content size-4 shrink-0 rounded-lg bg-current/5 p-1.5",
+                  toneClasses[metric.tone],
+                )}
                 aria-hidden
               />
             </div>
-            <p className={cn("mt-3 text-3xl font-bold", toneClasses[metric.tone])}>
+            <p
+              className={cn(
+                "mt-1 text-2xl font-semibold tracking-tight",
+                toneClasses[metric.tone],
+              )}
+            >
               {metric.value}
             </p>
           </Card>

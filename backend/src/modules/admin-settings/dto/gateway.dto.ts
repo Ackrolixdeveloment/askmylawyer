@@ -6,7 +6,7 @@ const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 /**
- * Cashfree credentials for one environment.
+ * Razorpay credentials for one environment.
  *
  * The secrets are optional: the panel never receives them back, so a save
  * that leaves them blank keeps whatever is already stored.
@@ -17,7 +17,7 @@ export class SaveGatewayDto {
   environment: GatewayEnvironment;
 
   @Transform(trim)
-  @Length(4, 120, { message: 'Enter the Cashfree App ID.' })
+  @Length(4, 120, { message: 'Enter the Razorpay Key ID.' })
   appId: string;
 
   @IsOptional()

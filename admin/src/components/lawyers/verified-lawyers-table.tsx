@@ -1,58 +1,23 @@
 "use client";
 
+import { lawyerListColumns, lawyerListRecord } from "./lawyer-list-columns";
+import { openPreviewAction } from "@/components/layout/preview-flow-host";
+
 import { Ban, CircleCheck, Eye, SquarePen, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  Badge,
   Button,
   DataTable,
   DropdownMenu,
   Modal,
-  SearchInput,
-  type BadgeTone,
   type Column,
 } from "@/components/ui";
 import { useAdmin } from "@/components/layout/auth-guard";
 import { ApiError } from "@/lib/api";
 import { canChange } from "@/lib/auth";
 import { reactivateLawyer, suspendLawyer } from "@/lib/lawyers";
-import {
-  lawyerDetailsColumn,
-  lawyerIdColumn,
-  type LawyerIdentity,
-} from "@/components/lawyers/lawyer-columns";
-import type { Lawyer, LawyerStatus, VerificationMethod } from "@/types/lawyer";
-
-const identity = (row: Lawyer): LawyerIdentity => ({
-  lawyerId: row.lawyerId,
-  name: row.name,
-  mobile: row.phone,
-  email: row.email,
-  href: `/lawyers/verified/${row.id}`,
-});
-
-const verificationLabel: Record<VerificationMethod, string> = {
-  digilocker: "DigiLocker",
-  manual: "Manual",
-};
-
-const verificationTone: Record<VerificationMethod, BadgeTone> = {
-  digilocker: "success",
-  manual: "info",
-};
-
-const statusLabel: Record<LawyerStatus, string> = {
-  active: "Active",
-  suspended: "Suspended",
-  inactive: "Inactive",
-};
-
-const statusTone: Record<LawyerStatus, BadgeTone> = {
-  active: "success",
-  suspended: "danger",
-  inactive: "neutral",
-};
+import type { Lawyer } from "@/types/lawyer";
 
 /** Built per-render so the row menu can navigate. */
 function buildColumns(
@@ -61,84 +26,54 @@ function buildColumns(
   /** Read-only admins get the view action and nothing that changes a lawyer. */
   canChangeLawyers: boolean,
 ): Column<Lawyer>[] {
-  return [
-  lawyerIdColumn((row) => identity(row)),
-  lawyerDetailsColumn((row) => identity(row)),
-  {
-    key: "barId",
-    header: "Bar ID",
-    sortValue: (row) => row.barId,
-    cell: (row) => <span className="text-ink-muted">{row.barId}</span>,
-  },
-  {
-    key: "verification",
-    header: "Verification",
-    sortValue: (row) => row.verification,
-    cell: (row) => (
-      <Badge tone={verificationTone[row.verification]}>
-        {verificationLabel[row.verification]}
-      </Badge>
-    ),
-  },
-  {
-    key: "city",
-    header: "City",
-    sortValue: (row) => row.barCouncilState ?? row.city ?? "",
-    cell: (row) => (
-      <span className="text-ink-muted">
-        {row.barCouncilState ?? row.city ?? "-"}
-      </span>
-    ),
-  },
-  {
-    key: "experience",
-    header: "Experience",
-    sortValue: (row) => row.experience,
-    cell: (row) => <span className="text-ink-muted">{row.experience}</span>,
-  },
-  {
-    key: "status",
-    header: "Status",
-    sortValue: (row) => row.status,
-    cell: (row) => (
-      <Badge tone={statusTone[row.status]}>{statusLabel[row.status]}</Badge>
-    ),
-  },
-  {
-    key: "action",
-    header: "Action",
-    cell: (row) => (
-      <DropdownMenu
-        label={`Actions for ${row.name}`}
-        actions={[
-          { label: "View", icon: Eye, onSelect: () => onView(row) },
-          ...(canChangeLawyers
-            ? [
-                { label: "Edit", icon: SquarePen, onSelect: () => {} },
-                row.status === "suspended"
-                  ? {
-                      label: "Reactivate",
-                      icon: CircleCheck,
-                      onSelect: () => onToggleStatus(row),
-                    }
-                  : {
-                      label: "Suspend",
-                      icon: Ban,
-                      onSelect: () => onToggleStatus(row),
-                    },
-                {
-                  label: "Delete",
-                  icon: Trash2,
-                  onSelect: () => {},
-                  destructive: true,
-                },
-              ]
-            : []),
-        ]}
-      />
-    ),
+  return lawyerListColumns(
+    (row: Lawyer) => ({
+      ...lawyerListRecord(row, "Approved", "/lawyers/verified"),
+      accountStatus: row.status,
+    }),
+    {
+      key: "action",
+      header: "Action",
+      cell: (row) => (
+        <DropdownMenu
+          label={`Actions for ${row.name}`}
+          actions={[
+            { label: "View", icon: Eye, onSelect: () => onView(row) },
+            ...(canChangeLawyers
+              ? [
+                  {
+                    label: "Edit",
+                    icon: SquarePen,
+                    onSelect: () =>
+                      openPreviewAction("Review application change"),
+                  },
+                  row.status === "suspended"
+                    ? {
+                        label: "Reactivate",
+                        icon: CircleCheck,
+                        onSelect: () => onToggleStatus(row),
+                      }
+                    : {
+                        label: "Suspend",
+                        icon: Ban,
+                        onSelect: () => onToggleStatus(row),
+                      },
+                  {
+                    label: "Delete",
+                    icon: Trash2,
+                    onSelect: () =>
+                      openPreviewAction("Review application change"),
+                    destructive: true,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      ),
     },
-  ];
+    false,
+    true,
+  );
 }
 
 export function VerifiedLawyersTable({
@@ -152,7 +87,6 @@ export function VerifiedLawyersTable({
   const router = useRouter();
   const admin = useAdmin();
   const canChangeLawyers = canChange(admin, "lawyers");
-  const [query, setQuery] = useState("");
 
   /** The lawyer whose suspension is being confirmed. */
   const [target, setTarget] = useState<Lawyer | null>(null);
@@ -200,31 +134,16 @@ export function VerifiedLawyersTable({
     }
   }
 
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return lawyers;
-
-    return lawyers.filter((lawyer) =>
-      [lawyer.lawyerId, lawyer.name, lawyer.phone, lawyer.barId, lawyer.email].some((field) =>
-        field.toLowerCase().includes(needle),
-      ),
-    );
-  }, [lawyers, query]);
-
   return (
     <div className="space-y-4">
-      <SearchInput
-        placeholder="Search by lawyer ID, name, phone, Bar ID"
-        aria-label="Search lawyers"
-        onValueChange={setQuery}
-      />
-
       <DataTable
+        totalCount={lawyers.length}
+        totalLabel="Total lawyers"
         columns={columns}
-        rows={rows}
+        rows={lawyers}
         getRowId={(row) => row.id}
-        minWidth={900}
-        defaultSort={{ key: "name" }}
+        minWidth={1060}
+        defaultSort={{ key: "submittedOn", direction: "desc" }}
         emptyMessage="No lawyers match your search."
       />
 
@@ -239,13 +158,19 @@ export function VerifiedLawyersTable({
         }
         footer={
           <>
-            <Button variant="outline" onClick={() => setTarget(null)} disabled={busy}>
+            <Button
+              variant="outline"
+              onClick={() => setTarget(null)}
+              disabled={busy}
+            >
               Cancel
             </Button>
             <Button
               onClick={submit}
               disabled={busy || (!reactivating && reason.trim().length < 5)}
-              className={reactivating ? undefined : "bg-red-600 hover:bg-red-700"}
+              className={
+                reactivating ? undefined : "bg-red-600 hover:bg-red-700"
+              }
             >
               {reactivating ? "Reactivate" : "Suspend lawyer"}
             </Button>
@@ -258,7 +183,10 @@ export function VerifiedLawyersTable({
           </p>
         ) : (
           <>
-            <label htmlFor="suspension-reason" className="text-sm font-medium text-ink">
+            <label
+              htmlFor="suspension-reason"
+              className="text-sm font-medium text-ink"
+            >
               Reason for suspension
             </label>
             <textarea

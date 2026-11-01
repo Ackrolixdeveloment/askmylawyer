@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   Inbox,
+  MessagesSquare,
   LifeBuoy,
   Phone,
   ReceiptText,
@@ -10,9 +13,9 @@ import {
 } from "lucide-react";
 import {
   Badge,
-  Button,
   Card,
   DataTable,
+  TableLink,
   EmptyState,
   type BadgeTone,
   type Column,
@@ -36,7 +39,7 @@ function HistoryCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="p-5">
+    <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-ink">{title}</h2>
         {action}
@@ -66,20 +69,41 @@ const consultationTone: Record<ConsultationHistoryRow["status"], BadgeTone> = {
 
 export function TransactionHistoryCard({ rows }: { rows: Transaction[] }) {
   const columns: Column<Transaction>[] = [
-    { key: "id", header: "TXN ID", sortValue: (r) => r.id, cell: (r) => r.id },
-    { key: "type", header: "Type", sortValue: (r) => r.type, cell: (r) => r.type },
+    {
+      key: "id",
+      header: "TXN ID",
+      sortValue: (r) => r.id,
+      cell: (r) => (
+        <span className="block max-w-64 whitespace-normal break-all font-mono text-xs">
+          {r.id}
+        </span>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      sortValue: (r) => r.type,
+      cell: (r) => r.type,
+    },
     {
       key: "amount",
       header: "Amount",
+      align: "right",
       sortValue: (r) => r.amount,
       cell: (r) => (
-        <span className={r.amount < 0 ? "text-negative" : "text-positive"}>
-          {formatInr(r.amount)}
+        <span className={r.type === "Debit" ? "text-ink" : "text-positive"}>
+          {r.type === "Credit" ? "+" : "−"}
+          {formatInr(Math.abs(r.amount))}
         </span>
       ),
     },
     { key: "method", header: "Method", cell: (r) => r.method },
-    { key: "date", header: "Date", sortValue: (r) => r.date, cell: (r) => r.date },
+    {
+      key: "date",
+      header: "Date",
+      sortValue: (r) => r.date,
+      cell: (r) => r.date,
+    },
   ];
 
   return (
@@ -87,7 +111,9 @@ export function TransactionHistoryCard({ rows }: { rows: Transaction[] }) {
       title="Transaction history"
       action={
         rows.length ? (
-          <Button className="px-3 py-2 text-xs">All transaction</Button>
+          <Link href="/billing" className="table-tool">
+            Open billing
+          </Link>
         ) : null
       }
     >
@@ -95,14 +121,19 @@ export function TransactionHistoryCard({ rows }: { rows: Transaction[] }) {
         columns={columns}
         rows={rows}
         getRowId={(row, index) => `${row.id}-${index}`}
-        minWidth={420}
-        paginated={false}
+        minWidth={900}
+        paginated={rows.length > 5}
+        pageSize={5}
+        pageSizeOptions={[5, 10, 25]}
+        selectable={false}
+        toolbar={false}
         bordered={false}
         emptyState={
           <EmptyState
+            className="py-5"
             icon={Wallet}
-            title="No transaction yet"
-            description="Once this customer books their first consultation, it will appear here with the lawyer, category, type, date, status, and amount."
+            title="No transactions yet"
+            description="Payments and credits will appear here when transactions are recorded."
           />
         }
       />
@@ -112,14 +143,35 @@ export function TransactionHistoryCard({ rows }: { rows: Transaction[] }) {
 
 export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
   const columns: Column<SupportTicket>[] = [
-    { key: "id", header: "Request ID", sortValue: (r) => r.id, cell: (r) => r.id },
-    { key: "issue", header: "Issues", cell: (r) => r.issue },
+    {
+      key: "id",
+      header: "Request ID",
+      sortValue: (r) => r.id,
+      cell: (r) => (
+        <span className="block max-w-64 whitespace-normal break-all font-mono text-xs">
+          {r.id}
+        </span>
+      ),
+    },
+    {
+      key: "issue",
+      header: "Issue",
+      cell: (r) => (
+        <p className="min-w-48 max-w-xl whitespace-normal break-words leading-5">
+          {r.issue}
+        </p>
+      ),
+    },
     {
       key: "status",
       header: "Status",
       cell: (r) => (
         <Badge tone={ticketTone[r.status]}>
-          {r.status === "open" ? "Open" : r.status === "resolved" ? "Resolved" : "Pending"}
+          {r.status === "open"
+            ? "Open"
+            : r.status === "resolved"
+              ? "Resolved"
+              : "Pending"}
         </Badge>
       ),
     },
@@ -132,7 +184,9 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
       title="Support tickets"
       action={
         rows.length ? (
-          <Badge tone="refunded">{rows.filter((r) => r.status === "open").length} open</Badge>
+          <Badge tone="refunded">
+            {rows.filter((r) => r.status === "open").length} open
+          </Badge>
         ) : null
       }
     >
@@ -140,11 +194,16 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
         columns={columns}
         rows={rows}
         getRowId={(row, index) => `${row.id}-${index}`}
-        minWidth={520}
-        paginated={false}
+        minWidth={960}
+        paginated={rows.length > 5}
+        pageSize={5}
+        pageSizeOptions={[5, 10, 25]}
+        selectable={false}
+        toolbar={false}
         bordered={false}
         emptyState={
           <EmptyState
+            className="py-5"
             icon={LifeBuoy}
             title="No support tickets raised"
             description="If this customer raises a support issue, it will appear here with the status and resolution details."
@@ -157,8 +216,25 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
 
 export function RefundHistoryCard({ rows }: { rows: RefundRequest[] }) {
   const columns: Column<RefundRequest>[] = [
-    { key: "id", header: "Request ID", sortValue: (r) => r.id, cell: (r) => r.id },
-    { key: "reason", header: "Reason", cell: (r) => r.reason },
+    {
+      key: "id",
+      header: "Request ID",
+      sortValue: (r) => r.id,
+      cell: (r) => (
+        <span className="block max-w-64 whitespace-normal break-all font-mono text-xs">
+          {r.id}
+        </span>
+      ),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      cell: (r) => (
+        <p className="min-w-48 max-w-xl whitespace-normal break-words leading-5">
+          {r.reason}
+        </p>
+      ),
+    },
     {
       key: "status",
       header: "Status",
@@ -176,16 +252,21 @@ export function RefundHistoryCard({ rows }: { rows: RefundRequest[] }) {
   ];
 
   return (
-    <HistoryCard title="Refund History">
+    <HistoryCard title="Refund history">
       <DataTable
         columns={columns}
         rows={rows}
         getRowId={(row, index) => `${row.id}-${index}`}
-        minWidth={460}
-        paginated={false}
+        minWidth={900}
+        paginated={rows.length > 5}
+        pageSize={5}
+        pageSizeOptions={[5, 10, 25]}
+        selectable={false}
+        toolbar={false}
         bordered={false}
         emptyState={
           <EmptyState
+            className="py-5"
             icon={ReceiptText}
             title="No refund requests"
             description="Refund requests raised by this customer will be listed here with their status and resolution."
@@ -199,12 +280,26 @@ export function RefundHistoryCard({ rows }: { rows: RefundRequest[] }) {
 export function ConsultationHistoryCard({
   rows,
   total,
+  preview = false,
 }: {
   rows: ConsultationHistoryRow[];
   total: number;
+  preview?: boolean;
 }) {
   const columns: Column<ConsultationHistoryRow>[] = [
-    { key: "id", header: "Booking ID", sortValue: (r) => r.id, cell: (r) => r.id },
+    {
+      key: "id",
+      header: "Booking ID",
+      sortValue: (r) => r.id,
+      cell: (r) =>
+        preview ? (
+          <span className="font-mono text-xs">{r.id}</span>
+        ) : (
+          <TableLink href={`/consultations/${r.recordId ?? r.id}`}>
+            {r.id}
+          </TableLink>
+        ),
+    },
     { key: "lawyer", header: "Lawyer", cell: (r) => r.lawyer },
     {
       key: "category",
@@ -216,7 +311,9 @@ export function ConsultationHistoryCard({
       header: "Type",
       cell: (r) => (
         <span className="inline-flex items-center gap-1.5 text-ink-muted">
-          {r.type === "Video" ? (
+          {r.type === "Consultation" ? (
+            <MessagesSquare className="size-4" aria-hidden />
+          ) : r.type === "Video" ? (
             <Video className="size-4" aria-hidden />
           ) : (
             <Phone className="size-4" aria-hidden />
@@ -244,7 +341,12 @@ export function ConsultationHistoryCard({
       header: "Amount",
       cell: (r) =>
         r.refunded ? (
-          <span className="text-negative">₹0 (refund)</span>
+          <span className="text-ink">
+            {formatInr(r.amount)}
+            <span className="ml-1 text-[10px] text-ink-muted">
+              · refund recorded
+            </span>
+          </span>
         ) : (
           <span className="text-ink">{formatInr(r.amount)}</span>
         ),
@@ -253,7 +355,7 @@ export function ConsultationHistoryCard({
 
   return (
     <HistoryCard
-      title="Consultation History"
+      title="Consultation history"
       action={
         rows.length ? (
           <p className="text-xs text-ink-muted">
@@ -267,10 +369,15 @@ export function ConsultationHistoryCard({
         rows={rows}
         getRowId={(row, index) => `${row.id}-${index}`}
         minWidth={860}
-        paginated={false}
+        paginated={rows.length > 5}
+        pageSize={5}
+        pageSizeOptions={[5, 10, 25]}
+        selectable={false}
+        toolbar={false}
         bordered={false}
         emptyState={
           <EmptyState
+            className="py-5"
             icon={Inbox}
             title="No consultations yet"
             description="Once this customer books their first consultation, it will appear here with the lawyer, category, type, date, status, and amount."

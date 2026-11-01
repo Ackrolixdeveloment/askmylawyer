@@ -3,8 +3,8 @@
 import { Eye } from "lucide-react";
 import { DataTable, TableLink, type Column } from "@/components/ui";
 import {
-  lawyerDetailsColumn,
-  lawyerIdColumn,
+  lawyerContactColumn,
+  lawyerIdentityColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
 import { formatDdMmYyyy } from "@/lib/format";
@@ -19,8 +19,8 @@ const identity = (row: DeletedLawyer): LawyerIdentity => ({
 });
 
 const columns: Column<DeletedLawyer>[] = [
-  lawyerIdColumn(identity),
-  lawyerDetailsColumn(identity),
+  lawyerIdentityColumn(identity),
+  lawyerContactColumn(identity),
   {
     key: "createdOn",
     header: "CREATED DATE",

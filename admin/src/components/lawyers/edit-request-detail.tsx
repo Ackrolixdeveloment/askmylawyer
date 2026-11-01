@@ -1,5 +1,6 @@
 "use client";
 
+import { LawyerEditHistoryCard } from "./lawyer-edit-history-card";
 import {
   Building2,
   CalendarDays,
@@ -32,7 +33,11 @@ import {
   rejectEditRequest,
 } from "@/lib/edit-requests";
 import { formatDdMmYyyy } from "@/lib/format";
-import type { EditChange, EditRequest, EditRequestStatus } from "@/types/edit-request";
+import type {
+  EditChange,
+  EditRequest,
+  EditRequestStatus,
+} from "@/types/edit-request";
 
 const statusTone: Record<EditRequestStatus, BadgeTone> = {
   pending: "refunded",
@@ -48,7 +53,11 @@ const statusLabel: Record<EditRequestStatus, string> = {
 
 function StatusBadge({ status }: { status: EditRequestStatus }) {
   const Icon =
-    status === "approved" ? CircleCheck : status === "rejected" ? CircleX : Clock;
+    status === "approved"
+      ? CircleCheck
+      : status === "rejected"
+        ? CircleX
+        : Clock;
 
   return (
     <Badge tone={statusTone[status]} className="gap-1.5">
@@ -188,10 +197,10 @@ export function EditRequestDetail({
             <div className="mt-4 space-y-4">
               {request.changes.map((change) => (
                 <ChangeRow
-              key={change.field}
-              change={change}
-              proofHref={editRequestProofUrl(request.id)}
-            />
+                  key={change.field}
+                  change={change}
+                  proofHref={editRequestProofUrl(request.id)}
+                />
               ))}
             </div>
           </Card>
@@ -209,7 +218,9 @@ export function EditRequestDetail({
 
         <div className="space-y-4">
           <Card className="p-5">
-            <h2 className="text-base font-semibold text-ink">Request Summary</h2>
+            <h2 className="text-base font-semibold text-ink">
+              Request Summary
+            </h2>
 
             <dl className="mt-4 space-y-4">
               <SummaryRow label="Section Type">
@@ -228,11 +239,16 @@ export function EditRequestDetail({
               {request.decidedAt ? (
                 <SummaryRow
                   label={
-                    request.status === "approved" ? "Approved At" : "Rejected At"
+                    request.status === "approved"
+                      ? "Approved At"
+                      : "Rejected At"
                   }
                 >
                   <span className="flex items-center gap-1.5 text-sm text-ink">
-                    <CalendarDays className="size-4 text-ink-muted" aria-hidden />
+                    <CalendarDays
+                      className="size-4 text-ink-muted"
+                      aria-hidden
+                    />
                     {formatDdMmYyyy(request.decidedAt)}
                   </span>
                 </SummaryRow>
@@ -264,12 +280,18 @@ export function EditRequestDetail({
                   }
                   date={request.decidedAt}
                   tone={
-                    request.status === "approved" ? "bg-positive" : "bg-negative"
+                    request.status === "approved"
+                      ? "bg-positive"
+                      : "bg-negative"
                   }
                 />
               ) : null}
             </ol>
           </Card>
+          <LawyerEditHistoryCard
+            entries={request.editHistory}
+            currentRequestId={request.id}
+          />
         </div>
       </div>
 
@@ -359,7 +381,10 @@ function TimelineItem({
 }) {
   return (
     <li className="flex gap-3">
-      <span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${tone}`} aria-hidden />
+      <span
+        className={`mt-1.5 size-2.5 shrink-0 rounded-full ${tone}`}
+        aria-hidden
+      />
       <div>
         <p className="text-sm font-medium text-ink">{title}</p>
         <p className="mt-0.5 text-xs text-ink-muted">{formatDdMmYyyy(date)}</p>

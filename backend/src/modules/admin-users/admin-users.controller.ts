@@ -51,6 +51,15 @@ export class AdminUsersController {
     return this.directory.deleteDepartment(id);
   }
 
+  @Get('categories/departments')
+  categoryDepartments() { return this.directory.departmentChoices(); }
+
+  @Get('roles/departments')
+  roleDepartments() { return this.directory.departmentChoices(); }
+
+  @Get('users/assignable-roles')
+  assignableRoles() { return this.directory.listRoles(); }
+
   // ---- Ticket categories ----
 
   @Get('categories')
@@ -72,6 +81,16 @@ export class AdminUsersController {
   @Delete('categories/:id')
   deleteCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.directory.deleteCategory(id);
+  }
+
+  @Get('roles/:id/permissions')
+  getRolePermissions(@Param('id', ParseUUIDPipe) id: string) {
+    return this.directory.getRolePermissions(id);
+  }
+
+  @Put('roles/:id/permissions')
+  setRolePermissions(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PermissionsDto) {
+    return this.directory.setRolePermissions(id, dto.permissions);
   }
 
   // ---- Roles ----
@@ -112,8 +131,8 @@ export class AdminUsersController {
 
   @Post('users')
   @HttpCode(201)
-  createUser(@Body() dto: CreateAdminUserDto) {
-    return this.directory.createUser(dto);
+  createUser(@Body() dto: CreateAdminUserDto, @Req() request: AdminRequest) {
+    return this.directory.createUser(dto, request.admin.id);
   }
 
   @Get('users/:id')
@@ -122,8 +141,8 @@ export class AdminUsersController {
   }
 
   @Put('users/:id')
-  updateUser(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAdminUserDto) {
-    return this.directory.updateUser(id, dto);
+  updateUser(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAdminUserDto, @Req() request: AdminRequest) {
+    return this.directory.updateUser(id, dto, request.admin.id);
   }
 
   @Delete('users/:id')
@@ -131,7 +150,7 @@ export class AdminUsersController {
     return this.directory.deleteUser(id, request.admin.id);
   }
 
-  // ---- Permissions, set per person ----
+  // ---- Permissions inherited from roles ----
 
   @Get('users/:id/permissions')
   getPermissions(@Param('id', ParseUUIDPipe) id: string) {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useConfirmation } from "@/components/ui/use-confirmation";
+
 import { Eye, Plus, RefreshCw, SquarePen, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -16,7 +18,7 @@ import {
   createCategory,
   deleteCategory,
   fetchCategories,
-  fetchDepartments,
+  fetchCategoryDepartments,
   updateCategory,
 } from "@/lib/admin-users";
 import { useApiData } from "@/lib/use-api-data";
@@ -33,7 +35,7 @@ const statusOptions = [
 
 export function CategoriesView() {
   const { data, loading, error, retry } = useApiData(() =>
-    Promise.all([fetchCategories(), fetchDepartments()]),
+    Promise.all([fetchCategories(), fetchCategoryDepartments()]),
   );
   const [categories, departments] = data ?? [];
   const rows = categories?.data ?? [];
@@ -76,12 +78,22 @@ export function CategoriesView() {
       retry();
     } catch (cause) {
       setFailure(
-        cause instanceof ApiError ? cause.message : "Could not save this category.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not save this category.",
       );
     }
   }
 
-  async function remove(id: string) {
+  const [confirmRemoval, removalDialog] = useConfirmation();
+  function remove(id: string) {
+    confirmRemoval(
+      "Delete category?",
+      "Review the selected category. Linked records may prevent deletion.",
+      () => performRemove(id),
+    );
+  }
+  async function performRemove(id: string) {
     setFailure(null);
 
     try {
@@ -89,76 +101,79 @@ export function CategoriesView() {
       retry();
     } catch (cause) {
       setFailure(
-        cause instanceof ApiError ? cause.message : "Could not delete this category.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not delete this category.",
       );
+      throw cause;
     }
   }
 
   // Rebuilt per render: the row actions close over the latest state.
   const columns: Column<Category>[] = [
-      {
-        key: "name",
-        header: "Category",
-        align: "left",
-        sortValue: (row) => row.name,
-        cell: (row) => <span className="text-ink">{row.name}</span>,
-      },
-      {
-        key: "department",
-        header: "Department",
-        align: "left",
-        sortValue: (row) => row.department,
-        cell: (row) => (
-          <span className="text-ink-muted">{row.department}</span>
-        ),
-      },
-      {
-        key: "status",
-        header: "Status",
-        align: "left",
-        sortValue: (row) => row.status,
-        cell: (row) => (
-          <Badge tone={row.status === "active" ? "success" : "neutral"}>
-            {row.status === "active" ? "Active" : "Inactive"}
-          </Badge>
-        ),
-      },
-      {
-        key: "actions",
-        header: "Actions",
-        align: "left",
-        cell: (row) => (
-          <div className="flex items-center gap-2">
-            <IconButton
-              label={`View ${row.name}`}
-              tone="muted"
-              onClick={() => open("view", row)}
-            >
-              <Eye className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton
-              label={`Edit ${row.name}`}
-              tone="brand"
-              onClick={() => open("edit", row)}
-            >
-              <SquarePen className="size-4" aria-hidden />
-            </IconButton>
-            <IconButton
-              label={`Delete ${row.name}`}
-              tone="danger"
-              onClick={() => remove(row.id)}
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </IconButton>
-          </div>
-        ),
-      },
+    {
+      key: "name",
+      header: "Category",
+      align: "left",
+      sortValue: (row) => row.name,
+      cell: (row) => <span className="text-ink">{row.name}</span>,
+    },
+    {
+      key: "department",
+      header: "Department",
+      align: "left",
+      sortValue: (row) => row.department,
+      cell: (row) => <span className="text-ink-muted">{row.department}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "left",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <Badge tone={row.status === "active" ? "success" : "neutral"}>
+          {row.status === "active" ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "left",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <IconButton
+            label={`View ${row.name}`}
+            tone="muted"
+            onClick={() => open("view", row)}
+          >
+            <Eye className="size-4" aria-hidden />
+          </IconButton>
+          <IconButton
+            label={`Edit ${row.name}`}
+            tone="brand"
+            onClick={() => open("edit", row)}
+          >
+            <SquarePen className="size-4" aria-hidden />
+          </IconButton>
+          <IconButton
+            label={`Delete ${row.name}`}
+            tone="danger"
+            onClick={() => remove(row.id)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </IconButton>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl leading-8 font-bold text-ink">Category</h1>
+        <h1 className="text-2xl leading-8 font-bold text-ink">
+          Ticket Categories
+        </h1>
 
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={retry} className={outlineAction}>
@@ -194,6 +209,7 @@ export function CategoriesView() {
       </ScreenState>
 
       {/* Keyed so each opening starts from the chosen row's values. */}
+      {removalDialog}
       <CategoryModal
         key={`${mode}-${active?.id ?? "new"}`}
         mode={mode}
@@ -220,8 +236,12 @@ function CategoryModal({
   onClose: () => void;
 }) {
   const [name, setName] = useState(category?.name ?? "");
-  const [departmentId, setDepartmentId] = useState(category?.departmentId ?? "");
-  const [status, setStatus] = useState<UserStatus>(category?.status ?? "active");
+  const [departmentId, setDepartmentId] = useState(
+    category?.departmentId ?? "",
+  );
+  const [status, setStatus] = useState<UserStatus>(
+    category?.status ?? "active",
+  );
   const [error, setError] = useState("");
 
   if (mode === null) return null;

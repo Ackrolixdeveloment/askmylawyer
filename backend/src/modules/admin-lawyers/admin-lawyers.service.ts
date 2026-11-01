@@ -53,6 +53,9 @@ const lawyerSelect = {
       barCouncilState: true,
       experienceBand: true,
       submittedAt: true,
+      approvedAt: true,
+      rejectedAt: true,
+      reviewedAt: true,
       updatedAt: true,
       correctionRequestedAt: true,
       correctionNotes: true,
@@ -426,6 +429,10 @@ export class AdminLawyersService {
           name: row.fullName ?? '',
           phone: row.phone ?? '',
           email: row.email ?? '',
+          ...this.applicationDates(profile),
+          barId: profile?.enrollmentNumber ?? '',
+          barCouncilState: profile?.barCouncilState ?? null,
+          experience: profile?.experienceBand ?? '',
           section: sections[0] ?? '',
           sections,
           remarks: notes.map(([block, note]) => `${block}: ${note}`).join(' · '),
@@ -493,6 +500,7 @@ export class AdminLawyersService {
           name: row.fullName ?? '',
           phone: row.phone ?? '',
           email: row.email ?? '',
+          ...this.applicationDates(profile),
           barId: profile?.enrollmentNumber ?? '',
           verification: profile?.kycMethod ?? 'manual',
           city: null,
@@ -669,6 +677,15 @@ export class AdminLawyersService {
     return { rows, total, page, limit };
   }
 
+  private applicationDates(profile: LawyerRow['lawyerProfile']) {
+    return {
+      submittedOn: profile?.submittedAt ? isoDate(profile.submittedAt) : null,
+      approvedAt: profile?.approvedAt?.toISOString() ?? null,
+      rejectedAt: profile?.rejectedAt?.toISOString() ?? null,
+      correctionRequestedAt: profile?.correctionRequestedAt?.toISOString() ?? null,
+    };
+  }
+
   private toRequest(row: LawyerRow) {
     const profile = row.lawyerProfile;
     return {
@@ -683,7 +700,7 @@ export class AdminLawyersService {
       barCouncilState: profile?.barCouncilState ?? null,
       experience: profile?.experienceBand ?? '',
       status: profile?.onboardingStatus ?? 'draft',
-      submittedOn: isoDate(profile?.submittedAt ?? profile?.updatedAt ?? row.createdAt),
+      ...this.applicationDates(profile),
     };
   }
 }

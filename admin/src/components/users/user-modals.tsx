@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdmin } from "@/components/layout/auth-guard";
 import { useState } from "react";
 import { FilterSelect, Modal, TextField } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -22,9 +23,19 @@ const statusChoices = [
   { value: "inactive", label: "Inactive" },
 ];
 
-export function EditUserModal({ user, roles, onClose, onSaved }: EditUserModalProps) {
+export function EditUserModal({
+  user,
+  roles,
+  onClose,
+  onSaved,
+}: EditUserModalProps) {
   return user ? (
-    <EditUserForm user={user} roles={roles} onClose={onClose} onSaved={onSaved} />
+    <EditUserForm
+      user={user}
+      roles={roles}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   ) : null;
 }
 
@@ -40,6 +51,7 @@ function EditUserForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const admin = useAdmin();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
@@ -83,7 +95,9 @@ function EditUserForm({
       onSaved();
       onClose();
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Could not save this user.");
+      setError(
+        cause instanceof ApiError ? cause.message : "Could not save this user.",
+      );
     } finally {
       setSaving(false);
     }
@@ -133,7 +147,9 @@ function EditUserForm({
           onChange={(event) => setPhone(event.target.value)}
         />
         <div>
-          <span className="mb-1.5 block text-sm font-medium text-ink">Role</span>
+          <span className="mb-1.5 block text-sm font-medium text-ink">
+            Role
+          </span>
           {user.isSystemRole ? (
             <p className="rounded-lg border border-line bg-slate-50 px-3.5 py-2.5 text-sm text-ink-muted">
               {user.role} — this role cannot be changed
@@ -178,13 +194,19 @@ function EditUserForm({
           <span className="mb-1.5 block text-sm font-medium text-ink">
             Status
           </span>
-          <FilterSelect
-            options={statusChoices}
-            value={status}
-            onChange={(value) => setStatus(value as AdminUser["status"])}
-            aria-label="Status"
-            size="sm"
-          />
+          {user.isSystemRole || user.id === admin.id ? (
+            <p className="rounded-lg border border-line bg-slate-50 p-2.5 text-sm text-ink-muted">
+              Active · Protected account
+            </p>
+          ) : (
+            <FilterSelect
+              options={statusChoices}
+              value={status}
+              onChange={(value) => setStatus(value as AdminUser["status"])}
+              aria-label="Status"
+              size="sm"
+            />
+          )}
         </div>
       </div>
     </Modal>

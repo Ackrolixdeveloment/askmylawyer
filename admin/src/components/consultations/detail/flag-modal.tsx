@@ -18,6 +18,7 @@ interface FlagModalProps {
 
 export function FlagModal({ open, onClose }: FlagModalProps) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
   const [notes, setNotes] = useState("");
 
   const canSubmit = selected.length > 0;
@@ -31,8 +32,7 @@ export function FlagModal({ open, onClose }: FlagModalProps) {
   }
 
   function submit() {
-    // TODO: post the flag, then refresh the consultation.
-    onClose();
+    setSubmitted(true);
     setSelected([]);
     setNotes("");
   }
@@ -42,7 +42,7 @@ export function FlagModal({ open, onClose }: FlagModalProps) {
       open={open}
       onClose={onClose}
       title="Flag for Quality Check"
-      description="Flag this consultation to the quality review queue. Lawyer is notified after 3 flags in 30 days."
+      description="Frontend review preview. No lawyer is notified or suspended."
       footer={
         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
           <Button
@@ -51,7 +51,7 @@ export function FlagModal({ open, onClose }: FlagModalProps) {
             onClick={submit}
             className="border-transparent bg-slate-100 hover:bg-slate-200"
           >
-            Submit &amp; Suspend
+            Preview flag &amp; suspension
           </Button>
           <Button
             disabled={!canSubmit}
@@ -63,6 +63,14 @@ export function FlagModal({ open, onClose }: FlagModalProps) {
         </div>
       }
     >
+      {submitted && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl bg-brand-soft p-3 text-sm text-brand"
+        >
+          Flag captured in this preview. No account changes were made.
+        </p>
+      )}
       <fieldset className="space-y-3">
         <legend className="sr-only">Reason for flagging</legend>
         {reasons.map((reason) => (

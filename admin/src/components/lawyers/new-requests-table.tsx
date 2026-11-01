@@ -1,194 +1,48 @@
 "use client";
-
-import { Eye, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import {
-  DataTable,
-  DropdownMenu,
-  FilterSelect,
-  SearchInput,
-  type Column,
-  type SelectOption,
-} from "@/components/ui";
-import { formatDdMmYyyy } from "@/lib/format";
-import {
-  lawyerDetailsColumn,
-  lawyerIdColumn,
-  type LawyerIdentity,
-} from "@/components/lawyers/lawyer-columns";
-import { useAdmin } from "@/components/layout/auth-guard";
-import { canChange } from "@/lib/auth";
+import Link from "next/link";
+import { DataTable, type SelectOption } from "@/components/ui";
 import type { LawyerRequest } from "@/types/lawyer";
-
-const identity = (row: LawyerRequest, basePath: string): LawyerIdentity => ({
-  lawyerId: row.lawyerId,
-  name: row.name,
-  mobile: row.phone,
-  email: row.email,
-  href: `${basePath}/${row.id}`,
-});
-
-/** Bar council state from the application; falls back to a city if one is set. */
+import { lawyerListColumns, lawyerListRecord } from "./lawyer-list-columns";
 export function placeOf(row: LawyerRequest) {
   return row.barCouncilState ?? row.city ?? "";
 }
-
-/** Built per-render so the row menu can navigate. */
-/** Only offered to admins with full access to Lawyer Management. */
-const DELETE_ACTION = {
-  label: "Delete",
-  icon: Trash2,
-  onSelect: () => {},
-  destructive: true,
-};
-
-function buildColumns(
-  onView: (row: LawyerRequest) => void,
-  dateHeader: string,
-  viewBasePath: string,
-  canChangeLawyers: boolean,
-): Column<LawyerRequest>[] {
-  return [
-  lawyerIdColumn((row: LawyerRequest) => identity(row, viewBasePath)),
-  lawyerDetailsColumn((row: LawyerRequest) => identity(row, viewBasePath)),
-  {
-    key: "barId",
-    header: "Bar ID",
-    sortValue: (row) => row.barId,
-    cell: (row) => <span className="text-ink-muted">{row.barId}</span>,
-  },
-  {
-    key: "city",
-    header: "State",
-    sortValue: (row) => placeOf(row),
-    cell: (row) => (
-      <span className="text-ink-muted">{placeOf(row) || "-"}</span>
-    ),
-  },
-  {
-    key: "experience",
-    header: "Experience",
-    sortValue: (row) => row.experience,
-    cell: (row) => <span className="text-ink-muted">{row.experience}</span>,
-  },
-  {
-    key: "submittedOn",
-    header: dateHeader,
-    sortValue: (row) => row.submittedOn,
-    cell: (row) => (
-      <span className="text-ink-muted">{formatDdMmYyyy(row.submittedOn)}</span>
-    ),
-  },
-  {
-    key: "action",
-    header: "Action",
-    cell: (row) => (
-      <DropdownMenu
-        label={`Actions for ${row.name}`}
-        actions={[
-          { label: "View", icon: Eye, onSelect: () => onView(row) },
-          ...(canChangeLawyers ? [DELETE_ACTION] : []),
-          // { label: "Edit", icon: SquarePen, onSelect: () => {} },
-        ]}
-      />
-    ),
-    },
-  ];
-}
-
 interface NewRequestsTableProps {
   requests: LawyerRequest[];
   stateOptions: SelectOption[];
   experienceOptions: SelectOption[];
-  /** Label for the date column — submitted, rejected or resubmitted. */
   dateHeader?: string;
-  /** Where the row links point. */
   viewBasePath?: string;
   emptyMessage?: string;
 }
-
 export function NewRequestsTable({
   requests,
-  stateOptions,
-  experienceOptions,
-  dateHeader = "Date",
   viewBasePath = "/lawyers/onboarding/new",
-  emptyMessage = "No requests match the current filters.",
+  emptyMessage = "No applications match these filters.",
 }: NewRequestsTableProps) {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const canChangeLawyers = canChange(useAdmin(), "lawyers");
-  const [state, setState] = useState("all");
-  const [experience, setExperience] = useState("all");
-
-  const columns = useMemo(
-    () =>
-      buildColumns(
-        (row) => router.push(`${viewBasePath}/${row.id}`),
-        dateHeader,
-        viewBasePath,
-        canChangeLawyers,
-      ),
-    [router, dateHeader, viewBasePath, canChangeLawyers],
-  );
-
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    return requests.filter((request) => {
-      const matchesQuery =
-        !needle ||
-        [request.name, request.phone, request.barId, request.email].some((field) =>
-          field.toLowerCase().includes(needle),
-        );
-      const matchesState =
-        state === "all" ||
-        placeOf(request).toLowerCase() === state.toLowerCase();
-      const matchesExperience =
-        experience === "all" || request.experience === experience;
-
-      return matchesQuery && matchesState && matchesExperience;
-    });
-  }, [requests, query, state, experience]);
-
+  const record = (row: LawyerRequest) =>
+    lawyerListRecord(
+      row,
+      viewBasePath.endsWith("rejected") ? "Rejected" : "Awaiting review",
+      viewBasePath,
+    );
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
-        {/* Search takes the leftover width; the filters keep their fixed size. */}
-        <div className="min-w-0 flex-1">
-          <SearchInput
-            placeholder="Search by name, phone, Bar ID"
-            aria-label="Search requests"
-            onValueChange={setQuery}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:w-auto sm:shrink-0">
-          <FilterSelect
-            aria-label="Filter by state"
-            options={stateOptions}
-            value={state}
-            onChange={setState}
-            className="sm:w-40"
-          />
-          <FilterSelect
-            aria-label="Filter by experience"
-            options={experienceOptions}
-            value={experience}
-            onChange={setExperience}
-            align="right"
-            className="sm:w-40"
-          />
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        defaultSort={{ key: "submittedOn", direction: "desc" }}
-        emptyMessage={emptyMessage}
-      />
-    </div>
+    <DataTable
+      totalCount={requests.length}
+      totalLabel="Total lawyers"
+      rows={requests}
+      columns={lawyerListColumns(record, {
+        key: "actions",
+        header: "Actions",
+        cell: (row) => (
+          <Link className="table-tool text-brand" href={record(row).href}>
+            View application
+          </Link>
+        ),
+      })}
+      getRowId={(row) => row.id}
+      minWidth={1060}
+      defaultSort={{ key: "submittedOn", direction: "desc" }}
+      emptyMessage={emptyMessage}
+    />
   );
 }

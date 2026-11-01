@@ -2,13 +2,16 @@
 
 import { ScreenState } from "@/components/common/screen-state";
 import { PermissionMatrix } from "@/components/users/permission-matrix";
-import { fetchPermissionCatalogue, fetchUserPermissions } from "@/lib/admin-users";
+import {
+  fetchPermissionCatalogue,
+  fetchRolePermissions,
+} from "@/lib/admin-users";
 import { useApiData } from "@/lib/use-api-data";
 
-/** What one admin user can reach. Access is set per person, not per role. */
+/** The shared permissions inherited by every user assigned to a role. */
 export function PermissionsView({ id }: { id: string }) {
   const { data, loading, error, retry } = useApiData(
-    () => Promise.all([fetchUserPermissions(id), fetchPermissionCatalogue()]),
+    () => Promise.all([fetchRolePermissions(id), fetchPermissionCatalogue()]),
     [id],
   );
 
@@ -23,7 +26,14 @@ export function PermissionsView({ id }: { id: string }) {
     >
       {current && catalogue ? (
         <PermissionMatrix
-          user={current.user}
+          key={current.role.id}
+          user={{
+            id: current.role.id,
+            name: current.role.name,
+            email: current.role.department || "No department",
+            isSystemRole: current.role.isSystem,
+          }}
+          affectedUsers={current.role.users}
           modules={catalogue.modules}
           levels={catalogue.levels}
           permissions={current.permissions}

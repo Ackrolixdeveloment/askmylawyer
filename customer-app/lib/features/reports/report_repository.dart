@@ -11,6 +11,7 @@ class CustomerReport {
     required this.owed,
     required this.profileComplete,
     required this.missingDetails,
+    this.unpaidExtensionIds = const [],
     this.message,
     this.submittedAt,
     this.caseSummary,
@@ -22,6 +23,8 @@ class CustomerReport {
     final report = json['report'] as Map<String, dynamic>?;
 
     return CustomerReport(
+      unpaidExtensionIds: (json['unpaidExtensionIds'] as List<dynamic>? ?? [])
+          .cast<String>(),
       status: json['status'] as String,
       lawyerName: json['lawyerName'] as String? ?? 'Your lawyer',
       owed: json['owed'] as int? ?? 0,
@@ -30,9 +33,8 @@ class CustomerReport {
           .map((value) => value as String)
           .toList(),
       message: json['message'] as String?,
-      submittedAt: DateTime.tryParse(
-        json['submittedAt'] as String? ?? '',
-      )?.toLocal(),
+      submittedAt: DateTime.tryParse(json['submittedAt'] as String? ?? '')
+          ?.toLocal(),
       caseSummary: report?['caseSummary'] as String?,
       legalGuidance: report?['legalGuidance'] as String?,
       nextSteps: report?['nextSteps'] as String?,
@@ -44,6 +46,7 @@ class CustomerReport {
 
   /// Rupees still owed for extra call time. Zero means nothing to pay.
   final int owed;
+  final List<String> unpaidExtensionIds;
 
   /// The report carries the client's name and goes to them as a legal
   /// document, so it waits until they have told us who they are.

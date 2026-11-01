@@ -17,6 +17,8 @@ export interface EngineProfile {
   escalateAfterAttempts: number;
   wrapUpCooldownMinutes: number;
   scheduledBufferMinutes: number;
+  preparationMinutes: number;
+  extensionPaymentSeconds: number;
   locationFreshnessMinutes: number;
   heartbeatSeconds: number;
   maxConcurrentChat: number;
@@ -49,6 +51,8 @@ export const PRODUCTION_PROFILE: EngineProfile = {
   escalateAfterAttempts: 0,
   wrapUpCooldownMinutes: 2,
   scheduledBufferMinutes: 15,
+  preparationMinutes: 3,
+  extensionPaymentSeconds: 180,
   locationFreshnessMinutes: 2,
   heartbeatSeconds: 45,
   maxConcurrentChat: 3,
@@ -202,6 +206,8 @@ export class EngineSettingsService {
       escalateAfterAttempts: row.escalateAfterAttempts,
       wrapUpCooldownMinutes: row.wrapUpCooldownMinutes,
       scheduledBufferMinutes: row.scheduledBufferMinutes,
+      preparationMinutes: row.preparationMinutes,
+      extensionPaymentSeconds: row.extensionPaymentSeconds,
       locationFreshnessMinutes: row.locationFreshnessMinutes,
       heartbeatSeconds: row.heartbeatSeconds,
       maxConcurrentChat: row.maxConcurrentChat,

@@ -20,10 +20,28 @@ export const billingTypeOptions = [
 ];
 
 const rows = [
-  { medium: "video", scheduled: false, duration: 20, fee: 799, status: "pending" },
+  {
+    medium: "video",
+    scheduled: false,
+    duration: 20,
+    fee: 799,
+    status: "pending",
+  },
   { medium: "video", scheduled: true, duration: 30, fee: 899, status: "paid" },
-  { medium: "audio", scheduled: false, duration: 30, fee: 899, status: "pending" },
-  { medium: "audio", scheduled: false, duration: 20, fee: 799, status: "pending" },
+  {
+    medium: "audio",
+    scheduled: false,
+    duration: 30,
+    fee: 899,
+    status: "pending",
+  },
+  {
+    medium: "audio",
+    scheduled: false,
+    duration: 20,
+    fee: 799,
+    status: "pending",
+  },
   { medium: "audio", scheduled: false, duration: 20, fee: 799, status: "paid" },
 ] as const;
 
@@ -33,9 +51,11 @@ export const billingRecords: BillingRecord[] = Array.from(
     const base = rows[index % rows.length];
     return {
       id: `billing-${index + 1}`,
-      bookingId: "BK-20260722",
-      customer: "Jignesh Kumar",
-      customerId: "CUS-00421",
+      bookingId: `BK-DEMO-${String(index + 1).padStart(4, "0")}`,
+      customer: ["Jignesh Kumar", "Priya Sharma", "Anita Rao", "Rahul Mehta"][
+        index % 4
+      ],
+      customerId: `CUS-DEMO-${String(index + 1).padStart(4, "0")}`,
       date: "2026-07-22",
       time: "2:44 PM",
       medium: base.medium,

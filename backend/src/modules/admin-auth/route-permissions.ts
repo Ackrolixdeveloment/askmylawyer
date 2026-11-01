@@ -22,8 +22,9 @@ const ROUTE_KEYS: { prefix: string; key: string; methods?: string[] }[] = [
 
   // User Management
   { prefix: 'departments', key: 'users.departments' },
-  { prefix: 'categories', key: 'users.categories' },
+  { prefix: 'categories', key: 'support.categories' },
   { prefix: 'roles', key: 'users.roles' },
+  { prefix: 'users/permission-catalogue', key: 'users.roles' },
   { prefix: 'users', key: 'users.users' },
 
   // Push Notifications. The composer looks up who it would reach, so those

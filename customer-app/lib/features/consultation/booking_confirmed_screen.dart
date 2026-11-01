@@ -61,8 +61,8 @@ class BookingConfirmedScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    "We'll remind you 10 minutes before it starts, so you "
-                    'can join on time.',
+                    "Track your booking in Upcoming. We'll notify you when "
+                    'a lawyer accepts your consultation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,

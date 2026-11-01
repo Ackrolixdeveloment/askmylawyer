@@ -31,6 +31,7 @@ enum DevicePlatform {
 
 /// Where a consultation request has got to.
 enum ConsultationStatus {
+  scheduled
   /// Waiting on payment, when payment is not being skipped.
   pending_payment
   /// Ringing lawyers.
@@ -360,8 +361,9 @@ model OtpCode {
   @@map("otp_codes")
 }
 
-/// A job title for admin users. Module access is set per user, not here.
+/// Admin role and the shared access matrix inherited by its users.
 model Role {
+  permissions Json?
   id           String      @id @default(uuid()) @db.Uuid
   name         String      @unique @db.VarChar(100)
   description  String?     @db.VarChar(300)
@@ -410,6 +412,9 @@ model TicketCategory {
 }
 
 model AdminUser {
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy AdminUser? @relation("AdminUserCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers AdminUser[] @relation("AdminUserCreator")
   id                     String                  @id @default(uuid()) @db.Uuid
   employeeCode           String                  @unique @map("employee_code") @db.VarChar(20)
   name                   String                  @db.VarChar(150)
@@ -627,12 +632,13 @@ model PlatformSettings {
   @@map("platform_settings")
 }
 
-/// Cashfree credentials, one row per environment.
+/// Gateway credentials, one row per environment. Legacy rows remain tagged Cashfree.
 ///
 /// Both sets are kept so switching between test and live never loses the
 /// other one. Secrets are encrypted at rest and never leave the server: the
 /// admin panel only ever sees the last four characters.
 model PaymentGateway {
+  provider         String @default("cashfree") @db.VarChar(20)
   environment      GatewayEnvironment @id
   appId            String?            @map("app_id") @db.VarChar(120)
   secretKeyEnc     String?            @map("secret_key_enc")
@@ -670,6 +676,8 @@ model ConsultationSettings {
   /// Breathing space after a consultation before the next offer.
   wrapUpCooldownMinutes    Int          @default(2) @map("wrap_up_cooldown_minutes")
   /// A lawyer is left alone this long before a booked consultation.
+  preparationMinutes Int @default(3) @map("preparation_minutes")
+  extensionPaymentSeconds Int @default(180) @map("extension_payment_seconds")
   scheduledBufferMinutes   Int          @default(15) @map("scheduled_buffer_minutes")
   /// A position older than this counts as unavailable.
   locationFreshnessMinutes Int          @default(2) @map("location_freshness_minutes")
@@ -763,6 +771,10 @@ model LawyerPresence {
 
 /// One customer asking for a consultation, and how the search went.
 model ConsultationRequest {
+  paymentBypassed Boolean @default(false) @map("payment_bypassed")
+  cancelledBy String? @map("cancelled_by") @db.VarChar(20)
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(255)
+  recording ConsultationRecording?
   id              String                  @id @default(uuid()) @db.Uuid
   /// The reference both sides quote: "AML-000123". See consultation_number_seq.
   number          Int?                    @unique
@@ -773,6 +785,11 @@ model ConsultationRequest {
   planName        String                  @map("plan_name") @db.VarChar(60)
   amount          Int
   durationMinutes Int                     @map("duration_minutes")
+  preparationMinutes Int @default(3) @map("preparation_minutes")
+  extensionMinutes Int @default(0) @map("extension_minutes")
+  extensionAmount Int @default(0) @map("extension_amount")
+  maxExtensions Int @default(0) @map("max_extensions")
+  gst Int @default(0)
   /// What the customer says the matter is about.
   category        String?                 @db.VarChar(120)
   description     String?                 @db.VarChar(1000)
@@ -809,11 +826,21 @@ model ConsultationRequest {
 /// consultation's own id, so the two can never drift apart. The amount here
 /// is what was actually charged — the plan's price plus GST — which is not
 /// the same as the request's `amount`.
+enum RefundStatus {
+  requested
+  processing
+  completed
+  failed
+  needs_review
+}
+
 model ConsultationPayment {
+  provider      String @default("cashfree") @db.VarChar(20)
+  gatewayRefundId String? @map("gateway_refund_id") @db.VarChar(80)
   id            String              @id @default(uuid()) @db.Uuid
   requestId     String              @unique @map("request_id") @db.Uuid
   request       ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  /// The gateway's order id, which is the consultation id.
+  /// Gateway order ID (Razorpay order_... for new payments).
   orderId       String              @unique @map("order_id") @db.VarChar(60)
   /// Paise are not used anywhere else in the platform, so this is rupees.
   amount        Int
@@ -832,6 +859,9 @@ model ConsultationPayment {
   failureReason String?             @map("failure_reason") @db.VarChar(255)
   paidAt        DateTime?           @map("paid_at") @db.Timestamptz(6)
   refundedAt    DateTime?           @map("refunded_at") @db.Timestamptz(6)
+  /// Separate from payment status: requesting money back is not a transfer.
+  refundStatus  RefundStatus?       @map("refund_status")
+  refundRequestedAt DateTime?       @map("refund_requested_at") @db.Timestamptz(6)
   /// In rupees. Less than [amount] when part of the consultation was given.
   refundAmount  Int?                @map("refund_amount")
   /// Plain words for the customer and for support, e.g. "the lawyer left
@@ -846,6 +876,7 @@ model ConsultationPayment {
 
 /// Where an extension request has got to.
 enum ExtensionStatus {
+  payment_pending
   /// Waiting on the customer.
   pending
   /// The customer agreed; the clock has already moved.
@@ -863,6 +894,13 @@ enum ExtensionStatus {
 /// the record of that exchange: who asked, what was quoted, what was
 /// answered. That is what settles a disputed bill weeks later.
 model ConsultationExtension {
+  orderId String? @unique @map("order_id") @db.VarChar(60)
+  environment GatewayEnvironment?
+  keyId String? @map("key_id") @db.VarChar(120)
+  reference String? @db.VarChar(120)
+  refundStatus RefundStatus? @map("refund_status")
+  gatewayRefundId String? @map("gateway_refund_id") @db.VarChar(80)
+
   id           String              @id @default(uuid()) @db.Uuid
   requestId    String              @map("request_id") @db.Uuid
   request      ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
@@ -1054,6 +1092,9 @@ model ConsultationOffer {
 
 /// The call or chat itself.
 model ConsultationSession {
+  usedModes String[] @default([]) @map("used_modes")
+  mediaUsageKnown Boolean @default(false) @map("media_usage_known")
+  readyAt DateTime? @map("ready_at") @db.Timestamptz(6)
   id         String              @id @default(uuid()) @db.Uuid
   requestId  String              @unique @map("request_id") @db.Uuid
   request    ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
@@ -1095,4 +1136,18 @@ model ConsultationSession {
 
   @@index([expiresAt])
   @@map("consultation_sessions")
+}
+
+/// Private cloud recording metadata. No public object URLs are stored.
+model ConsultationRecording {
+  requestId String @id @map("request_id") @db.Uuid
+  request ConsultationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status String @db.VarChar(20)
+  resourceId String? @map("resource_id")
+  sid String?
+  files Json?
+  problem String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("consultation_recordings")
 }

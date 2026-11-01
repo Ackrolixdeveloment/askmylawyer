@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PushService } from '../../infrastructure/push/push.service';
-import { normalisePermissions } from '../admin-users/permission-catalogue';
+import { normalisePermissions, levelFor } from '../admin-users/permission-catalogue';
 import { AdminEventsService } from './admin-events.service';
 
 interface NewAlert {
@@ -29,14 +29,14 @@ export class AdminAlertsService {
   async notify(alert: NewAlert) {
     const admins = await this.prisma.adminUser.findMany({
       where: { status: 'active', deletedAt: null },
-      select: { id: true, permissions: true, role: { select: { isSystem: true } } },
+      select: { id: true, role: { select: { isSystem: true, permissions: true, status: true } } },
     });
 
     const recipients = admins
       .filter(
         (admin) =>
           admin.role.isSystem ||
-          normalisePermissions(admin.permissions)[alert.module] !== 'none',
+          (admin.role.status === 'active' && levelFor(normalisePermissions(admin.role.permissions), alert.module) !== 'none'),
       )
       .map((admin) => admin.id);
 

@@ -32,9 +32,42 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null);
+    const first = focusables()[0];
+    first?.focus();
+    function trap(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const controls = focusables();
+      const start = controls[0];
+      const end = controls[controls.length - 1];
+      if (!start) {
+        event.preventDefault();
+        return;
+      }
+      if (
+        event.shiftKey &&
+        (document.activeElement === start ||
+          !panelRef.current?.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        end.focus();
+      } else if (!event.shiftKey && document.activeElement === end) {
+        event.preventDefault();
+        start.focus();
+      }
+    }
+    document.addEventListener("keydown", trap);
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
+      document.removeEventListener("keydown", trap);
+      previouslyFocused?.focus();
     };
   }, [open]);
 
@@ -48,7 +81,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "w-full max-w-lg rounded-xl border border-line bg-surface shadow-xl",
+          "w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-2xl border border-line bg-surface shadow-xl",
           className,
         )}
       >

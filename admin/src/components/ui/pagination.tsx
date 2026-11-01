@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PaginationProps {
@@ -31,7 +32,6 @@ export function Pagination({
   page,
   pageCount,
   pageSize,
-  pageSizeOptions,
   onPageChange,
   onPageSizeChange,
   className,
@@ -43,19 +43,26 @@ export function Pagination({
         className,
       )}
     >
-      <label className="flex items-center gap-2 text-sm text-ink-muted">
+      <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-ink-muted">
         Rows per page:
-        <select
-          value={pageSize}
-          onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
-        >
-          {pageSizeOptions.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
+        <span className="relative inline-flex w-24 shrink-0 items-center">
+          <select
+            aria-label="Rows per page"
+            value={pageSize}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            className="h-10 w-full min-w-0 appearance-none rounded-lg border border-line bg-surface py-2 pr-9 pl-3 text-sm leading-5 tabular-nums text-ink focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
+          >
+            {[10, 25, 50, 100, 500].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-3 size-4 text-ink-muted"
+            aria-hidden
+          />
+        </span>
       </label>
 
       <nav aria-label="Pagination" className="flex items-center gap-1.5">

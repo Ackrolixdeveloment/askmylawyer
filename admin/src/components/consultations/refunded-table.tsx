@@ -1,5 +1,7 @@
 "use client";
 
+import { PersonCell } from "@/components/common/person-cell";
+
 import { Eye } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -19,21 +21,29 @@ import type {
 import { formatInr } from "@/lib/format";
 
 const refundTone: Record<RefundState, BadgeTone> = {
+  requested: "refunded",
+  processing: "refunded",
+  needs_review: "refunded",
+  none: "neutral",
   completed: "success",
   failed: "danger",
   "auto-processing": "refunded",
 };
 
 const refundLabel: Record<RefundState, string> = {
+  requested: "Requested",
+  processing: "Processing",
+  needs_review: "Needs review",
+  none: "No refund",
   completed: "Completed",
   failed: "Failed",
-  "auto-processing": "Auto Processing",
+  "auto-processing": "Processing",
 };
 
 const columns: Column<RefundedConsultation>[] = [
   {
     key: "refundId",
-    header: "Refund ID",
+    header: "Consultation",
     align: "left",
     sortValue: (row) => row.refundId,
     cell: (row) => (
@@ -43,22 +53,20 @@ const columns: Column<RefundedConsultation>[] = [
     ),
   },
   {
-    key: "consultationId",
-    header: "Consultation",
-    align: "left",
-    sortValue: (row) => row.consultationId,
-    cell: (row) => <span className="text-ink">{row.consultationId}</span>,
-  },
-  {
     key: "customer",
     header: "Customer",
     align: "left",
     sortValue: (row) => row.customer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.customer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.customerId}</p>
-      </>
+      <PersonCell
+        name={row.customer}
+        tone="blue"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.customerId)
+            ? `/customers/${row.customerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
@@ -67,15 +75,20 @@ const columns: Column<RefundedConsultation>[] = [
     align: "left",
     sortValue: (row) => row.lawyer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.lawyer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.lawyerId}</p>
-      </>
+      <PersonCell
+        name={row.lawyer}
+        tone="violet"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.lawyerId)
+            ? `/lawyers/verified/${row.lawyerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
     key: "refundedAt",
-    header: "Refunded at",
+    header: "Completed at",
     align: "left",
     sortValue: (row) => row.refundedAt,
     cell: (row) => <span className="text-ink-muted">{row.refundedAt}</span>,
@@ -86,13 +99,6 @@ const columns: Column<RefundedConsultation>[] = [
     align: "left",
     sortValue: (row) => row.reason,
     cell: (row) => <span className="text-ink-muted">{row.reason}</span>,
-  },
-  {
-    key: "percent",
-    header: "%",
-    align: "left",
-    sortValue: (row) => row.percent,
-    cell: (row) => <span className="text-ink-muted">{row.percent}%</span>,
   },
   {
     key: "refundAmount",
@@ -179,10 +185,12 @@ export function RefundedTable({
       </div>
 
       <DataTable
+        totalCount={consultations.length}
+        searchable={false}
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
-        minWidth={1240}
+        minWidth={1080}
         emptyMessage="No refunds match the current filters."
       />
     </div>

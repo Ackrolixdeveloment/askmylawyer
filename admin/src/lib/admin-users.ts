@@ -17,11 +17,17 @@ export function fetchDepartments() {
 }
 
 export function createDepartment(input: DepartmentInput) {
-  return api<{ id: string }>("/admin/departments", { method: "POST", body: input });
+  return api<{ id: string }>("/admin/departments", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function updateDepartment(id: string, input: DepartmentInput) {
-  return api<{ id: string }>(`/admin/departments/${id}`, { method: "PUT", body: input });
+  return api<{ id: string }>(`/admin/departments/${id}`, {
+    method: "PUT",
+    body: input,
+  });
 }
 
 export function deleteDepartment(id: string) {
@@ -41,11 +47,17 @@ export function fetchCategories() {
 }
 
 export function createCategory(input: CategoryInput) {
-  return api<{ id: string }>("/admin/categories", { method: "POST", body: input });
+  return api<{ id: string }>("/admin/categories", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function updateCategory(id: string, input: CategoryInput) {
-  return api<{ id: string }>(`/admin/categories/${id}`, { method: "PUT", body: input });
+  return api<{ id: string }>(`/admin/categories/${id}`, {
+    method: "PUT",
+    body: input,
+  });
 }
 
 export function deleteCategory(id: string) {
@@ -70,7 +82,10 @@ export function createRole(input: RoleInput) {
 }
 
 export function updateRole(id: string, input: RoleInput) {
-  return api<{ id: string }>(`/admin/roles/${id}`, { method: "PUT", body: input });
+  return api<{ id: string }>(`/admin/roles/${id}`, {
+    method: "PUT",
+    body: input,
+  });
 }
 
 export function deleteRole(id: string) {
@@ -136,4 +151,33 @@ export function saveUserPermissions(id: string, permissions: PermissionSet) {
     `/admin/users/${id}/permissions`,
     { method: "PUT", body: { permissions } },
   );
+}
+
+export function fetchRolePermissions(id: string) {
+  return api<{
+    role: {
+      id: string;
+      name: string;
+      isSystem: boolean;
+      department: string;
+      users: number;
+    };
+    permissions: PermissionSet;
+  }>(`/admin/roles/${id}/permissions`);
+}
+export function saveRolePermissions(id: string, permissions: PermissionSet) {
+  return api<{ id: string; permissions: PermissionSet }>(
+    `/admin/roles/${id}/permissions`,
+    { method: "PUT", body: { permissions } },
+  );
+}
+
+export function fetchCategoryDepartments() {
+  return api<{ data: Department[] }>("/admin/categories/departments");
+}
+export function fetchRoleDepartments() {
+  return api<{ data: Department[] }>("/admin/roles/departments");
+}
+export function fetchAssignableRoles() {
+  return api<{ data: Role[] }>("/admin/users/assignable-roles");
 }

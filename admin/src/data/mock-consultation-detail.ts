@@ -1,11 +1,13 @@
+import { notFound } from "next/navigation";
 /**
  * Placeholder consultation detail — replace with the admin API.
  * Shapes live in `src/types/consultation-detail.ts`.
  */
+import { billingRecords } from "./mock-billing";
 import type { ConsultationDetail } from "@/types/consultation-detail";
 
 export function getConsultationDetail(id: string): ConsultationDetail {
-  return {
+  const detail: ConsultationDetail = {
     id,
     consultationId: "#C-62372932",
     title: "Family Law . Divorce & custody consultation",
@@ -99,9 +101,21 @@ export function getConsultationDetail(id: string): ConsultationDetail {
       submittedAt: "22 Jul 2026 at 3:02 PM",
     },
     documents: [
-      { id: "d1", name: "Marriage certificate", meta: "PDF · 1.2 MB · uploaded by customer" },
-      { id: "d2", name: "Section 24 HMA - Interim custody guide", meta: "PDF · 0.8 MB · uploaded by lawyer" },
-      { id: "d3", name: "Consultation summary report", meta: "PDF · 0.4 MB · generated · Delivered 22 Jul 2026" },
+      {
+        id: "d1",
+        name: "Marriage certificate",
+        meta: "PDF · 1.2 MB · uploaded by customer",
+      },
+      {
+        id: "d2",
+        name: "Section 24 HMA - Interim custody guide",
+        meta: "PDF · 0.8 MB · uploaded by lawyer",
+      },
+      {
+        id: "d3",
+        name: "Consultation summary report",
+        meta: "PDF · 0.4 MB · generated · Delivered 22 Jul 2026",
+      },
     ],
     paymentTrail: [
       {
@@ -159,5 +173,24 @@ export function getConsultationDetail(id: string): ConsultationDetail {
         timestamp: "22 Jul 2:32 PM",
       },
     ],
+  };
+  const record = billingRecords.find(
+    (row) => row.id === id.replace(/^preview-/, ""),
+  );
+  if (!record) notFound();
+  return {
+    ...detail,
+    consultationId: record.bookingId,
+    title: `${record.customer} · Consultation preview`,
+    fee: record.fee,
+    duration: `${record.duration} min`,
+    date: record.date,
+    customer: {
+      ...detail.customer,
+      name: record.customer,
+      idValue: record.customerId,
+    },
+    medium: record.medium === "audio" ? "Audio" : "Video",
+    booking: record.scheduled ? "Scheduled" : "Instant",
   };
 }

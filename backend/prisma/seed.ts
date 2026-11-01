@@ -4,8 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
- * The job titles an admin user can hold. Module access is granted per person
- * on the permissions screen, so a role here is a label and a department.
+ * The roles an admin user can hold. Access is configured on each role and inherited by its assigned users.
  */
 const ROLES = [
   {

@@ -273,19 +273,9 @@ class _PayAction extends StatefulWidget {
 class _PayActionState extends State<_PayAction> {
   bool _busy = false;
   String? _problem;
+  Consultation? _booking;
 
   Future<void> _pay() async {
-    // A scheduled booking is simply confirmed for its slot; only an instant
-    // consult goes looking for a lawyer now.
-    if (widget.draft.mode == ConsultMode.scheduled) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => BookingConfirmedScreen(draft: widget.draft),
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _busy = true;
       _problem = null;
@@ -295,9 +285,10 @@ class _PayActionState extends State<_PayAction> {
     // against it, so a payment can always be traced back to what it bought.
     final Consultation consultation;
     try {
-      consultation = await ConsultationRepository.instance.create(
+      consultation = _booking ??= await ConsultationRepository.instance.create(
         planCode: widget.draft.planCode,
         category: widget.draft.caseTag,
+        scheduledFor: widget.draft.slot,
       );
     } on ApiException catch (error) {
       if (mounted) {
@@ -342,6 +333,14 @@ class _PayActionState extends State<_PayAction> {
   }
 
   void _startSearching(Consultation consultation) {
+    if (widget.draft.mode == ConsultMode.scheduled) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => BookingConfirmedScreen(draft: widget.draft),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => FindingLawyerScreen(

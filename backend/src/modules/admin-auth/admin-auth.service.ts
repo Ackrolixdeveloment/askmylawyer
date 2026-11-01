@@ -19,7 +19,7 @@ const adminSelect = {
   status: true,
   lastLoginAt: true,
   permissions: true,
-  role: { select: { id: true, name: true, isSystem: true } },
+  role: { select: { id: true, name: true, isSystem: true, permissions: true, status: true } },
 } satisfies Prisma.AdminUserSelect;
 
 export type AdminProfile = Prisma.AdminUserGetPayload<{ select: typeof adminSelect }>;
@@ -92,7 +92,7 @@ export class AdminAuthService {
       throw invalidCredentials();
     }
 
-    if (admin.status !== 'active') {
+    if (admin.status !== 'active' || (!admin.role.isSystem && admin.role.status !== 'active')) {
       throw new AppException(
         HttpStatus.FORBIDDEN,
         'ACCOUNT_INACTIVE',
@@ -108,7 +108,7 @@ export class AdminAuthService {
 
     const tokens = await this.startSession(admin.id, client);
     const { passwordHash, failedLoginCount, lockedUntil, ...profile } = admin;
-    return { admin: { ...profile, lastLoginAt }, tokens };
+    return { admin: { ...profile, permissions: profile.role.permissions, lastLoginAt }, tokens };
   }
 
   /** Swaps a refresh token for a new pair. A reused (already revoked) token ends every session. */
@@ -117,7 +117,7 @@ export class AdminAuthService {
 
     const session = await this.prisma.adminSession.findUnique({
       where: { refreshTokenHash: sha256(refreshToken) },
-      include: { adminUser: { select: { status: true, deletedAt: true } } },
+      include: { adminUser: { select: { status: true, deletedAt: true, role: {select: {status:true,isSystem:true}} } } },
     });
 
     if (!session) throw sessionExpired();
@@ -128,7 +128,7 @@ export class AdminAuthService {
     }
 
     const { adminUser } = session;
-    if (session.expiresAt <= new Date() || adminUser.status !== 'active' || adminUser.deletedAt) {
+    if (session.expiresAt <= new Date() || adminUser.status !== 'active' || adminUser.deletedAt || (!adminUser.role.isSystem && adminUser.role.status !== 'active')) {
       throw sessionExpired();
     }
 
@@ -157,10 +157,12 @@ export class AdminAuthService {
     if (!session || session.adminUserId !== payload.sub || session.revokedAt) return null;
     if (session.expiresAt <= new Date()) return null;
 
-    return this.prisma.adminUser.findFirst({
+    const admin = await this.prisma.adminUser.findFirst({
       where: { id: payload.sub, status: 'active', deletedAt: null },
       select: adminSelect,
     });
+    if (!admin || (!admin.role.isSystem && admin.role.status !== 'active')) return null;
+    return {...admin, permissions: admin.role.permissions};
   }
 
   private async startSession(adminUserId: string, client: ClientInfo): Promise<IssuedTokens> {

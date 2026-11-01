@@ -1,3 +1,5 @@
+import { renderReportPdf } from './report-pdf';
+import { consultationCode } from '../../common/consultation-code';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { EarningStatus, ReportStatus } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
@@ -93,8 +95,8 @@ export class ReportsService {
     const engine = await this.settings.forEngine();
     const now = new Date();
 
-    await this.prisma.consultationReport.update({
-      where: { requestId },
+    await this.prisma.consultationReport.updateMany({
+      where: { requestId, status: ReportStatus.generating },
       data: {
         ...sections,
         transcript,
@@ -116,8 +118,8 @@ export class ReportsService {
     const engine = await this.settings.forEngine();
     const now = new Date();
 
-    await this.prisma.consultationReport.update({
-      where: { requestId },
+    await this.prisma.consultationReport.updateMany({
+      where: { requestId, status: ReportStatus.generating },
       data: {
         status: ReportStatus.failed,
         problem,
@@ -334,6 +336,7 @@ export class ReportsService {
       submittedAt: request.report.submittedAt,
       /** What is still owed for extra call time. Zero means nothing to pay. */
       owed,
+      unpaidExtensionIds: request.extensions.filter((row) => row.status === 'accepted' && !row.paidAt && row.amount > 0).map((row) => row.id),
       /** The report itself, once it is theirs to read. */
       report:
         ready && owed === 0 && details.complete
@@ -352,6 +355,15 @@ export class ReportsService {
   }
 
   // ---- Internals ----
+
+  async pdf(customerId: string, requestId: string) {
+    const visible = await this.forCustomer(customerId, requestId);
+    if (!visible.report) throw new AppException(HttpStatus.FORBIDDEN, 'REPORT_LOCKED', 'Complete your profile and wait for your lawyer to submit the report before downloading.');
+    const booking = await this.prisma.consultationRequest.findFirstOrThrow({ where: { id: requestId, customerId }, select: { number: true, customer: { select: { fullName: true } } } });
+    return renderReportPdf({ reference: consultationCode(booking.number), customer: booking.customer.fullName ?? 'Customer',
+      lawyer: visible.lawyerName, submittedAt: visible.submittedAt,
+      caseSummary: visible.report.caseSummary ?? '', legalGuidance: visible.report.legalGuidance ?? '', nextSteps: visible.report.nextSteps ?? '' });
+  }
 
   private async mine(lawyerId: string, requestId: string) {
     const request = await this.prisma.consultationRequest.findFirst({

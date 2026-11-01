@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  CalendarDays,
-  CircleCheck,
-  Clock,
-  Eye,
-  Headphones,
-  SquarePen,
-  Video,
-} from "lucide-react";
+import { PersonCell } from "@/components/common/person-cell";
+import { CalendarDays, CircleCheck, Clock, Eye, SquarePen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
@@ -58,94 +51,83 @@ function buildColumns(
   onOpen: (row: BillingRecord, mode: "view" | "edit") => void,
 ): Column<BillingRecord>[] {
   return [
-  {
-    key: "bookingId",
-    header: "Booking ID",
-    sortValue: (row) => row.bookingId,
-    cell: (row) => (
-      <TableLink href={`/billing/${row.id}?mode=view`}>
-        {row.bookingId}
-      </TableLink>
-    ),
-  },
-  {
-    key: "customer",
-    header: "Customer",
-    sortValue: (row) => row.customer,
-    cell: (row) => (
-      <>
-        <p className="text-ink">{row.customer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.customerId}</p>
-      </>
-    ),
-  },
-  {
-    key: "date",
-    header: "Date",
-    sortValue: (row) => `${row.date} ${row.time}`,
-    cell: (row) => (
-      <>
-        <p className="text-ink-muted">{formatDayMonthYear(row.date)}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.time}</p>
-      </>
-    ),
-  },
-  {
-    key: "type",
-    header: "Type",
-    sortValue: (row) => typeLabel(row),
-    cell: (row) => (
-      <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-ink-muted">
-        {typeLabel(row)}
-        {row.medium === "video" ? (
-          <Video className="size-4" aria-hidden />
-        ) : (
-          <Headphones className="size-4" aria-hidden />
-        )}
-      </span>
-    ),
-  },
-  {
-    key: "duration",
-    header: "Duration",
-    sortValue: (row) => row.duration,
-    cell: (row) => <span className="text-ink-muted">{row.duration} min</span>,
-  },
-  {
-    key: "fee",
-    header: "Consultation Fee",
-    sortValue: (row) => row.fee,
-    cell: (row) => (
-      <span className="font-medium text-positive">{formatInr(row.fee)}</span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    sortValue: (row) => row.status,
-    cell: (row) => (
-      <Badge tone={statusTone[row.status]} className="gap-1.5">
-        {row.status === "paid" ? (
-          <CircleCheck className="size-3.5" aria-hidden />
-        ) : row.status === "pending" ? (
-          <Clock className="size-3.5" aria-hidden />
-        ) : null}
-        {statusLabel[row.status]}
-      </Badge>
-    ),
-  },
-  {
-    key: "action",
-    header: "Action",
-    cell: (row) => (
-      <DropdownMenu
-        label={`Actions for ${row.bookingId}`}
-        actions={[
-          { label: "View", icon: Eye, onSelect: () => onOpen(row, "view") },
-          { label: "Edit", icon: SquarePen, onSelect: () => onOpen(row, "edit") },
-        ]}
-      />
-    ),
+    {
+      key: "bookingId",
+      header: "Booking ID",
+      sortValue: (row) => row.bookingId,
+      textValue: (row) => `${row.bookingId} ${row.date} ${row.time}`,
+      cell: (row) => (
+        <div>
+          <TableLink href={`/billing/${row.id}?mode=view`}>
+            {row.bookingId}
+          </TableLink>
+          <p className="mt-1 whitespace-nowrap text-[11px] text-ink-muted">
+            {formatDayMonthYear(row.date)} · {row.time}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      sortValue: (row) => row.customer,
+      textValue: (row) => `${row.customer} ${row.customerId}`,
+      cell: (row) => <PersonCell name={row.customer} detail={row.customerId} />,
+    },
+    {
+      key: "type",
+      header: "Session",
+      sortValue: (row) => typeLabel(row),
+      textValue: (row) => `${typeLabel(row)}; ${row.duration} minutes`,
+      cell: (row) => (
+        <div>
+          <span className="text-xs font-medium">{typeLabel(row)}</span>
+          <p className="mt-1 text-[11px] text-ink-muted">
+            {row.duration} min session
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "fee",
+      header: "Amount",
+      align: "right",
+      sortValue: (row) => row.fee,
+      cell: (row) => (
+        <span className="font-medium text-positive">{formatInr(row.fee)}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
+      cell: (row) => (
+        <Badge tone={statusTone[row.status]} className="gap-1.5">
+          {row.status === "paid" ? (
+            <CircleCheck className="size-3.5" aria-hidden />
+          ) : row.status === "pending" ? (
+            <Clock className="size-3.5" aria-hidden />
+          ) : null}
+          {statusLabel[row.status]}
+        </Badge>
+      ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      cell: (row) => (
+        <DropdownMenu
+          label={`Actions for ${row.bookingId}`}
+          actions={[
+            { label: "View", icon: Eye, onSelect: () => onOpen(row, "view") },
+            {
+              label: "Edit",
+              icon: SquarePen,
+              onSelect: () => onOpen(row, "edit"),
+            },
+          ]}
+        />
+      ),
     },
   ];
 }
@@ -170,7 +152,9 @@ export function BillingTable({
 
   const columns = useMemo(
     () =>
-      buildColumns((row, mode) => router.push(`/billing/${row.id}?mode=${mode}`)),
+      buildColumns((row, mode) =>
+        router.push(`/billing/${row.id}?mode=${mode}`),
+      ),
     [router],
   );
 
@@ -235,7 +219,10 @@ export function BillingTable({
               <span className="truncate">
                 {range ? formatDateRange(range) : "Date"}
               </span>
-              <CalendarDays className="size-4 shrink-0 text-ink-muted" aria-hidden />
+              <CalendarDays
+                className="size-4 shrink-0 text-ink-muted"
+                aria-hidden
+              />
             </button>
 
             <DateRangePicker
@@ -253,11 +240,14 @@ export function BillingTable({
       </div>
 
       <DataTable
+        totalCount={records.length}
+        totalLabel="Total records"
+        searchable={false}
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
         minWidth={1020}
-        defaultSort={{ key: "date", direction: "desc" }}
+        defaultSort={{ key: "bookingId", direction: "desc" }}
         emptyMessage="No billing records match the current filters."
       />
     </div>

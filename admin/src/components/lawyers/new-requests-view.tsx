@@ -1,16 +1,13 @@
 "use client";
 
-import { BarChart3, TrendingUp, UserRoundSearch } from "lucide-react";
 import { useEffect, useState } from "react";
-import { MetricCards, type Metric } from "@/components/common/metric-cards";
-import { NewRequestsTable, placeOf } from "@/components/lawyers/new-requests-table";
+import {
+  NewRequestsTable,
+  placeOf,
+} from "@/components/lawyers/new-requests-table";
 import { Button, Card, type SelectOption } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import {
-  fetchLawyerSummary,
-  fetchOnboardingRequests,
-  type LawyerSummary,
-} from "@/lib/lawyers";
+import { fetchOnboardingRequests } from "@/lib/lawyers";
 import type { LawyerRequest } from "@/types/lawyer";
 
 /** Filter choices come from the rows on screen, so they always match the data. */
@@ -18,7 +15,9 @@ function optionsFrom(
   values: (string | null | undefined)[],
   allLabel: string,
 ): SelectOption[] {
-  const unique = [...new Set(values.filter((value): value is string => Boolean(value)))];
+  const unique = [
+    ...new Set(values.filter((value): value is string => Boolean(value))),
+  ];
   unique.sort((a, b) => a.localeCompare(b));
 
   return [
@@ -27,43 +26,9 @@ function optionsFrom(
   ];
 }
 
-function toMetrics(summary: LawyerSummary): Metric[] {
-  return [
-    {
-      id: "registered",
-      label: "Registered Lawyers",
-      value: summary.registered,
-      tone: "brand",
-      icon: UserRoundSearch,
-    },
-    {
-      id: "verified",
-      label: "Verified & Live",
-      value: summary.verified,
-      tone: "positive",
-      icon: TrendingUp,
-    },
-    {
-      id: "queue",
-      label: "Verification Queue",
-      value: summary.queue,
-      tone: "negative",
-      icon: BarChart3,
-    },
-    {
-      id: "incomplete",
-      label: "Profile Incomplete",
-      value: summary.incomplete,
-      tone: "negative",
-      icon: BarChart3,
-    },
-  ];
-}
-
 /** Lawyer applications waiting for a first review. */
 export function NewRequestsView() {
   const [requests, setRequests] = useState<LawyerRequest[]>([]);
-  const [summary, setSummary] = useState<LawyerSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -73,11 +38,10 @@ export function NewRequestsView() {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([fetchOnboardingRequests("new"), fetchLawyerSummary()])
-      .then(([list, counts]) => {
+    fetchOnboardingRequests("new")
+      .then((list) => {
         if (cancelled) return;
         setRequests(list.data);
-        setSummary(counts);
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
@@ -123,7 +87,6 @@ export function NewRequestsView() {
 
   return (
     <div className="space-y-4">
-      {summary ? <MetricCards metrics={toMetrics(summary)} /> : null}
       <NewRequestsTable
         requests={requests}
         stateOptions={optionsFrom(requests.map(placeOf), "All states")}

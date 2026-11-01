@@ -31,4 +31,15 @@ export interface EditRequest {
   /** Reason shown to the lawyer when rejected. */
   feedback: string | null;
   changes: EditChange[];
+  editHistory?: LawyerEditHistoryEntry[];
+}
+
+export interface LawyerEditHistoryEntry {
+  id: string;
+  requestId: string;
+  section: string;
+  status: EditRequestStatus;
+  requestedAt: string;
+  decidedAt: string | null;
+  decidedBy: { name: string; employeeCode: string } | null;
 }

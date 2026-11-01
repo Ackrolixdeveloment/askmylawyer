@@ -5,17 +5,24 @@
 import type { Consultation } from "@/types/consultation";
 
 export const consultationTypeOptions = [
-  { value: "all", label: "Type" },
+  { value: "all", label: "All sessions" },
+  { value: "Consultation", label: "Consultation" },
   { value: "video", label: "Video" },
   { value: "sched-video", label: "Sched Video" },
   { value: "audio", label: "Audio" },
 ];
 
-
-export type RefundState = "completed" | "failed" | "auto-processing";
+export type RefundState =
+  | "completed"
+  | "failed"
+  | "auto-processing"
+  | "requested"
+  | "processing"
+  | "needs_review"
+  | "none";
 
 /** Who ended the booking before it started. */
-export type CancelledBy = "lawyer" | "customer";
+export type CancelledBy = "lawyer" | "customer" | "unknown";
 
 export interface CancelledConsultation extends Consultation {
   customerId: string;
@@ -32,9 +39,8 @@ export const cancelledByOptions = [
   { value: "all", label: "Cancelled By" },
   { value: "lawyer", label: "Lawyer" },
   { value: "customer", label: "Customer" },
+  { value: "unknown", label: "Not recorded" },
 ];
-
-
 
 /** A live call: how long ago it started and the running timer. */
 export interface LiveConsultation extends Consultation {
@@ -45,9 +51,6 @@ export interface LiveConsultation extends Consultation {
   /** Running clock, mm:ss. */
   elapsed: string;
 }
-
-
-
 
 /** A refunded consultation plus the refund's own trail. */
 export interface RefundedConsultation extends Consultation {
@@ -67,5 +70,7 @@ export const refundStatusOptions = [
   { value: "all", label: "Status" },
   { value: "completed", label: "Completed" },
   { value: "failed", label: "Failed" },
-  { value: "auto-processing", label: "Auto Processing" },
+  { value: "requested", label: "Requested" },
+  { value: "processing", label: "Processing" },
+  { value: "needs_review", label: "Needs review" },
 ];

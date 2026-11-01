@@ -1,10 +1,13 @@
+import { notFound } from "next/navigation";
 /**
  * Placeholder ticket detail — replace with the admin API.
  * Shapes live in `src/types/ticket-detail.ts`.
  */
+import { newTickets, inProgressTickets, resolvedTickets } from "./mock-tickets";
 import type { TicketDetail } from "@/types/ticket-detail";
 
 export const statusOptions = [
+  { value: "New", label: "New" },
   { value: "In Progress", label: "In Progress" },
   { value: "Resolved", label: "Resolved" },
   { value: "Closed", label: "Closed" },
@@ -36,7 +39,10 @@ export const refundActionOptions = [
 ];
 
 export function getTicketDetail(id: string): TicketDetail {
-  return {
+  const source = [...newTickets, ...inProgressTickets, ...resolvedTickets].find(
+    (row) => row.id === id,
+  );
+  const detail: TicketDetail = {
     id,
     ticketId: "AML-TK-20260803",
     status: "In Progress",
@@ -91,7 +97,7 @@ export function getTicketDetail(id: string): TicketDetail {
       email: "kumari@gmail.com",
       city: "Delhi",
       lastActive: "Yesterday",
-      profileHref: "/customers/customer-1",
+      profileHref: "/customers",
     },
     lawyer: {
       idLabel: "Lawyer ID",
@@ -109,5 +115,37 @@ export function getTicketDetail(id: string): TicketDetail {
       resolution:
         "Customer faced issue while joining the consultation. Refund approved and informed via email.",
     },
+  };
+  if (!source) notFound();
+  return {
+    ...detail,
+    ticketId: source.ticketId,
+    subject: source.subject,
+    category: source.category,
+    status: id.startsWith("resolved-")
+      ? "Resolved"
+      : id.startsWith("in-progress-")
+        ? "In Progress"
+        : "New",
+    priority:
+      source.priority === "high"
+        ? "High"
+        : source.priority === "medium"
+          ? "Medium"
+          : "Low",
+    assignedTo: source.assigned,
+    issueDescription: source.subject,
+    customer: {
+      ...detail.customer,
+      name: source.createdByName,
+      email: source.createdByEmail,
+      mobile: source.mobile,
+    },
+    actions: { ...detail.actions, refundAction: "No Refund", resolution: "" },
+    conversation: detail.conversation.map((message, index) =>
+      index === 0
+        ? { ...message, authorName: source.createdByName, body: source.subject }
+        : message,
+    ),
   };
 }

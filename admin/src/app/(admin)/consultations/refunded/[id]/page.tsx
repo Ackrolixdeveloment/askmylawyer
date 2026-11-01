@@ -1,23 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { use, useMemo } from "react";
 import { ScreenState } from "@/components/common/screen-state";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton, Card } from "@/components/ui";
-import { fetchConsultation } from "@/lib/consultations";
+import { fetchConsultation, refundState } from "@/lib/consultations";
 import { useApiData } from "@/lib/use-api-data";
 import type { RefundState } from "@/types/consultation-tables";
 import { formatInr } from "@/lib/format";
 
-
 /** Outlined pill, matching the design. */
 const statusPill: Record<RefundState, string> = {
+  requested: "border-amber-300 text-amber-600",
+  processing: "border-amber-300 text-amber-600",
+  needs_review: "border-amber-300 text-amber-600",
+  none: "border-slate-300 text-ink-muted",
   completed: "border-emerald-300 text-emerald-600",
   failed: "border-red-300 text-negative",
   "auto-processing": "border-amber-300 text-amber-600",
 };
 
 const statusLabel: Record<RefundState, string> = {
+  requested: "Requested",
+  processing: "Processing",
+  needs_review: "Needs review",
+  none: "No refund",
   completed: "Completed",
   failed: "Failed",
   "auto-processing": "Processing",
@@ -42,7 +50,12 @@ export default function RefundDetailPage({
         <Topbar title="Consultation Management" />
         <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8">
           <BackButton fallbackHref="/consultations/refunded" />
-          <ScreenState loading={loading} error={error} onRetry={retry} loadingLabel="Loading refund…">
+          <ScreenState
+            loading={loading}
+            error={error}
+            onRetry={retry}
+            loadingLabel="Loading refund…"
+          >
             <></>
           </ScreenState>
         </main>
@@ -55,22 +68,22 @@ export default function RefundDetailPage({
     refundId: data.consultationId,
     percent: data.refundPercent,
     reason: data.reason ?? "Refunded",
-    refundedAt: data.refundedAt ? new Date(data.refundedAt).toLocaleString() : "—",
-    refundStatus: (data.refundAmount > 0
-      ? "completed"
-      : "auto-processing") as RefundState,
+    refundedAt: data.refundedAt
+      ? new Date(data.refundedAt).toLocaleString()
+      : "—",
+    refundStatus: refundState(data),
   };
 
   const refundRows: [Field, Field][] = [
     [
-      { label: "Refund ID", value: refund.refundId },
+      { label: "Consultation", value: refund.consultationId },
       {
         label: "Amount",
-        value: `${formatInr(refund.refundAmount)}( ${refund.percent}%)`,
+        value: formatInr(refund.refundAmount),
       },
     ],
     [
-      { label: "Date", value: refund.refundedAt },
+      { label: "Completed at", value: refund.refundedAt },
       { label: "Destination", value: "Original Payment" },
     ],
     [
@@ -97,15 +110,18 @@ export default function RefundDetailPage({
 
   const paymentRows: [Field, Field][] = [
     [
-      { label: "Customer", value: "Amit Sharma" },
-      { label: "Payment ID", value: "PAY_MFWQ81KB" },
+      { label: "Customer", value: data.customer },
+      { label: "Payment ID", value: data.paymentId ?? "—" },
     ],
     [
-      { label: "Consultation", value: "CONS-8450" },
-      { label: "Payment Method", value: "UPI (GPay)" },
+      { label: "Consultation", value: data.consultationId },
+      { label: "Payment Method", value: data.paymentMethod ?? "—" },
     ],
     [
-      { label: "Payment Date", value: "Yesterday, 07:12 PM" },
+      {
+        label: "Payment Date",
+        value: data.paidAt ? new Date(data.paidAt).toLocaleString() : "—",
+      },
       { label: "Amount", value: formatInr(refund.fee) },
     ],
   ];
@@ -136,15 +152,21 @@ export default function RefundDetailPage({
               </div>
             </div>
 
-            {/* TODO: link through to the source consultation once wired. */}
-            <button
-              type="button"
+            <Link
+              href={`/consultations/${id}`}
               className="inline-flex items-center rounded-lg border border-line bg-surface px-4 py-2.5 text-sm text-ink transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
             >
               View Consultation
-            </button>
+            </Link>
           </div>
         </Card>
+
+        {refund.refundStatus !== "completed" ? (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            No completed gateway refund is confirmed. Requested amounts must be
+            reconciled before money is marked returned.
+          </p>
+        ) : null}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <DetailCard title="Refund details" rows={refundRows} />

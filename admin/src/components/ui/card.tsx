@@ -1,13 +1,10 @@
 import { cn } from "@/lib/utils";
 
-export function Card({
-  className,
-  ...props
-}: React.ComponentProps<"section">) {
+export function Card({ className, ...props }: React.ComponentProps<"section">) {
   return (
     <section
       className={cn(
-        "rounded-xl border border-line bg-surface shadow-card",
+        "rounded-2xl border border-line bg-surface shadow-card",
         className,
       )}
       {...props}
@@ -15,10 +12,16 @@ export function Card({
   );
 }
 
-export function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+export function CardHeader({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex items-start justify-between gap-4 p-5", className)}
+      className={cn(
+        "flex flex-wrap items-start justify-between gap-4 p-5",
+        className,
+      )}
       {...props}
     />
   );
@@ -42,6 +45,9 @@ export function CardDescription({
   );
 }
 
-export function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+export function CardContent({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return <div className={cn("px-5 pb-5", className)} {...props} />;
 }

@@ -60,7 +60,8 @@ export function ForgotPasswordFlow() {
         <>
           <h1 className="text-xl font-bold text-ink">Forgot password</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Enter your email and we&apos;ll send you a verification code.
+            Preview the account recovery flow. No email will be sent and no
+            password will be changed.
           </p>
 
           <form onSubmit={submitEmail} className="mt-6 space-y-4">
@@ -84,10 +85,13 @@ export function ForgotPasswordFlow() {
         <>
           <h1 className="text-xl font-bold text-ink">Enter code</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            We sent a 6-digit code to{" "}
+            Preview verification for{" "}
             <span className="font-medium text-ink">{email}</span>.
           </p>
 
+          <p className="mt-3 rounded-xl bg-brand-soft p-3 text-xs text-brand">
+            Preview code: {MOCK_OTP}. Live verification will be connected later.
+          </p>
           <form onSubmit={submitCode} className="mt-6 space-y-4">
             <OtpInput
               value={code}
@@ -116,7 +120,6 @@ export function ForgotPasswordFlow() {
               </button>
             </p>
           </form>
-
         </>
       ) : null}
 
@@ -152,10 +155,16 @@ export function ForgotPasswordFlow() {
 
       {stage === "done" ? (
         <div className="py-4 text-center">
-          <CircleCheckBig className="mx-auto size-10 text-positive" aria-hidden />
-          <h1 className="mt-4 text-xl font-bold text-ink">Password updated</h1>
+          <CircleCheckBig
+            className="mx-auto size-10 text-positive"
+            aria-hidden
+          />
+          <h1 className="mt-4 text-xl font-bold text-ink">
+            Reset preview complete
+          </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            You can now sign in with your new password.
+            No account password was changed. This completes the recovery screen
+            preview.
           </p>
           <Button onClick={() => router.push("/login")} className="mt-6 w-full">
             Back to sign in

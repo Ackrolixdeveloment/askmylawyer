@@ -14,6 +14,16 @@ import {
 
 /** Everything on Settings → Consultation Engine. */
 export class EngineSettingsDto {
+  @IsInt()
+  @Min(0)
+  @Max(15)
+  preparationMinutes: number;
+
+  @IsInt()
+  @Min(30)
+  @Max(600)
+  extensionPaymentSeconds: number;
+
   @IsBoolean()
   demoMode: boolean;
 

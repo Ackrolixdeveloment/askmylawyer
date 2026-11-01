@@ -70,6 +70,8 @@ export class AdminCustomersService {
           status: true,
           createdAt: true,
           lastLoginAt: true,
+          suspendedAt: true,
+          consultations: { select: { status: true, createdAt: true, session: { select: { startedAt: true, endedAt: true } }, payment: { select: { paidAt: true, amount: true, status: true, environment: true } } } },
           customerProfile: { select: { city: true, state: true } },
           _count: { select: { consultations: { where: { status: { in: COMPLETED } } } } },
         },
@@ -81,6 +83,11 @@ export class AdminCustomersService {
       data: rows.map((row) => ({
         id: row.id,
         name: row.fullName ?? 'Unnamed customer',
+        phone: row.phone,
+        email: row.email,
+        suspendedAt: row.suspendedAt,
+        consultationDates: row.consultations.filter(item => COMPLETED.includes(item.status)).map(item => (item.session?.endedAt ?? item.session?.startedAt ?? item.createdAt).toISOString()),
+        paidDates: row.consultations.flatMap(item => item.payment?.paidAt && item.payment.amount > 0 && item.payment.status === 'paid' && item.payment.environment === 'production' ? [item.payment.paidAt.toISOString()] : []),
         contact: row.phone ?? row.email ?? '',
         city: row.customerProfile?.city ?? row.customerProfile?.state ?? '',
         joinedOn: row.createdAt,
@@ -126,7 +133,7 @@ export class AdminCustomersService {
         createdAt: true,
         lawyer: { select: { fullName: true } },
         payment: {
-          select: { amount: true, status: true, method: true, paidAt: true, refundAmount: true, refundReason: true },
+          select: { amount: true, status: true, method: true, paidAt: true, refundAmount: true, refundReason: true, refundStatus: true, refundedAt: true, refundRequestedAt: true },
         },
       },
     });
@@ -165,27 +172,30 @@ export class AdminCustomersService {
         date: row.createdAt,
         status: row.status,
         amount: row.payment?.status === 'paid' ? row.payment.amount : row.amount,
-        refunded: (row.payment?.refundAmount ?? 0) > 0,
+        refunded: row.payment?.refundStatus === 'completed',
       })),
       // Money in and out, taken from the consultation payments — there is no
       // separate wallet.
-      transactions: consultations
-        .filter((row) => row.payment?.paidAt)
-        .map((row) => ({
-          id: row.id,
-          type: (row.payment!.refundAmount ?? 0) > 0 ? ('Credit' as const) : ('Debit' as const),
-          amount: (row.payment!.refundAmount ?? 0) > 0 ? row.payment!.refundAmount! : row.payment!.amount,
-          method: row.payment!.method ?? 'online',
-          date: row.payment!.paidAt!,
-          reference: consultationCode(row.number),
-        })),
+      transactions: consultations.flatMap((row) => {
+        const payment = row.payment;
+        if (!payment?.paidAt) return [];
+        const debit = {
+          id: `${row.id}-payment`, type: 'Debit' as 'Debit' | 'Credit',
+          amount: payment.amount, method: payment.method ?? 'online',
+          date: payment.paidAt, reference: consultationCode(row.number),
+        };
+        return payment.refundStatus === 'completed' && payment.refundedAt
+          ? [debit, { ...debit, id: `${row.id}-refund`, type: 'Credit' as const,
+              amount: payment.refundAmount ?? 0, date: payment.refundedAt }]
+          : [debit];
+      }),
       refunds: consultations
         .filter((row) => (row.payment?.refundAmount ?? 0) > 0)
         .map((row) => ({
           id: row.id,
           reason: row.payment!.refundReason ?? 'Refunded',
           amount: row.payment!.refundAmount!,
-          requestedOn: row.createdAt,
+          requestedOn: row.payment!.refundRequestedAt ?? null,
         })),
       // No referral or support module yet: empty rather than invented.
       referral: null,

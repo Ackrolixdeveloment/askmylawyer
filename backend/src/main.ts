@@ -11,7 +11,7 @@ import { env } from './config/env';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
-    // Cashfree signs its webhooks over the bytes it sent, so the raw body has
+    // Razorpay signs its webhooks over the bytes it sent, so the raw body has
     // to survive JSON parsing for the signature to be checkable.
     rawBody: true,
   });

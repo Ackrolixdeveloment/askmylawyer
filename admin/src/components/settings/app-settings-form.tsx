@@ -442,8 +442,8 @@ function RateDetail({
             </div>
           </div>
           <p className="mt-1.5 text-xs text-ink-subtle">
-            Charged separately each time the customer adds{" "}
-            {rate.extensionMinutes} more minutes.
+            {rate.extensionAmount === 0 ? "Free extension" : `₹${rate.extensionAmount} per extension, payable before time is added`}
+            {" · "}{rate.extensionMinutes} extra minutes. Settings are saved with each new booking.
           </p>
         </fieldset>
 

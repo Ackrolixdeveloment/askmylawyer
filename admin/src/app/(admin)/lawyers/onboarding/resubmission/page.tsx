@@ -3,7 +3,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { CorrectionsView } from "@/components/lawyers/corrections-view";
 
 export const metadata: Metadata = {
-  title: "Resubmission",
+  title: "Resubmitted Applications",
 };
 
 export default function ResubmissionPage() {
@@ -13,7 +13,7 @@ export default function ResubmissionPage() {
 
       <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
         <h1 className="text-2xl leading-8 font-bold text-ink sm:text-[28px] sm:leading-9">
-          Resubmission
+          Resubmitted Applications
         </h1>
 
         <div className="mt-6">

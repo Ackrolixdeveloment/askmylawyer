@@ -17,6 +17,8 @@ export interface EngineSettings {
   escalateAfterAttempts: number;
   wrapUpCooldownMinutes: number;
   scheduledBufferMinutes: number;
+  preparationMinutes: number;
+  extensionPaymentSeconds: number;
   locationFreshnessMinutes: number;
 
   // Availability

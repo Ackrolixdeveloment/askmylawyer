@@ -1,12 +1,11 @@
 "use client";
 
-import { TriangleAlert } from "lucide-react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useAdmin } from "@/components/layout/auth-guard";
 import {
   Button,
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -25,7 +24,10 @@ interface EngineSettingsFormProps {
 }
 
 /** How the consultation engine behaves: who is rung, for how long, and what the apps show. */
-export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProps) {
+export function EngineSettingsForm({
+  initial,
+  defaults,
+}: EngineSettingsFormProps) {
   const canEdit = canChange(useAdmin(), "settings.engine");
 
   const [form, setForm] = useState(initial);
@@ -33,7 +35,10 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function set<K extends keyof EngineSettings>(key: K, value: EngineSettings[K]) {
+  function set<K extends keyof EngineSettings>(
+    key: K,
+    value: EngineSettings[K],
+  ) {
     setForm((previous) => ({ ...previous, [key]: value }));
     setSaved(false);
     setError(null);
@@ -50,7 +55,9 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
       setSaved(true);
     } catch (cause) {
       setError(
-        cause instanceof ApiError ? cause.message : "Could not save these settings.",
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not save these settings.",
       );
     } finally {
       setBusy(false);
@@ -61,13 +68,16 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
     <div className="space-y-4">
       {form.demoMode ? (
         <Card className="flex items-start gap-3 border-amber-300 bg-amber-50 p-4">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-warn"
+            aria-hidden
+          />
           <div className="text-sm text-ink-muted">
             <p className="font-semibold text-ink">Demo mode is on</p>
             <p className="mt-0.5">
-              Every consultation is offered to every lawyer, filters are
-              ignored{form.skipPayment ? ", and payment is skipped" : ""}. Switch
-              back to the production profile before this reaches real customers.
+              Every consultation is offered to every lawyer, filters are ignored
+              {form.skipPayment ? ", and payment is skipped" : ""}. Switch back
+              to the production profile before this reaches real customers.
             </p>
           </div>
         </Card>
@@ -82,7 +92,7 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
             </CardDescription>
           </div>
 
-          <div className="flex shrink-0 gap-2">
+          <div className="flex max-w-full flex-wrap gap-2">
             <Button
               variant="outline"
               disabled={!canEdit || busy}
@@ -105,7 +115,10 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
         title="Matching"
         description="Who gets rung for a consultation, and for how long."
       >
-        <Row label="Dispatch" hint="Broadcast rings everyone at once; one at a time works down the ranked list.">
+        <Row
+          label="Dispatch"
+          hint="Broadcast rings everyone at once; one at a time works down the ranked list."
+        >
           <SegmentedControl<DispatchMode>
             aria-label="Dispatch mode"
             value={form.dispatchMode}
@@ -161,12 +174,29 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
           onChange={(value) => set("wrapUpCooldownMinutes", value)}
         />
         <NumberRow
-          label="Buffer before a booked consultation"
+          label="Start matching before scheduled time"
           unit="minutes"
           value={form.scheduledBufferMinutes}
           fallback={defaults.scheduledBufferMinutes}
           disabled={!canEdit}
           onChange={(value) => set("scheduledBufferMinutes", value)}
+        />
+        <NumberRow
+          label="Preparation time after assignment"
+          hint="Paid minutes begin only after preparation and both participants join."
+          unit="minutes"
+          value={form.preparationMinutes}
+          fallback={defaults.preparationMinutes}
+          disabled={!canEdit}
+          onChange={(value) => set("preparationMinutes", value)}
+        />
+        <NumberRow
+          label="Extension checkout window"
+          unit="seconds"
+          value={form.extensionPaymentSeconds}
+          fallback={defaults.extensionPaymentSeconds}
+          disabled={!canEdit}
+          onChange={(value) => set("extensionPaymentSeconds", value)}
         />
         <NumberRow
           label="Location counts as stale after"
@@ -178,7 +208,10 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
         />
       </Section>
 
-      <Section title="Availability" description="How often lawyers check in, and how much they can take on.">
+      <Section
+        title="Availability"
+        description="How often lawyers check in, and how much they can take on."
+      >
         <NumberRow
           label="Heartbeat"
           unit="seconds"
@@ -210,7 +243,10 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
         />
       </Section>
 
-      <Section title="Payments" description="What happens to the money around a consultation.">
+      <Section
+        title="Payments"
+        description="What happens to the money around a consultation."
+      >
         <Toggle
           label="Skip payment"
           hint="Demo only. Connects the customer without taking any money."
@@ -229,7 +265,10 @@ export function EngineSettingsForm({ initial, defaults }: EngineSettingsFormProp
         />
       </Section>
 
-      <Section title="While the customer waits" description="What the searching screen offers.">
+      <Section
+        title="While the customer waits"
+        description="What the searching screen offers."
+      >
         <Toggle
           label='Show the "lawyers notified" count'
           checked={form.showNotifiedCount}
@@ -374,15 +413,22 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader>
+    <details
+      id={title.toLowerCase().replaceAll(" ", "-")}
+      open={title === "Matching"}
+      className="group rounded-2xl border border-line bg-white shadow-card"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5">
         <div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          <h2>{title}</h2>
+          <p className="mt-1 text-xs text-ink-muted">{description}</p>
         </div>
-      </CardHeader>
-      <CardContent className="divide-y divide-line">{children}</CardContent>
-    </Card>
+        <ChevronDown className="size-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="divide-y divide-line border-t border-line px-5 py-5">
+        {children}
+      </div>
+    </details>
   );
 }
 
@@ -422,7 +468,12 @@ function Toggle({
 }) {
   return (
     <Row label={label} hint={hint}>
-      <Switch checked={checked} disabled={disabled} onChange={onChange} aria-label={label} />
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        aria-label={label}
+      />
     </Row>
   );
 }
@@ -451,7 +502,9 @@ function NumberRow({
     <Row
       label={label}
       hint={
-        changed ? `${hint ? `${hint} ` : ""}Normally ${fallback}${unit ? ` ${unit}` : ""}.` : hint
+        changed
+          ? `${hint ? `${hint} ` : ""}Normally ${fallback}${unit ? ` ${unit}` : ""}.`
+          : hint
       }
     >
       <div className="flex items-center gap-2">

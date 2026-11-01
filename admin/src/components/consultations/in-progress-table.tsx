@@ -1,5 +1,7 @@
 "use client";
 
+import { PersonCell } from "@/components/common/person-cell";
+
 import { Eye, Headphones, Video } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -14,12 +16,14 @@ import type { LiveConsultation } from "@/types/consultation-tables";
 
 /** "Video" / "Sched Video" / "Audio" — medium plus how it was booked. */
 function typeLabel(row: LiveConsultation) {
+  if (row.medium === "consultation") return "Consultation";
   if (row.medium === "audio") return row.scheduled ? "Sched Audio" : "Audio";
   return row.scheduled ? "Sched Video" : "Video";
 }
 
 /** Matches the values in `consultationTypeOptions`. */
 function typeValue(row: LiveConsultation) {
+  if (row.medium === "consultation") return "Consultation";
   if (row.medium === "audio") return "audio";
   return row.scheduled ? "sched-video" : "video";
 }
@@ -49,10 +53,15 @@ const columns: Column<LiveConsultation>[] = [
     align: "left",
     sortValue: (row) => row.customer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.customer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.customerId}</p>
-      </>
+      <PersonCell
+        name={row.customer}
+        tone="blue"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.customerId)
+            ? `/customers/${row.customerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
@@ -61,10 +70,15 @@ const columns: Column<LiveConsultation>[] = [
     align: "left",
     sortValue: (row) => row.lawyer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.lawyer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.lawyerId}</p>
-      </>
+      <PersonCell
+        name={row.lawyer}
+        tone="violet"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.lawyerId)
+            ? `/lawyers/verified/${row.lawyerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
@@ -153,6 +167,8 @@ export function InProgressTable({
       </div>
 
       <DataTable
+        totalCount={consultations.length}
+        searchable={false}
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

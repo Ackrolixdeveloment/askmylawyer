@@ -20,10 +20,13 @@ const SCREEN_KEYS: { prefix: string; key: string }[] = [
   { prefix: "/customers", key: "customers" },
 
   { prefix: "/users/departments", key: "users.departments" },
-  { prefix: "/users/category", key: "users.categories" },
+  { prefix: "/users/category", key: "support.categories" },
   { prefix: "/users/roles", key: "users.roles" },
   { prefix: "/users", key: "users.users" },
 
+  { prefix: "/consultations/all", key: "consultations.in-progress" },
+  { prefix: "/consultations/scheduled", key: "consultations.in-progress" },
+  { prefix: "/consultations/reports", key: "consultations.completed" },
   { prefix: "/consultations/completed", key: "consultations.completed" },
   { prefix: "/consultations/refunded", key: "consultations.refunded" },
   { prefix: "/consultations/disputed", key: "consultations.disputed" },
@@ -45,6 +48,7 @@ const SCREEN_KEYS: { prefix: string; key: string }[] = [
   { prefix: "/settings/integrations", key: "settings.integrations" },
   { prefix: "/settings", key: "settings" },
 
+  { prefix: "/support/categories", key: "support.categories" },
   { prefix: "/support/new", key: "support.new" },
   { prefix: "/support/in-progress", key: "support.in-progress" },
   { prefix: "/support/resolved", key: "support.resolved" },
@@ -71,7 +75,8 @@ const MODULE_HOME: Record<string, string> = {
  */
 export function landingPath(canOpen: (key: string) => boolean) {
   const first = Object.entries(MODULE_HOME).find(
-    ([moduleId, path]) => canOpen(moduleId) && canOpen(keyForPath(path) ?? moduleId),
+    ([moduleId, path]) =>
+      canOpen(moduleId) && canOpen(keyForPath(path) ?? moduleId),
   );
   return first ? first[1] : "/notifications/alerts";
 }
@@ -82,7 +87,8 @@ export function keyForPath(pathname: string): string | null {
   if (pathname.startsWith("/notifications/alerts")) return null;
 
   const match = SCREEN_KEYS.filter(
-    (entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`),
+    (entry) =>
+      pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`),
   ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
 
   return match?.key ?? null;

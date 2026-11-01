@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Topbar } from "@/components/layout/topbar";
 import { BackButton } from "@/components/ui";
-import { PermissionsView } from "@/components/users/permissions-view";
+import { LegacyUserPermissions } from "@/components/users/legacy-user-permissions";
 
 export const metadata: Metadata = {
   title: "Manage Permission",
@@ -24,7 +24,7 @@ export default async function ManagePermissionPage({
         </h1>
 
         <div className="mt-6">
-          <PermissionsView id={id} />
+          <LegacyUserPermissions id={id} />
         </div>
       </main>
     </>

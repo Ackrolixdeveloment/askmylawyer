@@ -1,16 +1,22 @@
 "use client";
 
-import { CircleCheck, CircleX, Clock, Eye, TrendingUp, UsersRound } from "lucide-react";
+import { CircleCheck, CircleX, Clock, Eye, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Card, DataTable, SearchInput, TableLink, type Column } from "@/components/ui";
+import {
+  Card,
+  DataTable,
+  SearchInput,
+  TableLink,
+  type Column,
+} from "@/components/ui";
 import { MetricCards } from "@/components/common/metric-cards";
 import {
-  lawyerDetailsColumn,
-  lawyerIdColumn,
+  lawyerContactColumn,
+  lawyerIdentityColumn,
   type LawyerIdentity,
 } from "@/components/lawyers/lawyer-columns";
 import { formatDdMmYyyy } from "@/lib/format";
-import { cn } from "@/lib/utils";
+
 import type { LawyerEditHistory } from "@/types/edit-history";
 
 const identity = (row: LawyerEditHistory): LawyerIdentity => ({
@@ -21,32 +27,6 @@ const identity = (row: LawyerEditHistory): LawyerIdentity => ({
   href: `/lawyers/edit-approvals/history/${row.id}`,
 });
 
-/** Small circular count, tinted by what it represents. */
-function CountChip({
-  value,
-  tone,
-}: {
-  value: number;
-  tone: "pending" | "approved" | "rejected";
-}) {
-  const tones = {
-    pending: "bg-amber-50 text-warn",
-    approved: "bg-emerald-50 text-positive",
-    rejected: "bg-red-50 text-negative",
-  } as const;
-
-  return (
-    <span
-      className={cn(
-        "grid size-7 place-items-center rounded-full text-xs font-semibold",
-        tones[tone],
-      )}
-    >
-      {value}
-    </span>
-  );
-}
-
 /** Totals across the rows currently listed. */
 function historyMetrics(rows: LawyerEditHistory[]) {
   const sum = (key: "pending" | "approved" | "rejected") =>
@@ -55,14 +35,16 @@ function historyMetrics(rows: LawyerEditHistory[]) {
   return [
     {
       id: "total",
-      label: "Total Lawyers",
+      label: "Lawyers with Edit History",
+      href: "/lawyers/edit-approvals/history",
       value: rows.length,
       tone: "brand",
       icon: UsersRound,
     },
     {
       id: "pending",
-      label: "Pending Requests",
+      label: "Pending Edit Requests",
+      href: "/lawyers/edit-approvals/pending",
       value: sum("pending"),
       tone: "negative",
       icon: Clock,
@@ -70,7 +52,8 @@ function historyMetrics(rows: LawyerEditHistory[]) {
     },
     {
       id: "approved",
-      label: "Approved",
+      label: "Approved Edit Requests",
+      href: "/lawyers/edit-approvals/approved",
       value: sum("approved"),
       tone: "positive",
       icon: CircleCheck,
@@ -78,7 +61,8 @@ function historyMetrics(rows: LawyerEditHistory[]) {
     },
     {
       id: "rejected",
-      label: "Rejected",
+      label: "Rejected Edit Requests",
+      href: "/lawyers/edit-approvals/rejected",
       value: sum("rejected"),
       tone: "negative",
       icon: CircleX,
@@ -88,40 +72,33 @@ function historyMetrics(rows: LawyerEditHistory[]) {
 }
 
 const columns: Column<LawyerEditHistory>[] = [
-  lawyerIdColumn(identity),
-  lawyerDetailsColumn(identity),
+  lawyerIdentityColumn(identity),
+  lawyerContactColumn(identity),
   {
     key: "totalRequests",
-    header: "TOTAL REQUESTS",
+    header: "Request summary",
     align: "left",
     sortValue: (row) => row.totalRequests,
+    textValue: (row) =>
+      `${row.totalRequests} total; ${row.pending} pending; ${row.approved} approved; ${row.rejected} rejected`,
     cell: (row) => (
-      <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
-        <TrendingUp className="size-4 text-positive" aria-hidden />
-        {row.totalRequests}
-      </span>
+      <div>
+        <p className="mb-2 text-xs font-semibold">
+          {row.totalRequests} requests
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-[10px]">
+          <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-700">
+            {row.pending} pending
+          </span>
+          <span className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">
+            {row.approved} approved
+          </span>
+          <span className="rounded-md bg-red-50 px-2 py-1 text-red-700">
+            {row.rejected} rejected
+          </span>
+        </div>
+      </div>
     ),
-  },
-  {
-    key: "pending",
-    header: "PENDING",
-    align: "left",
-    sortValue: (row) => row.pending,
-    cell: (row) => <CountChip value={row.pending} tone="pending" />,
-  },
-  {
-    key: "approved",
-    header: "APPROVED",
-    align: "left",
-    sortValue: (row) => row.approved,
-    cell: (row) => <CountChip value={row.approved} tone="approved" />,
-  },
-  {
-    key: "rejected",
-    header: "REJECTED",
-    align: "left",
-    sortValue: (row) => row.rejected,
-    cell: (row) => <CountChip value={row.rejected} tone="rejected" />,
   },
   {
     key: "latestActivity",
@@ -130,8 +107,12 @@ const columns: Column<LawyerEditHistory>[] = [
     sortValue: (row) => `${row.latestActivityDate} ${row.latestActivityTime}`,
     cell: (row) => (
       <>
-        <p className="text-ink-muted">{formatDdMmYyyy(row.latestActivityDate)}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.latestActivityTime}</p>
+        <p className="text-ink-muted">
+          {formatDdMmYyyy(row.latestActivityDate)}
+        </p>
+        <p className="mt-0.5 text-xs text-ink-subtle">
+          {row.latestActivityTime}
+        </p>
       </>
     ),
   },
@@ -181,6 +162,9 @@ export function EditHistoryTable({ rows }: { rows: LawyerEditHistory[] }) {
       <MetricCards metrics={historyMetrics(visible)} />
 
       <DataTable
+        totalCount={rows.length}
+        totalLabel="Total lawyers"
+        searchable={false}
         columns={columns}
         rows={visible}
         getRowId={(row) => row.id}

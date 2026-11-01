@@ -2,382 +2,221 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import 'call_invite_sheet.dart';
+import '../consultation/consultation_repository.dart';
+import '../consultation/consultation_screen.dart';
+import '../consultation/consult_draft.dart';
+import '../consultation/call_screen.dart';
+import '../consultation/finding_lawyer_screen.dart';
+import '../consultation/payment_service.dart';
 import 'upcoming_data.dart';
 
-/// Consultations that are paid for and still to happen.
 class UpcomingScreen extends StatefulWidget {
   const UpcomingScreen({super.key, this.consultations, this.now});
-
-  /// Defaults to the sample list; pass an empty list for the first-run state.
+  // Retained for existing callers; production always reads persisted bookings.
   final List<UpcomingConsultation>? consultations;
-
-  /// Fixes "now" for tests, so the join window does not drift.
   final DateTime? now;
-
   @override
   State<UpcomingScreen> createState() => _UpcomingScreenState();
 }
 
 class _UpcomingScreenState extends State<UpcomingScreen> {
-  Timer? _ticker;
-  late DateTime _now = widget.now ?? DateTime.now();
-  late final List<UpcomingConsultation> _all =
-      widget.consultations ?? upcomingSample(_now);
-
-  /// Cards whose invite has already been shown, so the sheet does not
-  /// reappear every time the clock ticks.
-  final _invited = <String>{};
-
+  List<Consultation>? _rows;
+  String? _error;
+  String? _busy;
+  Timer? _poll;
+  bool _loading = false;
   @override
   void initState() {
     super.initState();
-
-    // A fixed clock means a test or preview, where nothing should move.
-    if (widget.now == null) {
-      _ticker = Timer.periodic(const Duration(seconds: 20), (_) {
-        if (mounted) setState(() => _now = DateTime.now());
-      });
-    }
-    _offerJoinWhenDue();
+    _load();
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _load());
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _poll?.cancel();
     super.dispose();
   }
 
-  /// Ten minutes out, the client is prompted to join or decline.
-  void _offerJoinWhenDue() {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-
-      for (final consultation in _all) {
-        if (!consultation.isJoinable(_now)) continue;
-        if (!_invited.add(consultation.id)) continue;
-
-        await showCallInviteSheet(context, consultation: consultation);
-        // One prompt at a time: the client deals with this call first.
-        break;
+  Future<void> _load() async {
+    if (_loading) return;
+    _loading = true;
+    try {
+      final rows = await ConsultationRepository.instance.upcoming();
+      if (mounted) {
+        setState(() {
+          _rows = rows;
+          _error = null;
+        });
       }
-    });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      _loading = false;
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final sorted = [..._all]..sort((a, b) => a.startsAt.compareTo(b.startsAt));
-
-    if (sorted.isEmpty) return const _EmptyState();
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 108),
-      children: [
-        const Text(
-          'Upcoming',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
+  Future<void> _open(Consultation row) async {
+    if (row.needsPayment) {
+      setState(() => _busy = row.id);
+      try {
+        await PaymentService.instance.payFor(row);
+        await _load();
+      } finally {
+        if (mounted) setState(() => _busy = null);
+      }
+      return;
+    }
+    if (row.isMatched) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CallScreen(
+            consultationId: row.id,
+            title: row.lawyerName ?? 'Your lawyer',
+            planName: row.planName,
           ),
         ),
-        const SizedBox(height: 2),
-        const Text(
-          'Your scheduled consultations',
-          style: TextStyle(fontSize: 13, color: AppColors.inkSubtle),
+      );
+    } else if (row.isSearching || row.noLawyerFound) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => FindingLawyerScreen(
+            draft: ConsultDraft(
+              mode: ConsultMode.scheduled,
+              location: '',
+              caseTag: row.category ?? '',
+              slot: row.scheduledFor,
+            ),
+            consultation: row,
+          ),
         ),
-        const SizedBox(height: 14),
-
-        for (final consultation in sorted)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _ConsultationCard(
-              consultation: consultation,
-              now: _now,
-              onJoin: () =>
-                  showCallInviteSheet(context, consultation: consultation),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// One booking, with the join action once its window opens.
-class _ConsultationCard extends StatelessWidget {
-  const _ConsultationCard({
-    required this.consultation,
-    required this.now,
-    required this.onJoin,
-  });
-
-  final UpcomingConsultation consultation;
-  final DateTime now;
-  final VoidCallback onJoin;
-
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  String get _slotLabel {
-    final at = consultation.startsAt;
-    final hour12 = at.hour % 12 == 0 ? 12 : at.hour % 12;
-    final minute = at.minute.toString().padLeft(2, '0');
-    final meridiem = at.hour < 12 ? 'AM' : 'PM';
-
-    return '${at.day} ${_months[at.month - 1]} . $hour12:$minute $meridiem';
+      );
+    }
+    await _load();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final joinable = consultation.isJoinable(now);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Avatar(initials: consultation.initials),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        consultation.lawyer,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        consultation.practice,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.inkSubtle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _ChannelBadge(label: consultation.channelLabel),
-              ],
-            ),
+  Future<void> _cancel(Consultation row) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel booking?'),
+        content: const Text(
+          'Any captured consultation payment will be queued for refund.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep booking'),
           ),
-
-          const Divider(height: 1, color: AppColors.line),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.event_outlined,
-                      size: 15,
-                      color: AppColors.inkSubtle,
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        _slotLabel,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        consultation.countdownLabel(now),
-                        textAlign: TextAlign.right,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: joinable
-                              ? AppColors.positive
-                              : AppColors.inkSubtle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // The button only appears once the call can actually be
-                // joined; before that it would do nothing.
-                if (joinable) ...[
-                  const SizedBox(height: 11),
-                  _JoinButton(
-                    label: 'Join ${consultation.channelLabel} Call',
-                    onTap: onJoin,
-                  ),
-                ],
-              ],
-            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel booking'),
           ),
         ],
       ),
     );
+    if (confirmed != true) return;
+    try {
+      await ConsultationRepository.instance.cancel(row.id);
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
   }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials});
-
-  final String initials;
 
   @override
   Widget build(BuildContext context) {
-    return MediaQuery.withNoTextScaling(
-      child: Container(
-        width: 42,
-        height: 42,
-        alignment: Alignment.center,
-        decoration: const BoxDecoration(
-          color: AppColors.ink,
-          shape: BoxShape.circle,
-        ),
-        child: Text(
-          initials,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+    final rows = _rows;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+        children: [
+          const Text(
+            'Upcoming consultations',
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChannelBadge extends StatelessWidget {
-  const _ChannelBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.brandSoft,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.brand,
-        ),
-      ),
-    );
-  }
-}
-
-class _JoinButton extends StatelessWidget {
-  const _JoinButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(9),
-      child: Container(
-        height: 42,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.ink,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.videocam_outlined, size: 17, color: Colors.white),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+          const SizedBox(height: 8),
+          const Text('Your saved bookings and current matching status.'),
+          if (_error != null)
+            Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
+          if (rows == null && _error == null)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          if (rows != null && rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 60),
+              child: Center(
+                child: Text(
+                  'No upcoming bookings. Schedule a consultation to see it here.',
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.schedule_outlined,
-              size: 34,
-              color: AppColors.inkSubtle,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'No upcoming consultations',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink,
+          for (final row in rows ?? <Consultation>[])
+            Card(
+              margin: const EdgeInsets.only(top: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.category ?? row.planName,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      row.scheduledFor == null
+                          ? ''
+                          : '${row.scheduledFor!.day}/${row.scheduledFor!.month}/${row.scheduledFor!.year} · ${TimeOfDay.fromDateTime(row.scheduledFor!).format(context)}',
+                    ),
+                    const SizedBox(height: 6),
+                    Text('₹${row.amount} · ${row.durationMinutes} minutes'),
+                    const SizedBox(height: 6),
+                    Text(
+                      row.lawyerName ??
+                          'Lawyer will be assigned near your slot',
+                      style: const TextStyle(color: AppColors.inkMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(row.status.replaceAll('_', ' ')),
+                    if (row.status != 'scheduled')
+                      FilledButton(
+                        onPressed: _busy == row.id ? null : () => _open(row),
+                        child: Text(
+                          _busy == row.id
+                              ? 'Opening…'
+                              : row.needsPayment
+                              ? 'Complete payment'
+                              : row.isMatched
+                              ? 'Get ready / Join'
+                              : row.noLawyerFound
+                              ? 'Review options'
+                              : 'View matching',
+                        ),
+                      ),
+                    if (row.status == 'scheduled' ||
+                        row.needsPayment ||
+                        row.isSearching)
+                      TextButton(
+                        onPressed: () => _cancel(row),
+                        child: const Text('Cancel booking'),
+                      ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Book a consultation and it will appear here.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.inkSubtle),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

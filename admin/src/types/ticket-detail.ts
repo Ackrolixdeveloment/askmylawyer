@@ -1,4 +1,5 @@
-export type TicketWorkStatus = "In Progress" | "Resolved" | "Closed" | "Escalated";
+export type TicketWorkStatus =
+  "New" | "In Progress" | "Resolved" | "Closed" | "Escalated";
 
 export interface TicketAttachment {
   name: string;

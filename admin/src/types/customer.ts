@@ -25,9 +25,10 @@ export interface RefundRequest {
 
 export interface ConsultationHistoryRow {
   id: string;
+  recordId?: string;
   lawyer: string;
   category: string;
-  type: "Video" | "Voice";
+  type: "Video" | "Voice" | "Consultation";
   date: string;
   status: "completed" | "cancelled" | "ongoing";
   amount: number;
@@ -83,6 +84,11 @@ export interface CustomerDetail {
 }
 
 export interface Customer {
+  phone?: string | null;
+  email?: string | null;
+  suspendedAt?: string | null;
+  consultationDates?: string[];
+  paidDates?: string[];
   id: string;
   name: string;
   /** Shown under the name in the Contact Details column. */
@@ -93,6 +99,6 @@ export interface Customer {
   /** Completed consultations. */
   consults: number;
   /** ISO yyyy-mm-dd; rendered relative ("Today", "2 days ago"). */
-  lastActiveOn: string;
+  lastActiveOn: string | null;
   status: CustomerStatus;
 }

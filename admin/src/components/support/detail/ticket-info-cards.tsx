@@ -1,4 +1,7 @@
-import { Download, Eye, FileText } from "lucide-react";
+"use client";
+import { usePreviewRecord } from "@/lib/preview-store";
+import { DocumentPreview } from "@/components/ui/document-preview";
+import { Eye, FileText } from "lucide-react";
 import { Badge, Card, type BadgeTone } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { TicketDetail } from "@/types/ticket-detail";
@@ -28,6 +31,10 @@ const priorityTone: Record<TicketDetail["priority"], BadgeTone> = {
 };
 
 export function TicketDetailsCard({ ticket }: { ticket: TicketDetail }) {
+  const [preview] = usePreviewRecord(`ticket:${ticket.id}`, {
+    status: ticket.status,
+    priority: ticket.priority,
+  });
   return (
     <Card className="p-5">
       <h2 className="text-base font-semibold text-ink">Ticket Details</h2>
@@ -35,14 +42,16 @@ export function TicketDetailsCard({ ticket }: { ticket: TicketDetail }) {
       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
         <Pair label="Ticket ID">{ticket.ticketId}</Pair>
         <Pair label="Status" align="right">
-          <Badge tone="refunded">{ticket.status}</Badge>
+          <Badge tone="refunded">{preview.status}</Badge>
         </Pair>
 
         <Pair label="Subject">
           <span className="font-medium">{ticket.subject}</span>
         </Pair>
         <Pair label="Priority" align="right">
-          <Badge tone={priorityTone[ticket.priority]}>{ticket.priority}</Badge>
+          <Badge tone={priorityTone[preview.priority]}>
+            {preview.priority}
+          </Badge>
         </Pair>
 
         <Pair label="Category">{ticket.category}</Pair>
@@ -113,19 +122,10 @@ export function IssueDescriptionCard({ ticket }: { ticket: TicketDetail }) {
               <p className="truncate text-sm text-ink">{file.name}</p>
               <p className="text-xs text-ink-subtle">{file.size}</p>
             </div>
-            <button
-              type="button"
-              aria-label={
-                file.previewable ? `Preview ${file.name}` : `Download ${file.name}`
-              }
-              className="rounded-lg border border-line p-1.5 text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-            >
-              {file.previewable ? (
-                <Eye className="size-4" aria-hidden />
-              ) : (
-                <Download className="size-4" aria-hidden />
-              )}
-            </button>
+            <DocumentPreview title={file.name} className="table-tool">
+              <Eye className="size-4" />
+              <span className="sr-only">Preview {file.name}</span>
+            </DocumentPreview>
           </div>
         ))}
       </div>

@@ -1,11 +1,13 @@
+import { notFound } from "next/navigation";
 /**
  * Placeholder billing detail — replace with the admin API.
  * Shapes live in `src/types/billing.ts`.
  */
+import { billingRecords } from "./mock-billing";
 import type { BillingDetail } from "@/types/billing";
 
 export function getBillingDetail(id: string): BillingDetail {
-  return {
+  const detail: BillingDetail = {
     id,
     title: "Priya Krishnan - Family Law",
     status: "pending",
@@ -33,7 +35,7 @@ export function getBillingDetail(id: string): BillingDetail {
       name: "Priya Krishnan",
       role: "Customer",
       initials: "PK",
-      profileHref: "/customers/customer-1",
+      profileHref: "/customers",
     },
     invoice: {
       number: "INV-2026-001865",
@@ -46,6 +48,40 @@ export function getBillingDetail(id: string): BillingDetail {
         { label: "GST 9%", amount: 98.21 },
       ],
       total: 499,
+    },
+  };
+  const record = billingRecords.find((row) => row.id === id);
+  if (!record) notFound();
+  const cut = Math.round(record.fee * 0.2);
+  return {
+    ...detail,
+    title: `${record.customer} · Consultation`,
+    status: record.status,
+    bookingId: record.bookingId,
+    dateTime: `${record.date} · ${record.time}`,
+    duration: `${record.duration} min`,
+    medium: record.medium === "audio" ? "Audio" : "Video",
+    booking: record.scheduled ? "Scheduled" : "Instant",
+    breakdown: {
+      customerPaid: record.fee,
+      couponDiscount: 0,
+      platformCut: cut,
+      platformCutPercent: 20,
+      netToLawyer: record.fee - cut,
+    },
+    customer: {
+      ...detail.customer,
+      name: record.customer,
+      profileHref: "/customers",
+    },
+    invoice: {
+      ...detail.invoice,
+      number: `INV-DEMO-${id.split("-").pop()}`,
+      date: record.date,
+      gstin: "Demonstration only",
+      supportEmail: "support@example.com",
+      lines: [{ label: "Consultation fee", amount: record.fee }],
+      total: record.fee,
     },
   };
 }

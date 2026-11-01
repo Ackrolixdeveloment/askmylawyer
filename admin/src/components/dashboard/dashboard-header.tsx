@@ -1,31 +1,77 @@
-import { Bell, Download } from "lucide-react";
-import { Button } from "@/components/ui";
+"use client";
+
+import Link from "next/link";
+import {
+  ArrowUpRight,
+  BriefcaseBusiness,
+  CalendarCheck2,
+  Scale,
+  UsersRound,
+} from "lucide-react";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canSee } from "@/lib/auth";
 
 export function DashboardHeader() {
+  const admin = useAdmin();
+  const shortcuts = [
+    {
+      label: "Review applications",
+      href: "/lawyers/onboarding/new",
+      key: "lawyers.onboarding",
+      icon: BriefcaseBusiness,
+    },
+    {
+      label: "View consultations",
+      href: "/consultations/in-progress",
+      key: "consultations.in-progress",
+      icon: CalendarCheck2,
+    },
+    {
+      label: "Manage customers",
+      href: "/customers",
+      key: "customers",
+      icon: UsersRound,
+    },
+  ].filter((item) => canSee(admin, item.key));
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl leading-8 font-bold text-ink sm:text-[32px] sm:leading-10">
-          Dashboard
-        </h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          Overview of platform activity, consultations, users, lawyers and
-          earnings.
-        </p>
+    <div className="relative overflow-hidden rounded-3xl bg-ink p-6 text-white sm:p-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-28 size-96 rounded-full border-[45px] border-white/[0.035]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-32 -bottom-40 size-80 rounded-full border border-white/10"
+      />
+      <div className="relative flex items-start justify-between gap-6">
+        <div>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200">
+            Ask My Lawyer · Operations
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Your practice. One clear view.
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+            Manage people, keep consultations moving, and give every client a
+            better experience.
+          </p>
+        </div>
+        <span className="hidden rounded-2xl border border-white/10 bg-white/5 p-4 sm:block">
+          <Scale className="size-9 text-blue-200" strokeWidth={1.3} />
+        </span>
       </div>
-
-      <div className="flex shrink-0 items-center gap-3">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-11 place-items-center rounded-full border border-line bg-surface text-ink-muted transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-        >
-          <Bell className="size-5" aria-hidden />
-        </button>
-        <Button className="px-4 py-2.5 sm:px-5 sm:py-3">
-          <Download className="size-[18px]" aria-hidden />
-          Export Report
-        </Button>
+      <div className="relative mt-7 flex flex-wrap gap-2">
+        {shortcuts.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-medium text-white transition hover:bg-white/15"
+          >
+            <item.icon className="size-4 text-blue-200" />
+            {item.label}
+            <ArrowUpRight className="ml-2 size-3.5 text-slate-400" />
+          </Link>
+        ))}
       </div>
     </div>
   );

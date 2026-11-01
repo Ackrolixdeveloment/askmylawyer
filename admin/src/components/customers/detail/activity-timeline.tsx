@@ -7,20 +7,10 @@ export function ActivityTimeline({ events }: { events: TimelineEvent[] }) {
     <Card className="p-5">
       <h2 className="text-base font-semibold text-ink">Activity Timeline</h2>
 
-      <ol className="mt-4">
-        {events.map((event, index) => {
-          const isLast = index === events.length - 1;
-
+      <ol className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        {events.map((event) => {
           return (
-            <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
-              {/* Connector runs between dots, so the last item has none. */}
-              {!isLast ? (
-                <span
-                  className="absolute top-3.5 left-[5px] h-full w-px bg-line"
-                  aria-hidden
-                />
-              ) : null}
-
+            <li key={event.id} className="relative flex min-w-0 gap-3">
               <span
                 className={cn(
                   "relative mt-1 size-2.5 shrink-0 rounded-full",
@@ -39,10 +29,14 @@ export function ActivityTimeline({ events }: { events: TimelineEvent[] }) {
                   {event.title}
                 </p>
                 {event.detail ? (
-                  <p className="mt-0.5 text-xs text-ink-muted">{event.detail}</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {event.detail}
+                  </p>
                 ) : null}
                 {event.timestamp ? (
-                  <p className="mt-0.5 text-xs text-ink-subtle">{event.timestamp}</p>
+                  <p className="mt-0.5 text-xs text-ink-subtle">
+                    {event.timestamp}
+                  </p>
                 ) : null}
               </div>
             </li>

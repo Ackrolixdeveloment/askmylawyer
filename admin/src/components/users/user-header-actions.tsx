@@ -1,4 +1,6 @@
 "use client";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange, canSee } from "@/lib/auth";
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -21,24 +23,29 @@ export function UserHeaderActions({
   statusOptions,
   onCreated,
 }: UserHeaderActionsProps) {
+  const admin = useAdmin();
   const [open, setOpen] = useState<"user" | null>(null);
 
   return (
     <>
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen("user")}
-          className={actionClasses}
-        >
-          <Plus className="size-[18px]" aria-hidden />
-          Add User
-        </button>
+        {canChange(admin, "users.users") && (
+          <button
+            type="button"
+            onClick={() => setOpen("user")}
+            className={actionClasses}
+          >
+            <Plus className="size-[18px]" aria-hidden />
+            Add User
+          </button>
+        )}
         {/* Roles are managed on their own screen. */}
-        <Link href="/users/roles" className={actionClasses}>
-          <Plus className="size-[18px]" aria-hidden />
-          Add Role
-        </Link>
+        {canSee(admin, "users.roles") && (
+          <Link href="/users/roles" className={actionClasses}>
+            <Plus className="size-[18px]" aria-hidden />
+            Manage roles
+          </Link>
+        )}
       </div>
 
       {/* Keyed so each opening starts from a blank form. */}
@@ -57,7 +64,6 @@ export function UserHeaderActions({
           onDone={() => setOpen(null)}
         />
       </Modal>
-
     </>
   );
 }

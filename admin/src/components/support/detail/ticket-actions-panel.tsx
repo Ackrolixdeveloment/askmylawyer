@@ -1,5 +1,6 @@
 "use client";
 
+import { updatePreviewRecord, usePreviewRecord } from "@/lib/preview-store";
 import { useState } from "react";
 import { Button, Card, FilterSelect, type SelectOption } from "@/components/ui";
 import type { TicketDetail } from "@/types/ticket-detail";
@@ -51,7 +52,10 @@ function ReadOnlyValue({ value }: { value: string }) {
   return (
     <p className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-ink">
       {dotColor[value] ? (
-        <span className={`size-2 rounded-full ${dotColor[value]}`} aria-hidden />
+        <span
+          className={`size-2 rounded-full ${dotColor[value]}`}
+          aria-hidden
+        />
       ) : null}
       {value}
     </p>
@@ -68,16 +72,47 @@ export function TicketActionsPanel({
   departmentOptions,
   refundActionOptions,
 }: TicketActionsPanelProps) {
-  const [status, setStatus] = useState<string>(ticket.status);
-  const [priority, setPriority] = useState<string>(ticket.priority);
-  const [assignee, setAssignee] = useState(ticket.assignedTo);
-  const [department, setDepartment] = useState(ticket.actions.department);
-  const [refundAction, setRefundAction] = useState(ticket.actions.refundAction);
-  const [resolution, setResolution] = useState(ticket.actions.resolution);
+  const [draft, saveDraft] = usePreviewRecord<Record<string, string>>(
+    `ticket:${ticket.id}`,
+    {
+      status: ticket.status,
+      priority: ticket.priority,
+      assignee: ticket.assignedTo,
+      department: ticket.actions.department,
+      refundAction: ticket.actions.refundAction,
+      resolution: ticket.actions.resolution,
+    },
+  );
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState("");
+  const form = { ...draft, ...edits };
+  const { status, priority, assignee, department, refundAction, resolution } =
+    form;
+  const setStatus = (value: string) =>
+    setEdits((prev) => ({ ...prev, status: value }));
+  const setPriority = (value: string) =>
+    setEdits((prev) => ({ ...prev, priority: value }));
+  const setAssignee = (value: string) =>
+    setEdits((prev) => ({ ...prev, assignee: value }));
+  const setDepartment = (value: string) =>
+    setEdits((prev) => ({ ...prev, department: value }));
+  const setRefundAction = (value: string) =>
+    setEdits((prev) => ({ ...prev, refundAction: value }));
+  const setResolution = (value: string) =>
+    setEdits((prev) => ({ ...prev, resolution: value }));
 
   return (
     <Card className="p-5">
       <h2 className="text-base font-semibold text-ink">Ticket Actions</h2>
+      <p className="mt-2 rounded-xl bg-brand-soft p-3 text-xs leading-5 text-brand">
+        Frontend preview · Last preview status: {draft.status}. Changes stay in
+        this browser session.
+      </p>
+      {notice && (
+        <p role="status" className="mt-3 text-sm text-positive">
+          {notice}
+        </p>
+      )}
 
       <div className="mt-4 space-y-4">
         <Field label="Status">
@@ -170,13 +205,44 @@ export function TicketActionsPanel({
       {(showActions ?? editable) ? (
         <div className="mt-5 space-y-2.5">
           {/* TODO: wire each action to the API. */}
-          <Button className="w-full">Resolve Ticket</Button>
-          <Button variant="outline" className="w-full">
+          <Button
+            className="w-full"
+            disabled={!resolution.trim()}
+            onClick={() => {
+              setStatus("Resolved");
+              saveDraft({ ...form, status: "Resolved" });
+              updatePreviewRecord("support-queues", {
+                [ticket.id]: "Resolved",
+              });
+              setNotice(
+                "Resolved in preview. No customer notification was sent.",
+              );
+            }}
+          >
+            Resolve Ticket
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              saveDraft(form);
+              updatePreviewRecord("support-queues", {
+                [ticket.id]: form.status,
+              });
+              setNotice("Draft saved for this browser session.");
+            }}
+          >
             Save Changes
           </Button>
           <Button
             variant="outline"
             className="w-full border-red-200 text-negative hover:bg-red-50"
+            onClick={() => {
+              setStatus("Closed");
+              saveDraft({ ...form, status: "Closed" });
+              updatePreviewRecord("support-queues", { [ticket.id]: "Closed" });
+              setNotice("Closed in preview only.");
+            }}
           >
             Close Ticket
           </Button>

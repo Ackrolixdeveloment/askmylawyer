@@ -1,5 +1,7 @@
 "use client";
 
+import { PersonCell } from "@/components/common/person-cell";
+
 import { Eye, Headphones, Video } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -18,6 +20,10 @@ import type {
 } from "@/types/consultation-tables";
 
 const refundTone: Record<RefundState, BadgeTone> = {
+  requested: "refunded",
+  processing: "refunded",
+  needs_review: "refunded",
+  none: "neutral",
   completed: "success",
   failed: "danger",
   "auto-processing": "refunded",
@@ -25,6 +31,10 @@ const refundTone: Record<RefundState, BadgeTone> = {
 
 /** The cancelled list labels a completed refund as "Refunded". */
 const refundLabel: Record<RefundState, string> = {
+  requested: "Requested",
+  processing: "Processing",
+  needs_review: "Needs review",
+  none: "No refund",
   completed: "Refunded",
   failed: "Failed",
   "auto-processing": "Processing",
@@ -32,6 +42,7 @@ const refundLabel: Record<RefundState, string> = {
 
 /** "Video" / "Sched Video" / "Audio" — medium plus how it was booked. */
 function typeLabel(row: CancelledConsultation) {
+  if (row.medium === "consultation") return "Consultation";
   if (row.medium === "audio") return row.scheduled ? "Sched Audio" : "Audio";
   return row.scheduled ? "Sched Video" : "Video";
 }
@@ -54,10 +65,15 @@ const columns: Column<CancelledConsultation>[] = [
     align: "left",
     sortValue: (row) => row.customer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.customer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.customerId}</p>
-      </>
+      <PersonCell
+        name={row.customer}
+        tone="blue"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.customerId)
+            ? `/customers/${row.customerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
@@ -66,15 +82,20 @@ const columns: Column<CancelledConsultation>[] = [
     align: "left",
     sortValue: (row) => row.lawyer,
     cell: (row) => (
-      <>
-        <p className="text-ink">{row.lawyer}</p>
-        <p className="mt-0.5 text-xs text-ink-subtle">{row.lawyerId}</p>
-      </>
+      <PersonCell
+        name={row.lawyer}
+        tone="violet"
+        href={
+          /^[0-9a-f]{8}-/i.test(row.lawyerId)
+            ? `/lawyers/verified/${row.lawyerId}`
+            : undefined
+        }
+      />
     ),
   },
   {
     key: "cancelledAt",
-    header: "Cancelled at",
+    header: "Record updated",
     align: "left",
     sortValue: (row) => row.cancelledAt,
     cell: (row) => <span className="text-ink-muted">{row.cancelledAt}</span>,
@@ -92,7 +113,9 @@ const columns: Column<CancelledConsultation>[] = [
     align: "left",
     sortValue: (row) => row.cancelledBy,
     cell: (row) => (
-      <span className="text-ink-muted capitalize">{row.cancelledBy}</span>
+      <span className="text-ink-muted capitalize">
+        {row.cancelledBy === "unknown" ? "Not recorded" : row.cancelledBy}
+      </span>
     ),
   },
   {
@@ -185,6 +208,8 @@ export function CancelledTable({
       </div>
 
       <DataTable
+        totalCount={consultations.length}
+        searchable={false}
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

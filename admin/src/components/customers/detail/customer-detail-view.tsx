@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import Link from "next/link";
+import { customerLayoutPreview } from "@/data/customer-layout-preview";
+import { useMemo, useState } from "react";
 import { ScreenState } from "@/components/common/screen-state";
 import { ActivityTimeline } from "@/components/customers/detail/activity-timeline";
 import { CustomerDetailHeader } from "@/components/customers/detail/customer-detail-header";
@@ -21,6 +23,11 @@ import type {
 } from "@/types/customer";
 
 export function CustomerDetailView({ id }: { id: string }) {
+  if (id === "preview")
+    return <Loaded customer={customerLayoutPreview} preview />;
+  return <LiveCustomerDetail id={id} />;
+}
+function LiveCustomerDetail({ id }: { id: string }) {
   const load = useMemo(() => () => fetchCustomer(id), [id]);
   const { data, loading, error, retry } = useApiData(load);
 
@@ -36,29 +43,124 @@ export function CustomerDetailView({ id }: { id: string }) {
   );
 }
 
-function Loaded({ customer }: { customer: CustomerDetail }) {
+function Loaded({
+  customer,
+  preview = false,
+}: {
+  customer: CustomerDetail;
+  preview?: boolean;
+}) {
+  const [section, setSection] = useState("consultations");
+  const sections = [
+    {
+      id: "consultations",
+      label: "Consultations",
+      count: customer.consultationTotal,
+    },
+    {
+      id: "transactions",
+      label: "Transactions",
+      count: customer.transactions.length,
+    },
+    {
+      id: "support",
+      label: "Support tickets",
+      count: customer.supportTickets.length,
+    },
+    { id: "refunds", label: "Refunds", count: customer.refunds.length },
+  ];
   return (
     <>
-      <CustomerDetailHeader customer={customer} />
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <PersonalInformationCard customer={customer} />
-          <TransactionHistoryCard rows={customer.transactions} />
-          <SupportTicketsCard rows={customer.supportTickets} />
-          <RefundHistoryCard rows={customer.refunds} />
-        </div>
-
-        <div className="space-y-4">
-          <ReferralsCard referral={customer.referral} />
-          <ActivityTimeline events={customer.timeline} />
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+        <span>
+          {preview
+            ? "Layout preview · Fictional customer and sample records · No changes are saved"
+            : "Customer profile"}
+        </span>
+        <Link
+          className="font-medium text-brand hover:underline"
+          href={preview ? "/customers" : "/customers/preview"}
+        >
+          {preview ? "Return to customers" : "View populated sample"}
+        </Link>
       </div>
-
-      <ConsultationHistoryCard
-        rows={customer.consultations}
-        total={customer.consultationTotal}
-      />
+      <CustomerDetailHeader customer={customer} readOnly={preview} />
+      <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <PersonalInformationCard customer={customer} />
+        <ReferralsCard referral={customer.referral} />
+      </div>
+      <section className="min-w-0 space-y-3" aria-label="Customer records">
+        <div
+          role="tablist"
+          aria-label="Customer history"
+          className="flex gap-1 overflow-x-auto border-b border-line"
+        >
+          {sections.map((item, index) => (
+            <button
+              key={item.id}
+              id={`history-tab-${item.id}`}
+              role="tab"
+              aria-selected={section === item.id}
+              aria-controls={`history-panel-${item.id}`}
+              tabIndex={section === item.id ? 0 : -1}
+              onClick={() => setSection(item.id)}
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                    event.key,
+                  )
+                )
+                  return;
+                event.preventDefault();
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? sections.length - 1
+                      : (index +
+                          (event.key === "ArrowRight" ? 1 : -1) +
+                          sections.length) %
+                        sections.length;
+                setSection(sections[next].id);
+                document
+                  .getElementById(`history-tab-${sections[next].id}`)
+                  ?.focus();
+              }}
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium ${section === item.id ? "border-brand text-brand" : "border-transparent text-ink-muted hover:text-ink"}`}
+            >
+              {item.label}
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] tabular-nums">
+                {item.count}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id={`history-panel-${section}`}
+          aria-labelledby={`history-tab-${section}`}
+          className="min-w-0"
+          tabIndex={0}
+        >
+          {section === "consultations" && (
+            <ConsultationHistoryCard
+              rows={customer.consultations}
+              total={customer.consultationTotal}
+              preview={preview}
+            />
+          )}
+          {section === "transactions" && (
+            <TransactionHistoryCard rows={customer.transactions} />
+          )}
+          {section === "support" && (
+            <SupportTicketsCard rows={customer.supportTickets} />
+          )}
+          {section === "refunds" && (
+            <RefundHistoryCard rows={customer.refunds} />
+          )}
+        </div>
+      </section>
+      <ActivityTimeline events={customer.timeline} />
     </>
   );
 }
@@ -77,9 +179,10 @@ function toDetail(record: CustomerRecord): CustomerDetail {
   const consultations: ConsultationHistoryRow[] = record.consultations.map(
     (row) => ({
       id: row.reference || row.id.slice(0, 8),
+      recordId: row.id,
       lawyer: row.lawyer ?? "—",
       category: row.category ?? "—",
-      type: "Video",
+      type: "Consultation",
       date: asDay(row.date),
       status:
         row.status === "completed"
@@ -134,6 +237,7 @@ function toDetail(record: CustomerRecord): CustomerDetail {
     timeline,
     transactions: record.transactions.map((row) => ({
       id: row.reference || row.id.slice(0, 8),
+      recordId: row.id,
       type: row.type,
       amount: row.amount,
       method: row.method,
@@ -143,7 +247,7 @@ function toDetail(record: CustomerRecord): CustomerDetail {
       id: row.id.slice(0, 8),
       reason: row.reason,
       status: "processed",
-      requestedOn: asDay(row.requestedOn),
+      requestedOn: row.requestedOn ? asDay(row.requestedOn) : "Unknown",
     })),
     consultations,
     consultationTotal: record.consultationTotal,

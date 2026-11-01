@@ -1,16 +1,16 @@
-export type ConsultationMedium = "video" | "audio";
+export type ConsultationMedium = "video" | "audio" | "consultation";
 
 export type ConsultationState =
-  | "completed"
-  | "refunded"
-  | "disputed"
-  | "cancelled"
-  | "in-progress";
+  "completed" | "refunded" | "disputed" | "cancelled" | "in-progress";
 
 export interface Consultation {
   id: string;
   consultationId: string;
   customer: string;
+  customerId?: string | null;
+  lawyerId?: string | null;
+  planName?: string;
+  talkedSeconds?: number;
   lawyer: string;
   medium: ConsultationMedium;
   /** Booked in advance rather than started instantly. */

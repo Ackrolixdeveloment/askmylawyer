@@ -2,7 +2,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConsultationStatus, GatewayEnvironment, PaymentStatus } from '@prisma/client';
 import { AppException } from '../../common/app-exception';
 import { env } from '../../config/env';
-import { CashfreeService } from '../../infrastructure/cashfree/cashfree.service';
+import { RazorpayService } from '../../infrastructure/razorpay.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AdminSettingsService } from '../admin-settings/admin-settings.service';
 import { ConsultationsService } from '../consultations/consultations.service';
@@ -14,7 +14,7 @@ const notFound = () =>
  * Taking the consultation fee, and only starting the search once it is in.
  *
  * The app never tells us a payment succeeded — it asks us to check. Every
- * route into `settle` goes through Cashfree first, so a customer cannot skip
+ * route into `settle` goes through Razorpay first, so a customer cannot skip
  * the fee by calling our API directly.
  */
 @Injectable()
@@ -23,7 +23,7 @@ export class PaymentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cashfree: CashfreeService,
+    private readonly razorpay: RazorpayService,
     private readonly settings: AdminSettingsService,
     private readonly consultations: ConsultationsService,
   ) {}
@@ -35,6 +35,13 @@ export class PaymentsService {
    * customer who backs out and tries again is never charged twice.
    */
   async session(customerId: string, requestId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${requestId}))`;
+      return this.openSession(customerId, requestId);
+    }, { timeout: 25_000 });
+  }
+
+  private async openSession(customerId: string, requestId: string) {
     const request = await this.prisma.consultationRequest.findFirst({
       where: { id: requestId, customerId },
       include: {
@@ -54,8 +61,10 @@ export class PaymentsService {
 
     // An order that is still open can be paid with the session it already has.
     const existing = request.payment;
-    if (existing?.status === PaymentStatus.created && existing.sessionId) {
+    if (existing?.provider === 'razorpay' && existing.status === PaymentStatus.created && existing.sessionId) {
       return {
+        provider: 'razorpay',
+        keyId: existing.sessionId,
         orderId: existing.orderId,
         sessionId: existing.sessionId,
         amount: existing.amount,
@@ -63,7 +72,7 @@ export class PaymentsService {
       };
     }
 
-    const price = await this.settings.priceFor(request.planCode);
+    const price = { gst: request.gst, payable: request.amount + request.gst };
 
     // No gateway live: record the consultation as paid so the search can
     // start and the rest of the flow can be exercised.
@@ -71,16 +80,12 @@ export class PaymentsService {
       return this.bypass(request.id, price);
     }
 
-    const order = await this.cashfree.createOrder(request.id, price.payable, {
-      id: request.customerId,
-      phone: request.customer.phone ?? '',
-      name: request.customer.fullName ?? undefined,
-      email: request.customer.email ?? undefined,
-    });
+    const order = await this.razorpay.createOrder(request.id, price.payable);
 
     const payment = await this.prisma.consultationPayment.upsert({
       where: { requestId: request.id },
       create: {
+        provider: 'razorpay',
         requestId: request.id,
         orderId: order.orderId,
         amount: price.payable,
@@ -89,6 +94,7 @@ export class PaymentsService {
         sessionId: order.sessionId,
       },
       update: {
+        provider: 'razorpay',
         orderId: order.orderId,
         amount: price.payable,
         gst: price.gst,
@@ -100,6 +106,8 @@ export class PaymentsService {
     });
 
     return {
+      provider: 'razorpay',
+      keyId: order.sessionId,
       orderId: payment.orderId,
       sessionId: order.sessionId,
       amount: payment.amount,
@@ -124,6 +132,7 @@ export class PaymentsService {
       // Recorded as sandbox because no money moved; the reference below is
       // what marks it as a bypass rather than a real sandbox payment.
       create: {
+        provider: 'bypass',
         requestId,
         orderId,
         amount: price.payable,
@@ -131,6 +140,7 @@ export class PaymentsService {
         environment: GatewayEnvironment.sandbox,
       },
       update: {
+        provider: 'bypass',
         orderId,
         amount: price.payable,
         gst: price.gst,
@@ -150,6 +160,8 @@ export class PaymentsService {
     });
 
     return {
+      provider: 'bypass',
+      keyId: null,
       orderId,
       /** Null tells the app there is no checkout sheet to open. */
       sessionId: null,
@@ -159,7 +171,7 @@ export class PaymentsService {
   }
 
   /**
-   * Asks Cashfree how the payment went, and starts the search if it landed.
+   * Asks Razorpay how the payment went, and starts the search if it landed.
    *
    * Called when the checkout sheet closes. The webhook does the same thing
    * from the other direction, whichever arrives first.
@@ -178,32 +190,34 @@ export class PaymentsService {
       );
     }
 
-    // Already settled by the webhook: nothing to ask Cashfree.
+    // Already settled by the webhook: nothing to ask Razorpay.
     if (request.payment.status === PaymentStatus.paid) {
+      await this.consultations.markPaid(requestId);
       return this.result(requestId, true);
     }
 
-    const status = await this.cashfree.fetchOrder(request.payment.orderId);
+    if (request.payment.provider !== 'razorpay') throw new AppException(HttpStatus.CONFLICT, 'LEGACY_PAYMENT', 'This payment needs support review.');
+    const status = await this.razorpay.fetchOrder(request.payment.orderId, request.payment.amount, request.payment.environment);
     await this.settle(request.payment.orderId, status);
 
     return this.result(requestId, status.paid);
   }
 
-  /** Cashfree's own notification, already verified by the controller. */
+  /** Razorpay's own notification, already verified by the controller. */
   async webhook(orderId: string) {
     const payment = await this.prisma.consultationPayment.findUnique({
       where: { orderId },
     });
-    if (!payment) {
+    if (!payment || payment.provider !== 'razorpay') {
       // An order we do not know about is not worth failing the webhook over;
-      // Cashfree would only retry it.
+      // Razorpay would only retry it.
       this.logger.warn(`Webhook for unknown order ${orderId}.`);
       return;
     }
 
-    // The webhook body says what happened, but we ask Cashfree ourselves
+    // The webhook body says what happened, but we ask Razorpay ourselves
     // rather than trusting a payload to decide whether money arrived.
-    const status = await this.cashfree.fetchOrder(orderId);
+    const status = await this.razorpay.fetchOrder(orderId, payment.amount, payment.environment);
     await this.settle(orderId, status);
   }
 
@@ -242,7 +256,9 @@ export class PaymentsService {
           },
     });
 
-    if (!status.paid || count === 0) return;
+    if (!status.paid) return;
+    // Even if payment was settled before a crash, resume the booking transition.
+    void count;
 
     const payment = await this.prisma.consultationPayment.findUnique({
       where: { orderId },
