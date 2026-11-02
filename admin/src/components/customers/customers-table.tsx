@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Eye, Pencil, Trash2, MapPin } from "lucide-react";
+import { Eye, MapPin } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui";
 import { PersonCell } from "@/components/common/person-cell";
 import { ContactCell } from "@/components/common/table-cells";
-import { PreviewAction } from "@/components/ui/preview-action";
+import { CustomerActions } from "./customer-actions";
 import type { Customer } from "@/types/customer";
 
 function CustomerTimestamp({ value }: { value: string | null }) {
@@ -45,7 +45,7 @@ const scopes = {
   signin: "Last sign-in",
 } as const;
 type Scope = keyof typeof scopes;
-export function CustomersTable({ customers }: { customers: Customer[] }) {
+export function CustomersTable({ customers, onChanged }: { customers: Customer[]; onChanged: () => void }) {
   const [scope, setScope] = useState<Scope>("registration");
   const [accountStatus, setAccountStatus] = useState("all");
   const rows = customers
@@ -146,23 +146,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
           >
             <Eye className="size-4" />
           </Link>
-          <PreviewAction
-            title={`Edit customer · ${r.name}`}
-            className="table-tool"
-          >
-            <span title="Edit customer" aria-label="Edit customer">
-              <Pencil className="size-4" />
-            </span>
-          </PreviewAction>
-          <PreviewAction
-            title={`Delete customer · ${r.name}`}
-            requireReason
-            className="table-tool text-negative"
-          >
-            <span title="Delete customer" aria-label="Delete customer">
-              <Trash2 className="size-4" />
-            </span>
-          </PreviewAction>
+          <CustomerActions id={r.id} name={r.name} onChanged={onChanged} />
         </div>
       ),
     },

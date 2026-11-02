@@ -89,6 +89,20 @@ class ApiClient {
   );
 
   /// Downloads a file (an uploaded document, say) rather than JSON.
+  /// Uploads picker bytes directly, including files exposed through Android content URIs.
+  Future<Map<String, dynamic>> multipartBytes(
+    String path, {
+    required Uint8List bytes,
+    required String fileName,
+  }) => _send(
+    () async => http.MultipartRequest('POST', _uri(path))
+      ..files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+      ),
+    auth: true,
+    timeout: _uploadTimeout,
+  );
+
   Future<Uint8List> bytes(String path) async {
     final token = await _tokens.accessToken;
     final response = await _http

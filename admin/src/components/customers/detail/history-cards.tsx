@@ -1,4 +1,5 @@
 "use client";
+import { DateTimeCell } from "@/components/common/table-cells";
 
 import Link from "next/link";
 
@@ -141,7 +142,7 @@ export function TransactionHistoryCard({ rows }: { rows: Transaction[] }) {
   );
 }
 
-export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
+export function SupportTicketsCard({ rows,total }: { rows: SupportTicket[];total?:number }) {
   const columns: Column<SupportTicket>[] = [
     {
       key: "id",
@@ -149,7 +150,7 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
       sortValue: (r) => r.id,
       cell: (r) => (
         <span className="block max-w-64 whitespace-normal break-all font-mono text-xs">
-          {r.id}
+          {r.recordId?<Link className="text-brand hover:underline" href={`/support/tickets/${r.recordId}`}>{r.id}</Link>:r.id}
         </span>
       ),
     },
@@ -167,16 +168,16 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
       header: "Status",
       cell: (r) => (
         <Badge tone={ticketTone[r.status]}>
-          {r.status === "open"
+          {r.statusLabel??(r.status === "open"
             ? "Open"
             : r.status === "resolved"
               ? "Resolved"
-              : "Pending"}
+              : "Pending")}
         </Badge>
       ),
     },
-    { key: "openedOn", header: "Opened", cell: (r) => r.openedOn },
-    { key: "resolvedOn", header: "Resolved", cell: (r) => r.resolvedOn ?? "-" },
+    { key: "openedOn", header: "Opened (IST)", cell: (r) => r.recordId?<DateTimeCell value={r.openedOn}/>:r.openedOn },
+    { key: "resolvedOn", header: "Resolved (IST)", cell: (r) => r.recordId?<DateTimeCell value={r.resolvedOn}/>:r.resolvedOn??"-" },
   ];
 
   return (
@@ -185,11 +186,12 @@ export function SupportTicketsCard({ rows }: { rows: SupportTicket[] }) {
       action={
         rows.length ? (
           <Badge tone="refunded">
-            {rows.filter((r) => r.status === "open").length} open
+            {total??rows.length} tickets
           </Badge>
         ) : null
       }
     >
+      {total!==undefined&&total>rows.length&&<p className="mb-3 text-xs text-ink-muted">Showing the latest {rows.length} of {total} accessible tickets.</p>}
       <DataTable
         columns={columns}
         rows={rows}

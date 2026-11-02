@@ -44,6 +44,8 @@ export interface Column<T> {
   cellClassName?: string;
 }
 export interface ServerTable<T> {
+  entityLabel?: string;
+  searchPlaceholder?: string;
   page: number; pageSize: number; total: number;
   filterCount?: number;
   dateFields: { key: string; header: string }[];
@@ -337,8 +339,8 @@ export function DataTable<T>({
                   />
                   <input
                     type="search"
-                    aria-label={serverSide ? "Search all consultations" : "Search loaded table records"}
-                    placeholder={serverSide ? "Search consultation ID, customer/lawyer name, ID, phone or email…" : "Search within loaded records…"}
+                    aria-label={serverSide ? `Search all ${serverSide.entityLabel ?? "consultations"}` : "Search loaded table records"}
+                    placeholder={serverSide ? serverSide.searchPlaceholder ?? "Search consultation ID, customer/lawyer name, ID, phone or email…" : "Search within loaded records…"}
                     value={query}
                     onChange={(e) => {
                       setQuery(e.target.value);
@@ -386,7 +388,7 @@ export function DataTable<T>({
                   </summary>
                   <div className="fixed inset-x-4 top-40 z-40 max-h-[55dvh] overflow-auto md:absolute md:inset-x-auto md:top-auto md:right-0 md:z-20 md:mt-2 md:max-h-80 md:w-72 rounded-2xl border border-line bg-white p-4 shadow-xl">
                     <div className="mb-3 flex justify-between text-xs font-semibold">
-                      <span>{serverSide ? "Filter consultations" : "Refine loaded records"}</span>
+                      <span>{serverSide ? `Filter ${serverSide.entityLabel ?? "consultations"}` : "Refine loaded records"}</span>
                       <button
                         onClick={() => {
                           setFilters({});
@@ -701,7 +703,7 @@ export function DataTable<T>({
               aria-live="polite"
             >
               <span>
-                {serverSide ? <>Showing <strong className="text-ink">{serverSide.total ? (serverSide.page - 1) * serverSide.pageSize + 1 : 0}–{Math.min(serverSide.page * serverSide.pageSize, serverSide.total)}</strong> of {serverSide.total.toLocaleString("en-IN")} matching consultations</> : <><strong className="text-ink">{sorted.length}</strong> of {rows.length} loaded records</>}
+                {serverSide ? <>Showing <strong className="text-ink">{serverSide.total ? (serverSide.page - 1) * serverSide.pageSize + 1 : 0}–{Math.min(serverSide.page * serverSide.pageSize, serverSide.total)}</strong> of {serverSide.total.toLocaleString("en-IN")} matching {serverSide.entityLabel ?? "consultations"}</> : <><strong className="text-ink">{sorted.length}</strong> of {rows.length} loaded records</>}
               </span>
               {(from || to) && (
                 <span className="rounded-full bg-brand-soft px-2.5 py-1 text-brand">

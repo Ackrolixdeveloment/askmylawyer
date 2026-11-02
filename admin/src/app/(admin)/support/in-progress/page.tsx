@@ -1,38 +1,5 @@
-import { PageIntro } from "@/components/common/page-intro";
-import type { Metadata } from "next";
-import { Topbar } from "@/components/layout/topbar";
-import { InProgressTicketsTable } from "@/components/support/in-progress-tickets-table";
-import {
-  categoryOptions,
-  createdByOptions,
-  inProgressTickets,
-  priorityOptions,
-} from "@/data/mock-tickets";
-
-export const metadata: Metadata = {
-  title: "In Progress Tickets",
-};
-
-export default function InProgressTicketsPage() {
-  return (
-    <>
-      <Topbar title="Support" />
-
-      <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
-        <PageIntro
-          title="Active support cases"
-          description="Continue conversations and move cases towards resolution."
-        />
-
-        <div className="mt-6">
-          <InProgressTicketsTable
-            tickets={inProgressTickets}
-            priorityOptions={priorityOptions}
-            createdByOptions={createdByOptions}
-            categoryOptions={categoryOptions}
-          />
-        </div>
-      </main>
-    </>
-  );
-}
+import { Topbar } from '@/components/layout/topbar';
+import { PageIntro } from '@/components/common/page-intro';
+import { LiveSupportQueue } from '@/components/support/live-support-queue';
+export const metadata={title:'Support in progress'};
+export default function Page(){return <><Topbar title="Support in progress"/><main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8"><PageIntro title="Support in progress" description="Follow assigned, active and escalated support tickets."/><div className="mt-6"><LiveSupportQueue bucket="in-progress"/></div></main></>;}

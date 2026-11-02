@@ -53,7 +53,7 @@ export function CustomersView() {
       loadingLabel="Loading customers…"
     >
       <div className="mt-6 space-y-4">
-        <CustomersTable customers={rows} />
+        <CustomersTable customers={rows} onChanged={retry} />
       </div>
     </ScreenState>
   );

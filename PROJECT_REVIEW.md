@@ -168,3 +168,11 @@ The accepted access model now supersedes earlier per-user permission findings: d
 ### Consultation admin follow-up — 1 November 2026
 
 Consultation queues now use one consistent table with participant IDs, evidence-based cancellation/payment/report labels, database-wide filters/search, bounded person lookup, IST date filtering, server pagination and full matching CSV export. See CONSULTATION_INTEGRATIONS.md for historical data limitations and migration 20261101040000_consultation_admin_facts. The Disputed module remains a separate preview workflow; this update does not claim a working dispute backend.
+
+### Pending-work follow-up — 1 November 2026
+
+The older dashboard, billing and forgot-password findings above are superseded: these now have real API integration. Customer directory edit/delete now use existing APIs; financial/history-preserving deletion guards include scheduled and unpaid open bookings. Details and deployment requirements are in CONSULTATION_INTEGRATIONS.md. Support, disputes, referrals, payout processing, invoice generation, refund recovery/admin tooling, recording operations and provider/device acceptance remain outstanding; do not treat these as completed by this follow-up.
+
+### Support follow-up — 2 November 2026
+
+Earlier findings that Support uses sample tickets are superseded. Admin queues and both mobile apps now use persisted tickets, replies, private attachments and guarded workflow APIs. Assignment, resolution/reopening, audit history and permission-scoped customer-detail support history are implemented. See SUPPORT_IMPLEMENTATION.md for migrations, verification and remaining physical-device/provider acceptance. Disputes, referrals, payouts/invoices and the other outstanding integration work are not completed by this update.

@@ -1,712 +1,228 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import '../home/home_screen.dart';
+import 'support_repository.dart';
 import 'raise_ticket_screen.dart';
-import 'support_data.dart';
 import 'ticket_detail_screen.dart';
 
-/// Help & FAQ: ticket counts, the customer's tickets, and the questions
-/// asked most often.
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
-
   @override
-  State<SupportScreen> createState() => _SupportScreenState();
+  State<SupportScreen> createState() => _SupportListState();
 }
 
-class _SupportScreenState extends State<SupportScreen> {
+class _SupportListState extends State<SupportScreen> {
   final _search = TextEditingController();
-
-  // TODO: load tickets from the backend instead of the sample list.
-  final List<SupportTicket> _tickets = List.of(supportSample);
-
-  TicketStatus? _status;
-  TicketCategory? _category;
-
+  final _repo = SupportRepository.instance;
+  Timer? _debounce;
+  List<LiveSupportTicket> _tickets = [];
+  String _status = '', _error = '';
+  int _total = 0, _all = 0, _page = 1, _generation = 0;
+  bool _loading = true;
   @override
   void initState() {
     super.initState();
-    _search.addListener(() => setState(() {}));
+    _load();
+    _search.addListener(() {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 350), () => _load());
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
 
-  int get _open =>
-      _tickets.where((t) => t.status != TicketStatus.resolved).length;
-
-  int get _resolved =>
-      _tickets.where((t) => t.status == TicketStatus.resolved).length;
-
-  List<SupportTicket> get _visible {
-    final query = _search.text.trim().toLowerCase();
-
-    return _tickets.where((ticket) {
-      final matchesQuery =
-          query.isEmpty ||
-          ticket.title.toLowerCase().contains(query) ||
-          ticket.id.toLowerCase().contains(query);
-
-      return matchesQuery &&
-          (_status == null || ticket.status == _status) &&
-          (_category == null || ticket.category == _category);
-    }).toList();
+  Future<void> _load({bool more = false}) async {
+    if (more && _loading) return;
+    final generation = ++_generation;
+    final page = more ? _page + 1 : 1;
+    setState(() => _loading = true);
+    try {
+      final r = await _repo.list(
+        search: _search.text,
+        status: _status,
+        page: page,
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _tickets = more ? [..._tickets, ...r.rows] : r.rows;
+        _page = page;
+        _total = r.total;
+        _all = r.totalRecords;
+        _error = '';
+      });
+    } on ApiException catch (e) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = 'Could not load support tickets.');
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
-  Future<void> _raiseTicket() async {
-    // Stays on this navigator so the bottom nav remains visible; the form
-    // keeps Submit clear of it with its own bottom bar.
-    final ticket = await Navigator.of(context).push<SupportTicket>(
-      MaterialPageRoute(
-        // Ids run on from the sample set so they stay unique without a
-        // backend to allocate them.
-        builder: (_) => RaiseTicketScreen(
-          nextId: 'TKT-${4799 + _tickets.length}',
-        ),
-      ),
+  Future<void> _create() async {
+    final ticket = await Navigator.of(context).push<LiveSupportTicket>(
+      MaterialPageRoute(builder: (_) => const RaiseTicketScreen()),
     );
-
-    if (ticket == null || !mounted) return;
-    setState(() => _tickets.insert(0, ticket));
+    if (ticket != null && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TicketDetailScreen(ticketId: ticket.id),
+        ),
+      );
+      if (mounted) _load();
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final visible = _visible;
-
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: AppColors.canvas,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          color: AppColors.ink,
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.canvas,
+    appBar: AppBar(
+      title: const Text('Support & help'),
+      actions: [
+        TextButton.icon(
+          onPressed: _create,
+          icon: const Icon(Icons.add),
+          label: const Text('Raise ticket'),
         ),
-        title: const Text(
-          'Support Ticket',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: FilledButton.icon(
-              onPressed: _raiseTicket,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              icon: const Icon(Icons.add_circle_outline, size: 15),
-              label: const Text('Raise Ticket'),
-            ),
-          ),
-        ],
-      ),
-      body: ListView(
-        // Room for the shell's floating nav, which paints over this route.
-        padding: EdgeInsets.fromLTRB(14, 0, 14, 24 + shellNavHeight(context)),
+      ],
+    ),
+    body: RefreshIndicator(
+      onRefresh: () => _load(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
-          const _NeedHelpBanner(),
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(value: _tickets.length, label: 'Total Tickets'),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: _StatTile(value: _open, label: 'Open')),
-              const SizedBox(width: 10),
-              Expanded(child: _StatTile(value: _resolved, label: 'Resolved')),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          _SearchRow(
+          TextField(
             controller: _search,
-            onFilter: _showFilterSheet,
-            filtered: _status != null || _category != null,
+            maxLength: 100,
+            decoration: const InputDecoration(
+              labelText: 'Search ticket ID or subject',
+              prefixIcon: Icon(Icons.search),
+              counterText: '',
+            ),
           ),
           const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: _FilterDropdown<TicketStatus>(
-                  hint: 'All Status',
-                  value: _status,
-                  items: {
-                    for (final status in TicketStatus.values)
-                      status: status.label,
-                  },
-                  onChanged: (value) => setState(() => _status = value),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _FilterDropdown<TicketCategory>(
-                  hint: 'All Categories',
-                  value: _category,
-                  items: {
-                    for (final category in TicketCategory.values)
-                      category: category.label,
-                  },
-                  onChanged: (value) => setState(() => _category = value),
-                ),
+          DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: const InputDecoration(labelText: 'Ticket status'),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('All tickets')),
+              ...['new', 'in_progress', 'escalated', 'resolved', 'closed'].map(
+                (s) =>
+                    DropdownMenuItem(value: s, child: Text(supportStatus(s))),
               ),
             ],
+            onChanged: (v) {
+              setState(() => _status = v ?? '');
+              _load();
+            },
           ),
-          const SizedBox(height: 18),
-
-          const _SectionTitle('My Tickets'),
-          const SizedBox(height: 10),
-
-          if (visible.isEmpty)
-            const _EmptyTickets()
-          else
-            for (final ticket in visible) ...[
-              _TicketCard(
-                ticket: ticket,
-                onTap: () => _openTicket(ticket),
-              ),
-              const SizedBox(height: 10),
-            ],
-
-          const SizedBox(height: 10),
-          const _SectionTitle('Popular Questions'),
-          const SizedBox(height: 10),
-          const _FaqList(),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openTicket(SupportTicket ticket) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => TicketDetailScreen(ticket: ticket),
-      ),
-    );
-    // A reply mutates the ticket in place, so repaint the card's timestamp.
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _showFilterSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      useRootNavigator: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Filter tickets',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _status = null;
-                    _category = null;
-                  });
-                  Navigator.of(sheetContext).pop();
-                },
-                child: const Text('Clear all filters'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NeedHelpBanner extends StatelessWidget {
-  const _NeedHelpBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          const SizedBox(height: 16),
           Text(
-            'Need help?',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+            '$_total matching · $_all total tickets',
+            style: const TextStyle(fontSize: 12, color: AppColors.inkMuted),
           ),
-          SizedBox(height: 6),
-          Text(
-            'Our team is here Monday-Friday, 9am-6pm ESR',
-            style: TextStyle(fontSize: 12, color: Colors.white70),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.value, required this.label});
-
-  final int value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: AppColors.inkSubtle),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SearchRow extends StatelessWidget {
-  const _SearchRow({
-    required this.controller,
-    required this.onFilter,
-    required this.filtered,
-  });
-
-  final TextEditingController controller;
-  final VoidCallback onFilter;
-
-  /// Tints the filter button while a filter is narrowing the list.
-  final bool filtered;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            style: const TextStyle(fontSize: 13, color: AppColors.ink),
-            decoration: InputDecoration(
-              hintText: 'Search by client name or booking ID...',
-              hintStyle: const TextStyle(
-                fontSize: 13,
-                color: AppColors.inkSubtle,
-              ),
-              prefixIcon: const Icon(
-                Icons.search,
-                size: 18,
-                color: AppColors.inkSubtle,
-              ),
-              filled: true,
-              fillColor: AppColors.surface,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.brand),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        InkWell(
-          onTap: onFilter,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: filtered ? AppColors.brand : AppColors.ink,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.filter_list,
-              size: 18,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Dropdown that shows a hint while nothing is chosen, so it reads as
-/// "All Status" rather than an empty box.
-class _FilterDropdown<T> extends StatelessWidget {
-  const _FilterDropdown({
-    required this.hint,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String hint;
-  final T? value;
-  final Map<T, String> items;
-  final ValueChanged<T?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T?>(
-          value: value,
-          isExpanded: true,
-          borderRadius: BorderRadius.circular(10),
-          icon: const Icon(
-            Icons.keyboard_arrow_down,
-            size: 18,
-            color: AppColors.inkMuted,
-          ),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 12,
-            color: AppColors.ink,
-          ),
-          items: [
-            DropdownMenuItem<T?>(value: null, child: Text(hint)),
-            for (final entry in items.entries)
-              DropdownMenuItem<T?>(
-                value: entry.key,
-                child: Text(entry.value),
-              ),
+          if (_loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
           ],
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: AppColors.ink,
-      ),
-    );
-  }
-}
-
-class _TicketCard extends StatelessWidget {
-  const _TicketCard({required this.ticket, required this.onTap});
-
-  final SupportTicket ticket;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      ticket.id,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.inkSubtle,
-                      ),
-                    ),
-                  ),
-                  StatusPill(status: ticket.status),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      ticket.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.ink,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      ticket.category.label,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Last updated ${ticket.lastUpdatedLabel}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.inkSubtle,
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.calendar_today_outlined,
-                    size: 12,
-                    color: AppColors.inkSubtle,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    ticket.createdOn.split(' ').first,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.inkSubtle,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              Text(
-                ticket.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.45,
-                  color: AppColors.inkMuted,
+          if (_error.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(_error, style: const TextStyle(color: Colors.red)),
+            TextButton(onPressed: () => _load(), child: const Text('Retry')),
+          ],
+          if (!_loading && _tickets.isEmpty && _error.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Text('No support tickets to show.'),
+            ),
+          const SizedBox(height: 12),
+          ..._tickets.map(
+            (t) => Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(14),
+                title: Text(
+                  t.subject,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '${t.code} · ${t.category}\n${supportStatus(t.status)} · ${supportDate(t.updatedAt)}',
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TicketDetailScreen(ticketId: t.id),
+                    ),
+                  );
+                  if (mounted) _load();
+                },
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyTickets extends StatelessWidget {
-  const _EmptyTickets();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Column(
-        children: [
-          Icon(
-            Icons.confirmation_number_outlined,
-            size: 26,
-            color: AppColors.inkSubtle,
-          ),
-          SizedBox(height: 10),
-          Text(
-            'No tickets to show',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.inkMuted,
             ),
           ),
-          SizedBox(height: 4),
-          Text(
-            'Raise a ticket and the team will get back to you.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.inkSubtle),
+          if (_tickets.length < _total)
+            OutlinedButton(
+              onPressed: _loading ? null : () => _load(more: true),
+              child: const Text('Load more tickets'),
+            ),
+          const SizedBox(height: 24),
+          const Text(
+            'Help',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Collapsible FAQ list.
-class _FaqList extends StatefulWidget {
-  const _FaqList();
-
-  @override
-  State<_FaqList> createState() => _FaqListState();
-}
-
-class _FaqListState extends State<_FaqList> {
-  /// Index of the open question, or null while all are collapsed.
-  int? _open;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var i = 0; i < faqEntries.length; i++) ...[
-          _FaqTile(
-            entry: faqEntries[i],
-            open: _open == i,
-            onTap: () => setState(() => _open = _open == i ? null : i),
-          ),
-          if (i != faqEntries.length - 1) const SizedBox(height: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _FaqTile extends StatelessWidget {
-  const _FaqTile({
-    required this.entry,
-    required this.open,
-    required this.onTap,
-  });
-
-  final FaqEntry entry;
-  final bool open;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const ExpansionTile(
+            title: Text('How do I track my request?'),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      entry.question,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    open ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    size: 20,
-                    color: AppColors.inkMuted,
-                  ),
-                ],
-              ),
-              if (open) ...[
-                const SizedBox(height: 10),
-                Text(
-                  entry.answer,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.55,
-                    color: AppColors.inkMuted,
-                  ),
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Open a ticket to see replies, status and resolution. Pull down to refresh this list.',
                 ),
-              ],
+              ),
             ],
           ),
-        ),
+          const ExpansionTile(
+            title: Text('Can I attach documents?'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'After creating a ticket, open it to add up to 10 PDF, JPG, PNG, WebP or TXT files, each up to 5 MB.',
+                ),
+              ),
+            ],
+          ),
+          const ExpansionTile(
+            title: Text('I still need help after resolution'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Reply to a resolved ticket to reopen it. For a closed ticket, create a new request and mention the earlier ticket ID.',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

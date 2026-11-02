@@ -14,7 +14,11 @@
     "prisma:generate": "prisma generate",
     "test:roles": "node --import tsx --test tests/role-permissions.test.ts",
     "test:integrations": "node --import tsx --test tests/integration-providers.test.ts",
-    "test:flow": "node --import tsx --test tests/consultation-flow.test.ts"
+    "test:flow": "node --import tsx --test tests/consultation-flow.test.ts",
+    "test:billing": "node --import tsx --test tests/billing-ledger.test.ts",
+    "test:recovery": "node --import tsx --test tests/password-recovery.test.ts",
+    "test:customer-actions": "node --import tsx --test tests/customer-actions.test.ts",
+    "test:support": "node --import tsx --test tests/support.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

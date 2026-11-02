@@ -52,6 +52,14 @@ export interface ConsultationRecord extends ConsultationRow {
     status: string;
     submittedAt: string | null;
     summary: string | null;
+    legalGuidance: string | null;
+    nextSteps: string | null;
+    transcript: string | null;
+    problem: string | null;
+    edited: boolean;
+    draftedAt: string | null;
+    reviewEndsAt: string | null;
+    attachments: {id:string;name:string;sizeBytes:number}[];
   } | null;
   earning: {
     gross: number;

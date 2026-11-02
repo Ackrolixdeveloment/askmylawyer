@@ -72,9 +72,3 @@ export async function getCurrentAdmin() {
   const { admin } = await api<{ admin: AdminSession }>("/admin/auth/me");
   return admin;
 }
-
-/**
- * MOCK — forgot password has no API yet; this code always works there.
- * Remove once the reset endpoints exist.
- */
-export const MOCK_OTP = "123456";

@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConsultationStatus, Prisma, UserStatus } from '@prisma/client';
+import { type AdminProfile } from '../admin-auth/admin-auth.service';
+import { levelFor,normalisePermissions } from '../admin-users/permission-catalogue';
 import { AppException } from '../../common/app-exception';
 import { consultationCode } from '../../common/consultation-code';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -102,7 +104,7 @@ export class AdminCustomersService {
   }
 
   /** Everything the detail screen shows. */
-  async detail(id: string) {
+  async detail(id: string, admin?:AdminProfile) {
     const user = await this.prisma.user.findFirst({
       where: { id, ...live },
       select: {
@@ -118,6 +120,12 @@ export class AdminCustomersService {
     if (!user) throw notFound();
 
     const profile = user.customerProfile;
+    const supportStates=[['new',['new']],['in-progress',['in_progress','escalated']],['resolved',['resolved','closed']]] as const;
+    const allowedSupportStates=admin?supportStates.filter(([bucket])=>admin.role.isSystem||levelFor(normalisePermissions(admin.permissions),`support.${bucket}`)!=='none').flatMap(([,states])=>[...states]):[];
+    const supportWhere={reporterId:id,status:{in:allowedSupportStates}};
+    const supportTickets=allowedSupportStates.length?await this.prisma.supportTicket.findMany({where:supportWhere,orderBy:[{createdAt:'desc'},{id:'desc'}],take:20,select:{id:true,number:true,subject:true,status:true,createdAt:true,resolvedAt:true}}):[];
+    const supportTicketTotal=allowedSupportStates.length?await this.prisma.supportTicket.count({where:supportWhere}):0;
+
 
     const consultations = await this.prisma.consultationRequest.findMany({
       where: { customerId: id },
@@ -197,18 +205,25 @@ export class AdminCustomersService {
           amount: row.payment!.refundAmount!,
           requestedOn: row.payment!.refundRequestedAt ?? null,
         })),
-      // No referral or support module yet: empty rather than invented.
+      // Referral remains separate; support history obeys the admin queue permissions.
       referral: null,
-      supportTickets: [],
+      supportAccess: allowedSupportStates.length>0,
+      supportTicketTotal,
+      supportTickets: supportTickets.map(t=>({...t,code:`TKT-${t.number}`})),
     };
   }
 
   /** Changes the details an admin is allowed to correct. */
-  async update(id: string, dto: UpdateCustomerDto) {
+  async update(id: string, dto: UpdateCustomerDto, admin?:AdminProfile) {
     const exists = await this.prisma.user.findFirst({ where: { id, ...live }, select: { id: true } });
     if (!exists) throw notFound();
 
     const { fullName, email, mobile, status, ...profile } = dto;
+    if(status==='suspended'){
+      const count=await this.prisma.consultationRequest.count({where:{customerId:id,status:{in:['pending_payment','scheduled','searching','assigned','active']}}});
+      if(count)throw new AppException(HttpStatus.CONFLICT,'CUSTOMER_IN_CONSULTATION','Close open or scheduled consultations before suspending this account.');
+    }
+
 
     try {
       await this.prisma.user.update({
@@ -242,7 +257,8 @@ export class AdminCustomersService {
       });
     }
 
-    return this.detail(id);
+    if(status==='suspended')await this.prisma.userSession.updateMany({where:{userId:id,revokedAt:null},data:{revokedAt:new Date()}});
+    return this.detail(id,admin);
   }
 
   /**
@@ -262,14 +278,14 @@ export class AdminCustomersService {
     const live_ = await this.prisma.consultationRequest.count({
       where: {
         customerId: id,
-        status: { in: [ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] },
+        status: { in: [ConsultationStatus.pending_payment, ConsultationStatus.scheduled, ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] },
       },
     });
     if (live_ > 0) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'CUSTOMER_IN_CONSULTATION',
-        'This customer is in a consultation right now. Try again once it has finished.',
+        'This customer has an open or scheduled consultation. Close it before deleting the account.',
       );
     }
 

@@ -72,3 +72,9 @@ export function formatDdMmYyyy(iso: string) {
 export function formatDateRange({ from, to }: { from: string; to: string }) {
   return `${dayMonth.format(fromISO(from))} – ${dayMonth.format(fromISO(to))}`;
 }
+
+/** Text form for exports whose column heading promises IST. */
+export function formatIstDateTime(value: string | null): string {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return 'Not recorded';
+  return new Date(value).toLocaleString('en-IN', {timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) + ' IST';
+}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, OtpInput, TextField } from "@/components/ui";
-import { MOCK_OTP } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 type Stage = "email" | "otp" | "reset" | "done";
 
@@ -18,40 +18,23 @@ export function ForgotPasswordFlow() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
 
-  function submitEmail(event: React.FormEvent) {
-    event.preventDefault();
-    if (!email.trim()) {
-      setError("Enter the email on your account.");
-      return;
-    }
-    // Mock: any address is accepted and no mail is actually sent.
-    setError("");
-    setStage("otp");
+  const [challengeId,setChallengeId]=useState("");
+  const [resetToken,setResetToken]=useState("");
+  const [busy,setBusy]=useState(false);
+  async function submitEmail(event?: React.FormEvent) {
+    event?.preventDefault();if(busy)return;setBusy(true);setError("");
+    try{const r=await api<{challengeId:string}>("/admin/auth/password/request",{method:"POST",body:{email:email.trim()}});setChallengeId(r.challengeId);setCode("");setStage("otp");}catch(e){setError(e instanceof Error?e.message:"Could not request recovery.");}finally{setBusy(false);}
   }
-
-  function submitCode(event: React.FormEvent) {
-    event.preventDefault();
-    if (code !== MOCK_OTP) {
-      setError("That code is not correct.");
-      return;
-    }
-    setError("");
-    setStage("reset");
+  async function submitCode(event: React.FormEvent) {
+    event.preventDefault();if(busy)return;setBusy(true);setError("");
+    try{const r=await api<{resetToken:string}>("/admin/auth/password/verify",{method:"POST",body:{challengeId,otp:code}});setResetToken(r.resetToken);setStage("reset");}catch(e){setError(e instanceof Error?e.message:"Could not verify code.");}finally{setBusy(false);}
   }
-
-  function submitPassword(event: React.FormEvent) {
-    event.preventDefault();
-
-    if (password.length < 8) {
-      setError("Use at least 8 characters.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Both passwords must match.");
-      return;
-    }
-    setError("");
-    setStage("done");
+  async function submitPassword(event: React.FormEvent) {
+    event.preventDefault();if(busy)return;
+    if(password.length<8||password.length>128){setError("Use 8–128 characters.");return;}
+    if(password!==confirm){setError("Both passwords must match.");return;}
+    setBusy(true);setError("");
+    try{await api("/admin/auth/password/reset",{method:"POST",body:{challengeId,resetToken,password}});setPassword("");setConfirm("");setResetToken("");setStage("done");}catch(e){setError(e instanceof Error?e.message:"Could not reset password.");}finally{setBusy(false);}
   }
 
   return (
@@ -60,8 +43,7 @@ export function ForgotPasswordFlow() {
         <>
           <h1 className="text-xl font-bold text-ink">Forgot password</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Preview the account recovery flow. No email will be sent and no
-            password will be changed.
+            Request a recovery code for your admin account.
           </p>
 
           <form onSubmit={submitEmail} className="mt-6 space-y-4">
@@ -74,7 +56,7 @@ export function ForgotPasswordFlow() {
               onChange={(event) => setEmail(event.target.value)}
               error={error || undefined}
             />
-            <Button type="submit" className="w-full">
+            <Button type="submit" disabled={busy} className="w-full">
               Send code
             </Button>
           </form>
@@ -85,13 +67,11 @@ export function ForgotPasswordFlow() {
         <>
           <h1 className="text-xl font-bold text-ink">Enter code</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Preview verification for{" "}
+            If the account is eligible, a code will be sent to{" "}
             <span className="font-medium text-ink">{email}</span>.
           </p>
 
-          <p className="mt-3 rounded-xl bg-brand-soft p-3 text-xs text-brand">
-            Preview code: {MOCK_OTP}. Live verification will be connected later.
-          </p>
+          <p className="mt-3 text-xs text-ink-muted">Codes expire after 10 minutes. Check spam too. Resends within 60 seconds reuse the current request.</p>
           <form onSubmit={submitCode} className="mt-6 space-y-4">
             <OtpInput
               value={code}
@@ -105,7 +85,7 @@ export function ForgotPasswordFlow() {
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full">
+            <Button type="submit" disabled={busy} className="w-full">
               Verify
             </Button>
 
@@ -113,7 +93,8 @@ export function ForgotPasswordFlow() {
               Didn&apos;t get it?{" "}
               <button
                 type="button"
-                onClick={() => setCode("")}
+                onClick={() => submitEmail()}
+                disabled={busy}
                 className="font-medium text-brand hover:underline"
               >
                 Resend code
@@ -146,7 +127,7 @@ export function ForgotPasswordFlow() {
               onChange={(event) => setConfirm(event.target.value)}
               error={error || undefined}
             />
-            <Button type="submit" className="w-full">
+            <Button type="submit" disabled={busy} className="w-full">
               Reset password
             </Button>
           </form>
@@ -160,11 +141,10 @@ export function ForgotPasswordFlow() {
             aria-hidden
           />
           <h1 className="mt-4 text-xl font-bold text-ink">
-            Reset preview complete
+            Password reset complete
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            No account password was changed. This completes the recovery screen
-            preview.
+            Your password has been updated. Sign in again with your new password.
           </p>
           <Button onClick={() => router.push("/login")} className="mt-6 w-full">
             Back to sign in

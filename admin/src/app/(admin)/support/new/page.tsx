@@ -1,38 +1,5 @@
-import { PageIntro } from "@/components/common/page-intro";
-import type { Metadata } from "next";
-import { Topbar } from "@/components/layout/topbar";
-import { NewTicketsTable } from "@/components/support/new-tickets-table";
-import {
-  categoryOptions,
-  createdByOptions,
-  newTickets,
-  priorityOptions,
-} from "@/data/mock-tickets";
-
-export const metadata: Metadata = {
-  title: "New Tickets",
-};
-
-export default function NewTicketsPage() {
-  return (
-    <>
-      <Topbar title="Support" />
-
-      <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
-        <PageIntro
-          title="Support inbox"
-          description="Triage new requests, review priorities and assign the next action."
-        />
-
-        <div className="mt-6">
-          <NewTicketsTable
-            tickets={newTickets}
-            priorityOptions={priorityOptions}
-            createdByOptions={createdByOptions}
-            categoryOptions={categoryOptions}
-          />
-        </div>
-      </main>
-    </>
-  );
-}
+import { Topbar } from '@/components/layout/topbar';
+import { PageIntro } from '@/components/common/page-intro';
+import { LiveSupportQueue } from '@/components/support/live-support-queue';
+export const metadata={title:'Support inbox'};
+export default function Page(){return <><Topbar title="Support inbox"/><main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8"><PageIntro title="Support inbox" description="Review new customer and lawyer tickets."/><div className="mt-6"><LiveSupportQueue bucket="new"/></div></main></>;}

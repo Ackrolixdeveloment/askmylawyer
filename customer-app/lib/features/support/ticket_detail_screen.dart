@@ -1,564 +1,355 @@
+import 'dart:async';
+
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import '../home/home_screen.dart';
-import 'support_data.dart';
+import 'support_repository.dart';
 
-/// A single ticket: its status, the issue as raised, any attachments, and
-/// the conversation with the support team.
 class TicketDetailScreen extends StatefulWidget {
-  const TicketDetailScreen({super.key, required this.ticket});
-
-  final SupportTicket ticket;
-
+  const TicketDetailScreen({super.key, required this.ticketId});
+  final String ticketId;
   @override
-  State<TicketDetailScreen> createState() => _TicketDetailScreenState();
+  State<TicketDetailScreen> createState() => _TicketDetailState();
 }
 
-class _TicketDetailScreenState extends State<TicketDetailScreen> {
-  Future<void> _reply() async {
-    final message = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      useRootNavigator: true,
-      builder: (_) => const _ReplySheet(),
-    );
-
-    if (message == null || !mounted) return;
-
-    setState(() {
-      // TODO: post the reply to the backend and re-read the thread.
-      widget.ticket.conversation.add(
-        TicketMessage(
-          body: message,
-          timestamp: widget.ticket.lastUpdated,
-          fromSupport: false,
-        ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ticket = widget.ticket;
-    // Read before removePadding below, which would zero the inset this
-    // height depends on.
-    final navHeight = shellNavHeight(context);
-
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: AppColors.canvas,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          color: AppColors.ink,
-        ),
-        title: const Text(
-          'Ticket Details',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-      ),
-      // Reply sits in the bar slot so the shell's floating nav cannot cover
-      // it; the thread scrolls above. The Scaffold would add the device
-      // inset again on top of navHeight, which already counts it.
-      bottomNavigationBar: MediaQuery.removePadding(
-        context: context,
-        removeBottom: true,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(14, 8, 14, 12 + navHeight),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _reply,
-              icon: const Icon(Icons.chat_bubble_outline, size: 16),
-              label: const Text('Reply to Ticket'),
-            ),
-          ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
-        children: [
-          _Card(child: _TicketHead(ticket: ticket)),
-          const SizedBox(height: 12),
-
-          _Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _CardLabel('Issue description'),
-                const SizedBox(height: 8),
-                Text(
-                  ticket.description,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
-                    color: AppColors.inkMuted,
-                  ),
-                ),
-
-                if (ticket.attachments.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _CardLabel('Attachment (${ticket.attachments.length})'),
-                  const SizedBox(height: 10),
-                  for (final file in ticket.attachments) ...[
-                    _AttachmentRow(attachment: file),
-                    if (file != ticket.attachments.last)
-                      const SizedBox(height: 10),
-                  ],
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          _Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _CardLabel('Conversation'),
-                const SizedBox(height: 12),
-                for (final message in ticket.conversation) ...[
-                  _MessageRow(message: message),
-                  if (message != ticket.conversation.last)
-                    const SizedBox(height: 12),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-        ],
-      ),
-    );
-  }
-}
-
-/// Ticket id, status, title, category and the two timestamps.
-class _TicketHead extends StatelessWidget {
-  const _TicketHead({required this.ticket});
-
-  final SupportTicket ticket;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Expanded(child: _CardLabel('TICKET ID')),
-            const Text(
-              'STATUS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.4,
-                color: AppColors.inkSubtle,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                ticket.id,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
-            ),
-            StatusPill(status: ticket.status),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        Text(
-          ticket.title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            height: 1.4,
-            color: AppColors.ink,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.ink,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              ticket.category.label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Divider(color: AppColors.line, height: 1),
-        const SizedBox(height: 14),
-
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _Stamp(label: 'CREATED ON', value: ticket.createdOn)),
-            Expanded(
-              child: _Stamp(label: 'LAST UPDATED', value: ticket.lastUpdated),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _Stamp extends StatelessWidget {
-  const _Stamp({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.4,
-            color: AppColors.inkSubtle,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.ink,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AttachmentRow extends StatelessWidget {
-  const _AttachmentRow({required this.attachment});
-
-  final TicketAttachment attachment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.canvas,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.insert_drive_file_outlined,
-            size: 18,
-            color: AppColors.inkMuted,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  attachment.name,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  attachment.size,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // TODO: download the file once attachments are served.
-          const Icon(
-            Icons.file_download_outlined,
-            size: 18,
-            color: AppColors.inkMuted,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One conversation entry: avatar, who wrote it, body and timestamp.
-class _MessageRow extends StatelessWidget {
-  const _MessageRow({required this.message});
-
-  final TicketMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: AppColors.ink,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            message.fromSupport
-                ? Icons.headset_mic_outlined
-                : Icons.person_outline,
-            size: 15,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: AppColors.canvas,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message.fromSupport
-                      ? 'Support team replied'
-                      : 'You created this ticket',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message.body,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: AppColors.inkMuted,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  message.timestamp,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Composer for a reply, opened from the button at the foot of the screen.
-class _ReplySheet extends StatefulWidget {
-  const _ReplySheet();
-
-  @override
-  State<_ReplySheet> createState() => _ReplySheetState();
-}
-
-class _ReplySheetState extends State<_ReplySheet> {
-  final _controller = TextEditingController();
-
+class _TicketDetailState extends State<TicketDetailScreen> {
+  final _repo = SupportRepository.instance;
+  final _reply = TextEditingController();
+  Timer? _poll;
+  LiveSupportTicket? _ticket;
+  List<SupportReply> _messages = [];
+  int _generation = 0;
+  bool _hasMore = false,
+      _historyLoaded = false,
+      _loading = true,
+      _fetching = false,
+      _busy = false;
+  String _error = '';
   @override
   void initState() {
     super.initState();
-    _controller.addListener(() => setState(() {}));
+    _load();
+    _poll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _load(silent: true),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _poll?.cancel();
+    _reply.dispose();
     super.dispose();
   }
 
+  Future<void> _load({bool silent = false}) async {
+    if (silent && (_fetching || _busy)) return;
+    final generation = ++_generation;
+    _fetching = true;
+    try {
+      final r = await _repo.detail(widget.ticketId);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _ticket = r;
+        if (_historyLoaded) {
+          final byId = {
+            for (final m in [..._messages, ...r.messages]) m.id: m,
+          };
+          _messages = byId.values.toList()
+            ..sort((a, b) => a.date.compareTo(b.date));
+        } else {
+          _messages = r.messages;
+          _hasMore = r.hasMoreMessages;
+        }
+        if (!silent) _error = '';
+      });
+    } on ApiException catch (e) {
+      if (mounted && !silent) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted && !silent) {
+        setState(() => _error = 'Could not load this support ticket.');
+      }
+    } finally {
+      if (generation == _generation) {
+        _fetching = false;
+        if (mounted) setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _send() async {
+    if (_busy || _reply.text.trim().isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      await _repo.reply(widget.ticketId, _reply.text);
+      if (!mounted) return;
+      _reply.clear();
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not send the reply.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _older() async {
+    if (_busy || _messages.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final r = await _repo.older(widget.ticketId, _messages.first.id);
+      if (mounted) {
+        setState(() {
+          final byId = {
+            for (final m in [...r.rows, ..._messages]) m.id: m,
+          };
+          _messages = byId.values.toList()
+            ..sort((a, b) => a.date.compareTo(b.date));
+          _hasMore = r.hasMore;
+          _historyLoaded = true;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not load older replies.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_busy) return;
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'txt'],
+      );
+      if (result == null || !mounted) return;
+      final file = result;
+      final size = await file.length();
+      if (size > 5 * 1024 * 1024) {
+        setState(() => _error = 'Choose a file up to 5 MB from this device.');
+        return;
+      }
+      setState(() {
+        _busy = true;
+        _error = '';
+      });
+      await _repo.upload(widget.ticketId, await file.readAsBytes(), file.name);
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload this file. Please retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _download(SupportFile file) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      final bytes = await ApiClient.instance.bytes(
+        _repo.fileUrl(widget.ticketId, file.id),
+      );
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile.fromData(bytes, mimeType: file.mime)],
+          fileNameOverrides: [file.name],
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open this attachment.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _card(String title, List<Widget> children) => Card(
+    margin: const EdgeInsets.only(bottom: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    ),
+  );
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final inset = media.viewInsets.bottom;
-    // Clears the gesture-nav home indicator, but only when the keyboard is
-    // down — the inset above already handles it otherwise.
-    final safeBottom = inset > 0 ? 0.0 : media.padding.bottom;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: inset),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + safeBottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Reply to Ticket',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
+    final t = _ticket;
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: Text(t?.code ?? 'Support ticket'),
+        actions: [
+          IconButton(
+            onPressed: _busy ? null : () => _load(),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh ticket',
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () => _load(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                children: [
+                  if (_error.isNotEmpty) ...[
+                    Text(_error, style: const TextStyle(color: Colors.red)),
+                    TextButton(
+                      onPressed: () => _load(),
+                      child: const Text('Retry'),
                     ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, size: 20),
-                  color: AppColors.inkMuted,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _controller,
-              maxLines: 5,
-              minLines: 4,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              style: const TextStyle(fontSize: 13, color: AppColors.ink),
-              decoration: InputDecoration(
-                hintText: 'Type your reply…',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.inkSubtle,
-                ),
-                filled: true,
-                fillColor: AppColors.canvas,
-                contentPadding: const EdgeInsets.all(12),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.line),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.brand),
-                ),
+                  ],
+                  if (t != null) ...[
+                    _card(t.subject, [
+                      Text(
+                        '${supportStatus(t.status)} · ${t.category}',
+                        style: const TextStyle(color: AppColors.brand),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Created ${supportDate(t.createdAt)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.inkMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SelectableText(t.description),
+                    ]),
+                    if (t.resolution != null)
+                      _card('Resolution', [SelectableText(t.resolution!)]),
+                    _card('Conversation', [
+                      if (_hasMore)
+                        TextButton(
+                          onPressed: _busy ? null : _older,
+                          child: const Text('Load older replies'),
+                        ),
+                      if (_messages.isEmpty) const Text('No replies yet.'),
+                      ..._messages.map(
+                        (m) => Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: m.fromSupport
+                                ? AppColors.brandSoft
+                                : AppColors.canvas,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                m.fromSupport ? '${m.author} · Support' : 'You',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              SelectableText(m.body),
+                              const SizedBox(height: 8),
+                              Text(
+                                supportDate(m.date),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.inkMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (t.status != 'closed') ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _reply,
+                          enabled: !_busy,
+                          maxLength: 5000,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            labelText: t.status == 'resolved'
+                                ? 'Reply to reopen ticket'
+                                : 'Your reply',
+                            alignLabelWithHint: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          onPressed: _busy ? null : _send,
+                          child: Text(_busy ? 'Saving…' : 'Send reply'),
+                        ),
+                      ] else
+                        const Text(
+                          'This ticket is closed. Create a new ticket for further help.',
+                        ),
+                    ]),
+                    _card('Attachments · ${t.files.length}/10', [
+                      ...t.files.map(
+                        (f) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(f.name),
+                          subtitle: Text('${(f.size / 1024).ceil()} KB'),
+                          trailing: const Icon(Icons.download),
+                          onTap: _busy ? null : () => _download(f),
+                        ),
+                      ),
+                      if (t.files.isEmpty) const Text('No attachments.'),
+                      if (t.status != 'closed' && t.files.length < 10) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _upload,
+                          icon: const Icon(Icons.attach_file),
+                          label: const Text('Add attachment'),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'PDF, JPG, PNG, WebP or TXT · up to 5 MB each',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ]),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _controller.text.trim().isEmpty
-                  ? null
-                  : () => Navigator.of(context).pop(_controller.text.trim()),
-              child: const Text('Send Reply'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// White card the detail sections sit in.
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _CardLabel extends StatelessWidget {
-  const _CardLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppColors.ink,
-      ),
-    );
-  }
-}
-
-/// Status pill, shared with the list card.
-class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.status});
-
-  final TicketStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: status.wash,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: status.tint,
-        ),
-      ),
     );
   }
 }

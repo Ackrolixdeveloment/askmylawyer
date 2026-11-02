@@ -112,13 +112,18 @@ export class AdminConsultationsService {
     return { data: rows.map(row => ({ id: row.id, name: row.name ?? (role === 'customer' ? 'Name not provided' : 'Lawyer'), displayId: role === 'lawyer' && row.lawyerNumber ? `LAW${String(row.lawyerNumber).padStart(4, '0')}` : row.id.slice(0, 8).toUpperCase() })) };
   }
 
+  async attachment(requestId: string, fileId: string) {
+    const file = await this.prisma.reportAttachment.findFirst({where:{id:fileId,report:{requestId}},select:{key:true,name:true}});
+    if(!file)throw notFound();return file;
+  }
+
   async detail(id: string) {
     const row = await this.prisma.consultationRequest.findUnique({
       where: { id },
       select: {
         ...rowSelect,
         description: true,
-        report: { select: { status: true, submittedAt: true, caseSummary: true } },
+        report: { select: { status: true, submittedAt: true, caseSummary: true, legalGuidance: true, nextSteps: true, transcript: true, problem: true, edited: true, draftedAt: true, reviewEndsAt: true, attachments: { select: { id: true, name: true, sizeBytes: true } } } },
         earning: { select: { gross: true, commission: true, net: true, status: true } },
       },
     });
@@ -132,6 +137,14 @@ export class AdminConsultationsService {
             status: row.report.status,
             submittedAt: row.report.submittedAt,
             summary: row.report.caseSummary || null,
+            legalGuidance: row.report.legalGuidance || null,
+            nextSteps: row.report.nextSteps || null,
+            transcript: row.report.transcript ?? null,
+            problem: row.report.problem ?? null,
+            edited: row.report.edited,
+            draftedAt: row.report.draftedAt,
+            reviewEndsAt: row.report.reviewEndsAt,
+            attachments: row.report.attachments ?? [],
           }
         : null,
       earning: row.earning,

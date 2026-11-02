@@ -56,3 +56,10 @@ export function ContactCell({
     </div>
   );
 }
+
+/** Calendar date and time in IST, regardless of the admin browser timezone. */
+export function DateTimeCell({ value }: { value: string | null }) {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return <span className="text-ink-muted">Not recorded</span>;
+  const date = new Date(value);
+  return <div className="whitespace-nowrap"><div>{date.toLocaleDateString('en-IN', {timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric'})}</div><div className="mt-1 text-xs text-ink-muted">{date.toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})} IST</div></div>;
+}

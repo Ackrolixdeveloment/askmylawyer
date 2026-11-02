@@ -9,6 +9,8 @@ export interface Transaction {
 }
 
 export interface SupportTicket {
+  recordId?:string;
+  statusLabel?:string;
   id: string;
   issue: string;
   status: "open" | "resolved" | "pending";
@@ -77,6 +79,8 @@ export interface CustomerDetail {
   timeline: TimelineEvent[];
   transactions: Transaction[];
   supportTickets: SupportTicket[];
+  supportAccess?:boolean;
+  supportTicketTotal?:number;
   refunds: RefundRequest[];
   consultations: ConsultationHistoryRow[];
   /** Total consultations, so the card can say "showing last 3 of 8". */

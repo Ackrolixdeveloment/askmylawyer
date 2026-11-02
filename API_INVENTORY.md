@@ -212,3 +212,25 @@ Extracted from controller decorators on 31 October 2026. Guards and DTOs remain 
 - `POST /api/v1/customer/consultations/:id/media/video` and `POST /api/v1/lawyer/consultations/:id/media/video`: participant-only recording of video usage during an active session; repeat calls are idempotent.
 
 Consultation per-screen filters additionally accept `refundStatus` (requested/processing/completed/failed/needs_review) and `reportStage` (generating/awaiting_review/failed/missing). Date fields also include `endedAt`, `refundRequestedAt` and `refundedAt`; refund completion date filtering requires a confirmed completed refund.
+
+### Billing, dashboard and admin recovery
+
+- `GET /api/v1/admin/billing`: authenticated role permission `billing`; paginated ledger with search, kind/status/environment/provider filters; dateField date/paidAt/refundedAt; IST from/to; whitelisted sorting and 500-row maximum.
+- `GET /api/v1/admin/billing/:id`: consultation_<request UUID> or extension_<extension UUID>; read-only detail with gateway references, refund facts and recorded earnings, without gateway session credentials.
+- `GET /api/v1/admin/dashboard?from=YYYY-MM-DD&to=YYYY-MM-DD`: role permission `dashboard`; actual counts/charts, live-only payment totals and recent bookings; defaults to last 30 IST days.
+- `POST /api/v1/admin/auth/password/request`: email; returns generic challengeId without account disclosure.
+- `POST /api/v1/admin/auth/password/verify`: challengeId, otp; returns a short-lived single-use resetToken.
+- `POST /api/v1/admin/auth/password/reset`: challengeId, resetToken, password; atomically updates password, clears login lock and revokes admin sessions.
+
+- `GET /api/v1/admin/consultations/:id/report/attachments/:fileId`: consultation-permission protected private attachment download; checks file-to-consultation membership and returns attachment/no-store headers. Consultation detail now includes full report sections, retained transcript, report timing/problem metadata and attachment names/sizes (without storage keys).
+
+## Live Support APIs — 2 November 2026
+
+All paths below have `/api/v1` prefix. Admin routes require the corresponding support queue permission; mobile routes require authentication and ticket ownership.
+
+- `/admin/support`: GET `categories`, GET `assignees`, GET `bucket/:bucket` (`new`, `in-progress`, `resolved`).
+- `/admin/support/tickets/:id`: GET detail, PUT workflow; GET/POST `messages`; GET `events`; POST `attachments`; GET `attachments/:fileId`. Messages/events accept a `before` cursor.
+- `/customer/support` and `/lawyer/support`: GET paginated list, POST create; GET `categories`, GET `consultations`; GET `:id`, GET/POST `:id/messages`, POST `:id/attachments`, GET `:id/attachments/:fileId`.
+- Workflow PUT requires `expectedUpdatedAt`; create accepts `clientKey` for retry deduplication. Files are authenticated private downloads.
+
+See SUPPORT_IMPLEMENTATION.md for limits, deployment and verification.

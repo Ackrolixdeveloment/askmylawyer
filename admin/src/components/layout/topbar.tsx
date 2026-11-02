@@ -55,7 +55,7 @@ export function Topbar({ title }: { title: string; showDateRange?: boolean }) {
       ? active.label
       : (active?.group ?? parent?.label ?? title);
   const previewData =
-    /^\/(support|billing|referral)(\/|$)/.test(pathname) ||
+    /^\/referral(\/|$)/.test(pathname) ||
     pathname === "/consultations/disputed" ||
     (/^\/consultations\/(?!all$|scheduled$|reports$|completed$|cancelled$|refunded$|in-progress$|disputed$)[^/]+$/.test(
       pathname,

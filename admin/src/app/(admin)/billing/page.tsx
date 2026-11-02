@@ -1,36 +1,5 @@
-import { PageIntro } from "@/components/common/page-intro";
-import type { Metadata } from "next";
-import { Topbar } from "@/components/layout/topbar";
-import { BillingTable } from "@/components/billing/billing-table";
-import {
-  billingRecords,
-  billingStatusOptions,
-  billingTypeOptions,
-} from "@/data/mock-billing";
-
-export const metadata: Metadata = {
-  title: "Billing Management",
-};
-
-export default function BillingManagementPage() {
-  return (
-    <>
-      <Topbar title="Billing Management" />
-
-      <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
-        <PageIntro
-          title="Billing & payouts"
-          description="Review charges, payment status and payout decisions."
-        />
-
-        <div className="mt-6">
-          <BillingTable
-            records={billingRecords}
-            statusOptions={billingStatusOptions}
-            typeOptions={billingTypeOptions}
-          />
-        </div>
-      </main>
-    </>
-  );
-}
+import { PageIntro } from '@/components/common/page-intro';
+import { Topbar } from '@/components/layout/topbar';
+import { LedgerView } from '@/components/billing/ledger-view';
+export const metadata={title:'Billing & payments'};
+export default function Page(){return <><Topbar title="Billing & payments"/><main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8"><PageIntro title="Billing & payments" description="Consultation charges, extensions, refunds and recorded lawyer earnings."/><div className="mt-6"><LedgerView/></div></main></>;}

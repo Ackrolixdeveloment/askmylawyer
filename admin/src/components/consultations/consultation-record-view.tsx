@@ -55,7 +55,7 @@ export function ConsultationRecordView({ id }: { id: string }) {
                   <div className="grid gap-5 sm:grid-cols-2">
                     <PersonCell
                       name={data.customer}
-                      detail="Customer profile"
+                      detail={data.customerDisplayId ?? "Customer profile"}
                       href={
                         data.customerId
                           ? `/customers/${data.customerId}`
@@ -64,7 +64,7 @@ export function ConsultationRecordView({ id }: { id: string }) {
                     />
                     <PersonCell
                       name={data.lawyer ?? "Not assigned"}
-                      detail="Lawyer profile"
+                      detail={data.lawyerDisplayId ?? "Lawyer profile"}
                       tone="violet"
                       href={
                         data.lawyerId
@@ -117,21 +117,14 @@ export function ConsultationRecordView({ id }: { id: string }) {
                       <Badge tone="info">
                         {data.report.status.replaceAll("_", " ")}
                       </Badge>
-                      <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink-muted">
-                        {data.report.summary ||
-                          "A summary has not been submitted."}
-                      </p>
+                      <div className="mt-4 space-y-5">{[["Case summary",data.report.summary],["Legal guidance",data.report.legalGuidance],["Next steps",data.report.nextSteps]].map(([label,value])=><section key={label}><h3 className="text-sm font-semibold">{label}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-ink-muted">{value || "Not submitted"}</p></section>)}{data.report.problem&&<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{data.report.problem}</p>}{data.report.attachments.length>0&&<section><h3 className="text-sm font-semibold">Report attachments</h3><ul className="mt-2 space-y-2">{data.report.attachments.map(file=><li key={file.id}><a className="text-sm text-brand underline" href={`/api/v1/admin/consultations/${id}/report/attachments/${file.id}`}>{file.name}</a><span className="ml-2 text-xs text-ink-muted">{Math.ceil(file.sizeBytes/1024)} KB</span></li>)}</ul></section>}</div>
                     </>
                   ) : (
                     <p className="text-sm text-ink-muted">
                       No report is available for this consultation.
                     </p>
                   )}
-                  <p className="mt-5 rounded-xl bg-canvas p-3 text-xs leading-5 text-ink-muted">
-                    Full report sections, attachments and transcript access need
-                    additional admin API fields. No demonstration transcript is
-                    shown for this record.
-                  </p>
+                  <details className="mt-5 rounded-xl border border-line p-3"><summary className="cursor-pointer text-sm font-semibold">Consultation transcript</summary><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink-muted">{data.report?.transcript || "No retained transcript is available. The report flow removes transcripts after delivery."}</p></details>
                 </Card>
               </div>
               <aside className="space-y-5">
@@ -166,6 +159,7 @@ export function ConsultationRecordView({ id }: { id: string }) {
                       </div>
                     ))}
                   </dl>
+                  <Link className="table-tool mt-4 w-full" href={`/billing/consultation_${id}`}>View billing detail<ArrowUpRight className="size-3.5" /></Link>
                   {data.refundStatus && (
                     <Link
                       href={`/consultations/refunded/${id}`}

@@ -1,3 +1,6 @@
+import { SupportModule } from './modules/support/support.module';
+import { DashboardModule } from './modules/admin-dashboard/dashboard.module';
+import { BillingModule } from './modules/admin-billing/billing.module';
 import { Controller, Get, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -54,6 +57,7 @@ class HealthController {
           'res.headers["set-cookie"]',
           'req.body.password',
           'req.body.otp',
+          'req.body.resetToken',
           'req.body.refreshToken',
           'req.body.idToken',
           'req.body.identityToken',
@@ -93,6 +97,9 @@ class HealthController {
     PaymentsModule,
     ReportsModule,
     EarningsModule,
+    BillingModule,
+    DashboardModule,
+    SupportModule,
     LawyerHomeModule,
     LawyerAccountModule,
     LawyerProfileModule,

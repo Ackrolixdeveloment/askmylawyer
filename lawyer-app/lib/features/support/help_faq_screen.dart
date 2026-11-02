@@ -1,555 +1,228 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import 'support_repository.dart';
 import 'raise_ticket_screen.dart';
-import 'support_data.dart';
 import 'ticket_detail_screen.dart';
 
-/// Help centre: search, common topics, the lawyer's own tickets and FAQs.
 class HelpFaqScreen extends StatefulWidget {
   const HelpFaqScreen({super.key});
-
   @override
-  State<HelpFaqScreen> createState() => _HelpFaqScreenState();
+  State<HelpFaqScreen> createState() => _SupportListState();
 }
 
-class _HelpFaqScreenState extends State<HelpFaqScreen> {
+class _SupportListState extends State<HelpFaqScreen> {
   final _search = TextEditingController();
-
-  /// Index of the open FAQ, or null when all are collapsed.
-  int? _openFaq;
-
+  final _repo = SupportRepository.instance;
+  Timer? _debounce;
+  List<LiveSupportTicket> _tickets = [];
+  String _status = '', _error = '';
+  int _total = 0, _all = 0, _page = 1, _generation = 0;
+  bool _loading = true;
   @override
   void initState() {
     super.initState();
-    _search.addListener(() => setState(() {}));
+    _load();
+    _search.addListener(() {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 350), () => _load());
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
 
-  List<FaqEntry> get _visibleFaqs {
-    final query = _search.text.trim().toLowerCase();
-    if (query.isEmpty) return faqEntries;
-
-    return faqEntries
-        .where((faq) => faq.question.toLowerCase().contains(query))
-        .toList();
+  Future<void> _load({bool more = false}) async {
+    if (more && _loading) return;
+    final generation = ++_generation;
+    final page = more ? _page + 1 : 1;
+    setState(() => _loading = true);
+    try {
+      final r = await _repo.list(
+        search: _search.text,
+        status: _status,
+        page: page,
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _tickets = more ? [..._tickets, ...r.rows] : r.rows;
+        _page = page;
+        _total = r.total;
+        _all = r.totalRecords;
+        _error = '';
+      });
+    } on ApiException catch (e) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = 'Could not load support tickets.');
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final faqs = _visibleFaqs;
-
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-          children: [
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      size: 18,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'How can we help today?',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _search,
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search FAQs or ticket topics...',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.inkSubtle,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 18,
-                  color: AppColors.inkSubtle,
-                ),
-                filled: true,
-                fillColor: AppColors.surface,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.line),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.brand),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            const _SectionTitle('Quick Help'),
-            const SizedBox(height: 10),
-            // Two per row, matching the design's grid.
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.9,
-              children: [
-                for (final topic in _quickCards)
-                  _QuickCard(
-                    icon: topic.icon,
-                    label: topic.label,
-                    // Opens the form with this category already chosen.
-                    onTap: () => _openTicketForm(context, topic.label),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            Row(
-              children: [
-                const Expanded(child: _SectionTitle('My Requests')),
-                if (supportTickets.isNotEmpty)
-                  const Text(
-                    'View All',
-                    style: TextStyle(fontSize: 11, color: AppColors.inkSubtle),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            if (supportTickets.isEmpty)
-              const _NoTickets()
-            else
-              for (final ticket in supportTickets) _TicketCard(ticket: ticket),
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                const Expanded(
-                  child: _SectionTitle('Frequently Asked Questions'),
-                ),
-                const Text(
-                  'View All',
-                  style: TextStyle(fontSize: 11, color: AppColors.inkSubtle),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            if (faqs.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  'No questions match your search.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSubtle),
-                ),
-              )
-            else
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    for (var i = 0; i < faqs.length; i++) ...[
-                      if (i > 0)
-                        const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: AppColors.line,
-                        ),
-                      _FaqRow(
-                        entry: faqs[i],
-                        expanded: _openFaq == i,
-                        // Only one answer stays open at a time.
-                        onTap: () =>
-                            setState(() => _openFaq = _openFaq == i ? null : i),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            const SizedBox(height: 18),
-
-            const _NeedHelpCard(),
-          ],
+  Future<void> _create() async {
+    final ticket = await Navigator.of(context).push<LiveSupportTicket>(
+      MaterialPageRoute(builder: (_) => const RaiseTicketScreen()),
+    );
+    if (ticket != null && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TicketDetailScreen(ticketId: ticket.id),
         ),
-      ),
-    );
+      );
+      if (mounted) _load();
+    }
   }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.label);
-
-  final String label;
 
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
-        color: AppColors.ink,
-      ),
-    );
-  }
-}
-
-/// The Quick Help grid, paired with the category each card pre-selects.
-const _quickCards = [
-  (icon: Icons.calendar_today_outlined, label: 'Booking Issues'),
-  (icon: Icons.credit_card, label: 'Payments'),
-  (icon: Icons.balance, label: 'Consultation Issues'),
-  (icon: Icons.person_outline, label: 'Account Issues'),
-];
-
-void _openTicketForm(BuildContext context, String? category) {
-  Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => RaiseTicketScreen(category: category),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.canvas,
+    appBar: AppBar(
+      title: const Text('Support & help'),
+      actions: [
+        TextButton.icon(
+          onPressed: _create,
+          icon: const Icon(Icons.add),
+          label: const Text('Raise ticket'),
+        ),
+      ],
     ),
-  );
-}
-
-class _QuickCard extends StatelessWidget {
-  const _QuickCard({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: AppColors.ink),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.ink),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TicketCard extends StatelessWidget {
-  const _TicketCard({required this.ticket});
-
-  final SupportTicket ticket;
-
-  @override
-  Widget build(BuildContext context) {
-    final open = ticket.state == TicketState.open;
-
-    return InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => TicketDetailScreen(ticket: ticket),
-        ),
-      ),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.chat_bubble_outline,
-                  size: 17,
-                  color: AppColors.inkMuted,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ticket.subject,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        ticket.id,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.inkSubtle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  open ? 'Open' : 'Resolved',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: open ? AppColors.positive : AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    ticket.category,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  ticket.updated,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSubtle,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NoTickets extends StatelessWidget {
-  const _NoTickets();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Column(
+    body: RefreshIndicator(
+      onRefresh: () => _load(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
-          Icon(Icons.chat_bubble_outline, size: 34, color: AppColors.inkSubtle),
-          SizedBox(height: 10),
-          Text(
-            'No requests yet',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
+          TextField(
+            controller: _search,
+            maxLength: 100,
+            decoration: const InputDecoration(
+              labelText: 'Search ticket ID or subject',
+              prefixIcon: Icon(Icons.search),
+              counterText: '',
             ),
           ),
-          SizedBox(height: 4),
-          Text(
-            'Tickets you raise will appear here.',
-            style: TextStyle(fontSize: 11, color: AppColors.inkSubtle),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: const InputDecoration(labelText: 'Ticket status'),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('All tickets')),
+              ...['new', 'in_progress', 'escalated', 'resolved', 'closed'].map(
+                (s) =>
+                    DropdownMenuItem(value: s, child: Text(supportStatus(s))),
+              ),
+            ],
+            onChanged: (v) {
+              setState(() => _status = v ?? '');
+              _load();
+            },
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FaqRow extends StatelessWidget {
-  const _FaqRow({
-    required this.entry,
-    required this.expanded,
-    required this.onTap,
-  });
-
-  final FaqEntry entry;
-  final bool expanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
+          const SizedBox(height: 16),
+          Text(
+            '$_total matching · $_all total tickets',
+            style: const TextStyle(fontSize: 12, color: AppColors.inkMuted),
+          ),
+          if (_loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ],
+          if (_error.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(_error, style: const TextStyle(color: Colors.red)),
+            TextButton(onPressed: () => _load(), child: const Text('Retry')),
+          ],
+          if (!_loading && _tickets.isEmpty && _error.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Text('No support tickets to show.'),
+            ),
+          const SizedBox(height: 12),
+          ..._tickets.map(
+            (t) => Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(14),
+                title: Text(
+                  t.subject,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    entry.question,
-                    style: const TextStyle(fontSize: 13, color: AppColors.ink),
+                    '${t.code} · ${t.category}\n${supportStatus(t.status)} · ${supportDate(t.updatedAt)}',
                   ),
                 ),
-                Icon(
-                  expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                  color: AppColors.inkSubtle,
-                ),
-              ],
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TicketDetailScreen(ticketId: t.id),
+                    ),
+                  );
+                  if (mounted) _load();
+                },
+              ),
             ),
-            if (expanded) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
+          ),
+          if (_tickets.length < _total)
+            OutlinedButton(
+              onPressed: _loading ? null : () => _load(more: true),
+              child: const Text('Load more tickets'),
+            ),
+          const SizedBox(height: 24),
+          const Text(
+            'Help',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          ),
+          const ExpansionTile(
+            title: Text('How do I track my request?'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
                 child: Text(
-                  entry.answer,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: AppColors.inkSubtle,
-                  ),
+                  'Open a ticket to see replies, status and resolution. Pull down to refresh this list.',
                 ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NeedHelpCard extends StatelessWidget {
-  const _NeedHelpCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Need more help?',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Our team is here Monday-Friday,\n9am-6pm ESR',
-                  style: TextStyle(
-                    fontSize: 10,
-                    height: 1.5,
-                    color: Color(0xFFB6C0D4),
-                  ),
-                ),
-              ],
-            ),
           ),
-          const SizedBox(width: 12),
-          InkWell(
-            // No category preselected when starting from scratch.
-            onTap: () => _openTicketForm(context, null),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+          const ExpansionTile(
+            title: Text('Can I attach documents?'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'After creating a ticket, open it to add up to 10 PDF, JPG, PNG, WebP or TXT files, each up to 5 MB.',
+                ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 15, color: AppColors.ink),
-                  SizedBox(width: 6),
-                  Text(
-                    'Create ticket',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ],
+            ],
+          ),
+          const ExpansionTile(
+            title: Text('I still need help after resolution'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Reply to a resolved ticket to reopen it. For a closed ticket, create a new request and mention the earlier ticket ID.',
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }

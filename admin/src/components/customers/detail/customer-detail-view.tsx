@@ -38,7 +38,7 @@ function LiveCustomerDetail({ id }: { id: string }) {
       onRetry={retry}
       loadingLabel="Loading customer…"
     >
-      {data ? <Loaded customer={toDetail(data)} /> : null}
+      {data ? <Loaded customer={toDetail(data)} onChanged={retry} /> : null}
     </ScreenState>
   );
 }
@@ -46,9 +46,11 @@ function LiveCustomerDetail({ id }: { id: string }) {
 function Loaded({
   customer,
   preview = false,
+  onChanged,
 }: {
   customer: CustomerDetail;
   preview?: boolean;
+  onChanged?: () => void;
 }) {
   const [section, setSection] = useState("consultations");
   const sections = [
@@ -65,10 +67,10 @@ function Loaded({
     {
       id: "support",
       label: "Support tickets",
-      count: customer.supportTickets.length,
+      count: customer.supportTicketTotal??customer.supportTickets.length,
     },
     { id: "refunds", label: "Refunds", count: customer.refunds.length },
-  ];
+  ].filter(item=>item.id!=="support"||customer.supportAccess!==false);
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
@@ -84,7 +86,7 @@ function Loaded({
           {preview ? "Return to customers" : "View populated sample"}
         </Link>
       </div>
-      <CustomerDetailHeader customer={customer} readOnly={preview} />
+      <CustomerDetailHeader customer={customer} readOnly={preview} onChanged={onChanged} />
       <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <PersonalInformationCard customer={customer} />
         <ReferralsCard referral={customer.referral} />
@@ -153,7 +155,7 @@ function Loaded({
             <TransactionHistoryCard rows={customer.transactions} />
           )}
           {section === "support" && (
-            <SupportTicketsCard rows={customer.supportTickets} />
+            <SupportTicketsCard rows={customer.supportTickets} total={customer.supportTicketTotal} />
           )}
           {section === "refunds" && (
             <RefundHistoryCard rows={customer.refunds} />
@@ -231,9 +233,11 @@ function toDetail(record: CustomerRecord): CustomerDetail {
       cityState: [p.city, p.state].filter(Boolean).join(" , ") || "—",
       address: p.address ?? "—",
     },
-    // Neither module is built yet, so these stay empty rather than invented.
+    // Referral remains separate; support data comes from permission-filtered API records.
     referral: null,
-    supportTickets: [],
+    supportAccess:record.supportAccess,
+    supportTicketTotal:record.supportTicketTotal,
+    supportTickets:record.supportTickets.map(t=>({id:t.code,recordId:t.id,issue:t.subject,status:(t.status==='new'?'open':['resolved','closed'].includes(t.status)?'resolved':'pending') as 'open'|'resolved'|'pending',statusLabel:({new:'New',in_progress:'In progress',resolved:'Resolved',closed:'Closed',escalated:'Escalated'} as Record<string,string>)[t.status]??t.status,openedOn:t.createdAt,resolvedOn:t.resolvedAt})),
     timeline,
     transactions: record.transactions.map((row) => ({
       id: row.reference || row.id.slice(0, 8),

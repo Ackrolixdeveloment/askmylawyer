@@ -1,15 +1,24 @@
-import { PreviewAction } from "@/components/ui/preview-action";
+"use client";
+import { useState } from "react";
+import { saveCustomer } from "@/lib/customers";
+import { useAdmin } from "@/components/layout/auth-guard";
+import { canChange } from "@/lib/auth";
 import { Ban, MapPin } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card, Modal, Button } from "@/components/ui";
 import type { CustomerDetail } from "@/types/customer";
 
 export function CustomerDetailHeader({
   customer,
   readOnly = false,
+  onChanged,
 }: {
   customer: CustomerDetail;
   readOnly?: boolean;
+  onChanged?: () => void;
 }) {
+  const admin=useAdmin();const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState("");
+  async function change(){setBusy(true);setError("");try{await saveCustomer(customer.id,{status:customer.status==="active"?"suspended":"active"});setOpen(false);onChanged?.();}catch(e){setError(e instanceof Error?e.message:"Could not update account.");}finally{setBusy(false);}}
+  const action=customer.status==="active"?"Suspend":"Restore";
   const initials = customer.name
     .split(" ")
     .map((part) => part[0])
@@ -50,17 +59,8 @@ export function CustomerDetailHeader({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {/* Edit is hidden until the form behind it is built. */}
-        {!readOnly && (
-          <PreviewAction
-            title={`Review suspension · ${customer.name}`}
-            requireReason
-            className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs text-negative hover:bg-red-50"
-          >
-            <Ban className="size-4" aria-hidden />
-            Suspend
-          </PreviewAction>
-        )}
+        {!readOnly && canChange(admin,"customers") && <><button onClick={()=>{setError("");setOpen(true);}} className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-xs"><Ban className="size-4"/>{action}</button><Modal open={open} onClose={()=>{if(!busy)setOpen(false);}} title={`${action} ${customer.name}?`} description={customer.status==="active"?"This blocks app access and revokes existing sessions. Consultation and payment history are retained.":"This restores the customer's ability to sign in."} footer={<><Button variant="outline" disabled={busy} onClick={()=>setOpen(false)}>Cancel</Button><Button disabled={busy} onClick={change}>{busy?"Saving…":`${action} account`}</Button></>}>{error&&<p role="alert" className="text-sm text-red-700">{error}</p>}</Modal></>}
+
       </div>
     </Card>
   );

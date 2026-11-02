@@ -87,8 +87,9 @@ export interface CustomerRecord {
   refunds: CustomerRefund[];
   /** No referral module yet; always null for now. */
   referral: null;
-  /** No support module yet; always empty for now. */
-  supportTickets: never[];
+  supportAccess: boolean;
+  supportTicketTotal:number;
+  supportTickets: {id:string;code:string;subject:string;status:string;createdAt:string;resolvedAt:string|null}[];
 }
 
 export interface CustomerFilters {

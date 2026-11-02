@@ -43,8 +43,12 @@ const ROUTE_KEYS: { prefix: string; key: string; methods?: string[] }[] = [
   // Still to be built, but guarded from the start.
   { prefix: 'customers', key: 'customers' },
   { prefix: 'consultations', key: 'consultations' },
+  { prefix: 'dashboard', key: 'dashboard' },
   { prefix: 'billing', key: 'billing' },
   { prefix: 'referral', key: 'referral' },
+  { prefix: 'support/bucket/new', key: 'support.new' },
+  { prefix: 'support/bucket/in-progress', key: 'support.in-progress' },
+  { prefix: 'support/bucket/resolved', key: 'support.resolved' },
   { prefix: 'support', key: 'support' },
 ];
 

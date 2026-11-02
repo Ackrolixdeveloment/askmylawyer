@@ -7,9 +7,10 @@ import {
   ParseUUIDPipe,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { AdminAuthGuard } from '../admin-auth/admin-auth.guard';
+import { AdminAuthGuard,type AdminRequest } from '../admin-auth/admin-auth.guard';
 import { AdminCustomersService } from './admin-customers.service';
 import { ListCustomersDto, UpdateCustomerDto } from './dto/customer.dto';
 
@@ -30,13 +31,13 @@ export class AdminCustomersController {
   }
 
   @Get(':id')
-  detail(@Param('id', ParseUUIDPipe) id: string) {
-    return this.customers.detail(id);
+  detail(@Param('id', ParseUUIDPipe) id: string,@Req() request:AdminRequest) {
+    return this.customers.detail(id,request.admin);
   }
 
   @Put(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCustomerDto) {
-    return this.customers.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCustomerDto,@Req() request:AdminRequest) {
+    return this.customers.update(id, dto,request.admin);
   }
 
   @Delete(':id')
