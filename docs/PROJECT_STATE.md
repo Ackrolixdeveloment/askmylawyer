@@ -17,8 +17,8 @@ Last maintained: 17 November 2026.
 | Local admin | `http://127.0.0.1:4300` | Proxies to local backend |
 | Local backend | `http://127.0.0.1:4400/api/v1` | PostgreSQL `127.0.0.1:55433/askmylawyer` |
 | Local staging admin/API | `http://127.0.0.1:4302` / `http://127.0.0.1:4500/api/v1` | Separate PostgreSQL 18 on 55434; synthetic data, independent keys/storage |
-| Amplify admin | `https://main.d1rj04e6zkfarg.amplifyapp.com` | Deployment 8 ef3a365; backend upgraded to compatible descendant 235bb6e |
-| Live API | `https://api.amlst.in/api/v1` | Existing hosted testing backend now release 235bb6e with 42 migrations; IP 13.232.215.29 |
+| Amplify admin | `https://main.d1rj04e6zkfarg.amplifyapp.com` | 8860017 frontend public assets verified; authenticated settings acceptance pending |
+| Live API | `https://api.amlst.in/api/v1` | Hosted testing backend now release 8860017 with 43 migrations; IP 13.232.215.29 |
 | Custom admin domain | `admin.amlst.in` | Deferred by user; do not treat partial DNS setup as completed |
 
 Local admin/database and live database are intentionally separate. A user registered through an APK built against the live API does not appear locally. Source sync does not sync data. Local login credentials are not production credentials. Do not silently point development mutations at production.
@@ -94,3 +94,21 @@ Added Settings → Integrations → MSG91 alongside existing Razorpay settings. 
 Hosted readiness inspection returned no payment gateway rows; OTP and payment bypass flags are both enabled, with engine skipPayment/demoMode false. Credentials must be entered privately in admin. Provider acceptance requires deliberate bypass disable/restart and real controlled delivery/payment evidence. New MSG91 source is not yet deployed to AWS/Amplify; running backend remains 235bb6e/42 migrations. Razorpay account replacement now requires both matching secrets when Key ID changes, avoiding accidental reuse of the previous account secrets. Historical account credentials are not versioned: reconcile old payment/refund work before replacing an account.
 
 Verification for MSG91 source: 62/62 backend tests passed on local PostgreSQL 16 and isolated PostgreSQL 18; migration 43 applied locally, fixture SMS settings rolled back. Backend build, admin Webpack production build, ESLint and API docs:check passed (227 routes). Compiled API startup/DI, health 200 and unauthenticated MSG91 guard 401 passed on isolated loopback staging. No real SMS/provider call or hosted deployment was performed.
+
+17 November MSG91 release preparation: user EC2 output confirms clone at pinned 88600179bc2a6d905732a3362152057d39754ff5, npm ci, Prisma generation and Nest build succeeded in /home/ubuntu/askmylawyer-releases/8860017/backend. Private environment copied from active 235bb6e release. Running service/database and Amplify are unchanged; restored verification DB migration/tests are next.
+
+17 November MSG91 EC2 rehearsal passed: user terminal confirms all 62 tests pass (zero failed/skipped) on restored verification DB after applying 20261117060000_sms_settings. Verification DB has 43 migrations; active testing DB remains 42. Candidate 88600179bc2a6d905732a3362152057d39754ff5 is built and verified. Fresh backup, additive migration and service switch remain pending; no provider delivery accepted yet.
+
+## 17 November — MSG91 testing backend activated through SSH
+
+User installed the dedicated deployment public key using EC2 Instance Connect. Direct SSH host fingerprint matched the user-provided server fingerprint; noninteractive sudo verified. Earlier user-assisted cutover stopped before service changes because reading the root-owned drop-in required sudo; direct deployment used sudo cat for the private backup instead.
+
+Built/rehearsed release 88600179bc2a6d905732a3362152057d39754ff5 activated successfully at /home/ubuntu/askmylawyer-releases/8860017/backend. Fresh private backup: /home/ubuntu/askmylawyer-backups/msg91-20261117-113519. Existing testing database now has 43 migrations. Before/after aggregate user/document/payment counts and amount/refund totals matched. Original private environment and absolute uploads retained; service healthy. Public health 200/status ok and SMS settings unauthenticated guard 401 verified. Settings not yet populated with Ackrolix credentials; OTP/payment bypass flags unchanged. No real SMS/payment provider acceptance implied.
+
+GitHub main fast-forwarded from ef3a365 to the tested 8860017 so the connected Amplify frontend can deploy the MSG91 UI. Public asset and authenticated UI acceptance remain to be verified separately. No DNS or new AWS instance changes.
+
+Frontend follow-up: GitHub main push to 8860017 succeeded and the active GitHub push webhook reports HTTP 202/OK. Amplify job status cannot be read from the EC2 role because no AWS credentials provider is configured there; public asset verification remains pending. Dedicated SSH private key stays in ignored local tooling and is never included in source or handover artifacts.
+
+## 17 November — MSG91 Amplify frontend published
+
+Public verification from EC2 confirms /settings/integrations serves the new frontend: current JavaScript includes the MSG91 card and /admin/settings/sms client alongside Razorpay. Tested main source 8860017 is now published on Amplify as well as the active EC2 backend (43 migrations). Public UI asset verification is complete; authenticated user interaction/save and provider delivery are separate, still pending. User should enter Ackrolix credentials privately in Settings → Integrations, using Razorpay sandbox and the approved MSG91 sender/template. OTP/payment bypass flags remain enabled until a deliberate configuration review/restart for provider acceptance. No real SMS or payment was initiated during deployment.

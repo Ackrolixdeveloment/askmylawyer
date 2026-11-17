@@ -40,3 +40,19 @@ Fresh private recovery point: /home/ubuntu/askmylawyer-backups/cutover-20261117-
 ## 17 November 2026 — Hosted authenticated page acceptance
 
 User confirmed all requested Amplify admin pages load after login: Dashboard, Billing & payouts, Support New Tickets and All Registered Lawyers. This closes the basic authenticated page/version alignment check for the 235bb6e testing backend and ef3a365 Amplify admin. It does not verify financial/provider operations, OTP delivery, device calls or push. Next: inspect masked provider configuration and configure sandbox acceptance; no secrets should be pasted into chat.
+
+17 November MSG91 release preparation: user EC2 output confirms clone at pinned 88600179bc2a6d905732a3362152057d39754ff5, npm ci, Prisma generation and Nest build succeeded in /home/ubuntu/askmylawyer-releases/8860017/backend. Private environment copied from active 235bb6e release. Running service/database and Amplify are unchanged; restored verification DB migration/tests are next.
+
+17 November MSG91 EC2 rehearsal passed: user terminal confirms all 62 tests pass (zero failed/skipped) on restored verification DB after applying 20261117060000_sms_settings. Verification DB has 43 migrations; active testing DB remains 42. Candidate 88600179bc2a6d905732a3362152057d39754ff5 is built and verified. Fresh backup, additive migration and service switch remain pending; no provider delivery accepted yet.
+
+## 17 November — MSG91 testing backend activated through SSH
+
+User installed the dedicated deployment public key using EC2 Instance Connect. Direct SSH host fingerprint matched the user-provided server fingerprint; noninteractive sudo verified. Earlier user-assisted cutover stopped before service changes because reading the root-owned drop-in required sudo; direct deployment used sudo cat for the private backup instead.
+
+Built/rehearsed release 88600179bc2a6d905732a3362152057d39754ff5 activated successfully at /home/ubuntu/askmylawyer-releases/8860017/backend. Fresh private backup: /home/ubuntu/askmylawyer-backups/msg91-20261117-113519. Existing testing database now has 43 migrations. Before/after aggregate user/document/payment counts and amount/refund totals matched. Original private environment and absolute uploads retained; service healthy. Public health 200/status ok and SMS settings unauthenticated guard 401 verified. Settings not yet populated with Ackrolix credentials; OTP/payment bypass flags unchanged. No real SMS/payment provider acceptance implied.
+
+GitHub main fast-forwarded from ef3a365 to the tested 8860017 so the connected Amplify frontend can deploy the MSG91 UI. Public asset and authenticated UI acceptance remain to be verified separately. No DNS or new AWS instance changes.
+
+## 17 November — MSG91 Amplify frontend published
+
+Public verification from EC2 confirms /settings/integrations serves the new frontend: current JavaScript includes the MSG91 card and /admin/settings/sms client alongside Razorpay. Tested main source 8860017 is now published on Amplify as well as the active EC2 backend (43 migrations). Public UI asset verification is complete; authenticated user interaction/save and provider delivery are separate, still pending. User should enter Ackrolix credentials privately in Settings → Integrations, using Razorpay sandbox and the approved MSG91 sender/template. OTP/payment bypass flags remain enabled until a deliberate configuration review/restart for provider acceptance. No real SMS or payment was initiated during deployment.

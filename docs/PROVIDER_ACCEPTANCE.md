@@ -37,3 +37,15 @@ Source supports admin-managed MSG91 settings, pending hosted backend migration/f
 Hosted OTP bypass is currently true. Disable it deliberately in the active release environment and restart only after configuration is saved, then request/verify an OTP from a controlled phone. Check MSG91 delivery logs, resend/cooldown/expiry/wrong-code handling for both apps. API submission acceptance differs from handset delivery. Do not mark provider acceptance complete from mocks or masked configuration presence.
 
 Official provider references: [MSG91 sendhttp parameters](https://msg91.com/help/add-ons-and-plug-ins/how-to-integrate-msg91-api-in-sap), [DLT parameter checks](https://msg91.com/help/dlt-registration-in-india/check-your-sms-api-and-dlt-parameters), [provider error codes](https://api.msg91.com/apidoc/errorCode/errorCodes.php).
+
+## 17 November — MSG91 testing backend activated through SSH
+
+User installed the dedicated deployment public key using EC2 Instance Connect. Direct SSH host fingerprint matched the user-provided server fingerprint; noninteractive sudo verified. Earlier user-assisted cutover stopped before service changes because reading the root-owned drop-in required sudo; direct deployment used sudo cat for the private backup instead.
+
+Built/rehearsed release 88600179bc2a6d905732a3362152057d39754ff5 activated successfully at /home/ubuntu/askmylawyer-releases/8860017/backend. Fresh private backup: /home/ubuntu/askmylawyer-backups/msg91-20261117-113519. Existing testing database now has 43 migrations. Before/after aggregate user/document/payment counts and amount/refund totals matched. Original private environment and absolute uploads retained; service healthy. Public health 200/status ok and SMS settings unauthenticated guard 401 verified. Settings not yet populated with Ackrolix credentials; OTP/payment bypass flags unchanged. No real SMS/payment provider acceptance implied.
+
+GitHub main fast-forwarded from ef3a365 to the tested 8860017 so the connected Amplify frontend can deploy the MSG91 UI. Public asset and authenticated UI acceptance remain to be verified separately. No DNS or new AWS instance changes.
+
+## 17 November — MSG91 Amplify frontend published
+
+Public verification from EC2 confirms /settings/integrations serves the new frontend: current JavaScript includes the MSG91 card and /admin/settings/sms client alongside Razorpay. Tested main source 8860017 is now published on Amplify as well as the active EC2 backend (43 migrations). Public UI asset verification is complete; authenticated user interaction/save and provider delivery are separate, still pending. User should enter Ackrolix credentials privately in Settings → Integrations, using Razorpay sandbox and the approved MSG91 sender/template. OTP/payment bypass flags remain enabled until a deliberate configuration review/restart for provider acceptance. No real SMS or payment was initiated during deployment.
