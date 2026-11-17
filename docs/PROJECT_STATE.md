@@ -120,3 +120,27 @@ User authenticated screenshot confirms Razorpay sandbox settings saved, but MSG9
 MSG91 save fix verification: new frontend wire-format regression passed; admin ESLint and production Webpack build passed. No other pre-serialized body was found in admin lib/components. Fix published to main/testing-upgrade as c697663335b1f099886e3da08ab3e52c262d89c1; Amplify asset verification pending. Backend/settings/provider configuration untouched.
 
 MSG91 serialization fix deployment verified: Amplify public integration bundle now submits PUT /admin/settings/sms with body as an object, without the extra JSON.stringify. Frontend source c697663 is published; backend remains 8860017 with 43 migrations. User must reload the page and retry Save MSG91 settings; authenticated persistence and actual SMS delivery remain pending. Screenshot confirms Razorpay sandbox save succeeded, but provider payment acceptance is not inferred.
+
+## 17 November — Temporary real OTP acceptance window
+
+User confirmed MSG91 save. Direct read-only database check confirms admin SMS settings exist with encrypted key/sender/template and exactly one OTP placeholder; no credentials printed. OTP bypass temporarily disabled in active 8860017 release and API restarted healthy; payment bypass remains true. Private configuration backup: /home/ubuntu/askmylawyer-backups/otp-enable-20261117-120308. Compiled env parses OTP bypass false. No SMS initiated by the agent yet; actual handset delivery/login pending user test.
+
+User explicitly clarified development policy: after OTP delivery/login acceptance, re-enable OTP bypass for repeated development logins until testing is complete. This temporary provider acceptance window must not be treated as a permanent bypass-disable decision. Email OTP shares the same bypass flag. Do not store phone numbers or received codes in documentation.
+
+## 17 November — Customer iOS simulator launched for OTP acceptance
+
+Built and launched current customer Flutter source on the booted Customer iOS 27.0 simulator with API_BASE_URL=https://api.amlst.in explicitly set. Xcode first fetched Razorpay Swift package dependencies; user approved the macOS GitHub Keychain access prompt. Xcode compilation completed successfully and Flutter attached. Simulator screenshot confirms onboarding is visible. No SMS/login action was performed by the agent. OTP bypass remains temporarily false for user delivery/login testing; re-enable after acceptance per user instruction. Payment bypass remains true.
+
+Runtime reports Firebase not initialized and push not started in this simulator build; this launch does not establish push acceptance. The observed customer onboarding uses lawyer-oriented wording, a separate copy issue for follow-up. Existing CocoaPods/SPM coexistence warning was not addressed during this launch; no dependency migration was performed merely to open the app.
+
+## 17 November — SMS handset delivery failed; MSG91 IP access issue
+
+User reports no handset SMS. Sanitized backend journal confirms recent customer SMS OTP requests returned HTTP 200 and the current adapter logged provider acceptance; this does not establish handset delivery. No resend was initiated by the agent. Read-only MSG91 SMS-log API call using the stored admin key returned HTTP 401 with apiError 418 / Unauthorized. Official MSG91 error documentation maps 418 to IP not whitelisted. Reporting access is therefore blocked; the exact delivery failure remains unverified until the provider report can be read. Backend public egress IP is being verified for the Authkey allowlist. Ask user to add only the EC2 public IP under the saved Authkey's Whitelisted IPs, retaining existing entries/IP security, then re-read reports before another test. Do not store phone numbers, OTPs, keys or message contents in these records. Development bypass must be re-enabled after provider acceptance per user instruction.
+
+References: https://api.msg91.com/apidoc/errorCode/errorCodes.php ; https://msg91.com/help/api/what-do-you-mean-by-api-security ; https://docs.msg91.com/sms/sms-logs
+
+## 17 November — Actual customer SMS OTP/login accepted; development bypass restored
+
+User added EC2 egress IP 13.232.215.29 to the saved MSG91 Authkey allowlist. Read-only reporting API now returns HTTP 200 instead of 401/apiError 418. Historical report rows were not matched to the requested handset by the diagnostic query; do not claim a provider delivery-report match. Separately, user explicitly confirmed receiving the actual OTP SMS and successfully logging in through the customer simulator. This closes the basic real customer SMS delivery/login case, not resend/expiry/abuse, lawyer-app OTP, email, push or payment acceptance.
+
+As explicitly requested, OTP bypass was then restored to true in the active 8860017 testing release and API restarted healthy. Compiled configuration confirms OTP_BYPASS_ENABLED=true and PAYMENTS_BYPASS_ENABLED=true. MSG91 credentials/sender/template remain saved and encrypted for later real testing; no provider keys changed. Private config recovery point: /home/ubuntu/askmylawyer-backups/otp-bypass-restore-20261117-122943. Development logins now use existing bypass behavior again; real SMS is not sent while bypass is on. Existing login credentials and bypass code are not recorded here.
