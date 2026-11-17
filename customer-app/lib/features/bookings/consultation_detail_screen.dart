@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../reports/report_screen.dart';
+import '../consultation/consultation_repository.dart';
+import '../consultation/payment_service.dart';
 import 'booking_repository.dart';
 
 /// Everything recorded against one consultation.
@@ -19,6 +21,69 @@ class ConsultationDetailScreen extends StatefulWidget {
 class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
   BookingDetail? _booking;
   String? _error;
+  bool _acting = false;
+
+  Future<void> _resumePayment() async {
+    setState(() {
+      _acting = true;
+      _error = null;
+    });
+    try {
+      final consultation = await ConsultationRepository.instance.detail(
+        widget.consultationId,
+      );
+      if (!consultation.needsPayment) {
+        await _load();
+        return;
+      }
+      final result = await PaymentService.instance.payFor(consultation);
+      if (mounted && !result.paid) {
+        setState(
+          () => _error = result.message ?? 'Payment was not completed. You can retry or cancel this booking.',
+        );
+      }
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _cancelUnpaid() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel unpaid booking?'),
+        content: const Text(
+          'No payment has been completed. Cancelling lets you create a new booking.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep booking'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel booking'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _acting = true;
+      _error = null;
+    });
+    try {
+      await ConsultationRepository.instance.cancel(widget.consultationId);
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
 
   @override
   void initState() {
@@ -107,6 +172,22 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
         children: [
           _HeaderCard(booking: booking),
+          if (booking.status == 'pending_payment') ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Payment pending. This consultation has not started. Resume payment or cancel it before creating another instant booking.',
+            ),
+            FilledButton(
+              onPressed: _acting ? null : _resumePayment,
+              child: Text(_acting ? 'Please wait…' : 'Resume payment'),
+            ),
+            TextButton(
+              onPressed: _acting ? null : _cancelUnpaid,
+              child: const Text('Cancel unpaid booking'),
+            ),
+          ],
+          if (_error != null)
+            Text(_error!, style: const TextStyle(color: AppColors.negative)),
           const SizedBox(height: 18),
 
           const _SectionTitle('Case Summary'),
@@ -132,8 +213,7 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
                 if (_summaryIsLong(booking.description)) ...[
                   const SizedBox(height: 10),
                   InkWell(
-                    onTap: () =>
-                        setState(() => _summaryOpen = !_summaryOpen),
+                    onTap: () => setState(() => _summaryOpen = !_summaryOpen),
                     child: Text(
                       _summaryOpen ? 'Show less' : 'Read full summary',
                       style: const TextStyle(
@@ -215,10 +295,7 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
                   value: '${booking.totalMinutes} Minutes',
                 ),
                 const _Hairline(),
-                _DetailRow(
-                  label: 'Date',
-                  value: booking.dateLabel,
-                ),
+                _DetailRow(label: 'Date', value: booking.dateLabel),
               ],
             ),
           ),
@@ -229,10 +306,7 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _DetailRow(
-                  label: 'Amount Paid',
-                  value: '₹${booking.paid}',
-                ),
+                _DetailRow(label: 'Amount Paid', value: '₹${booking.paid}'),
                 const _Hairline(),
                 _DetailRow(
                   label: 'Coupon Discount',

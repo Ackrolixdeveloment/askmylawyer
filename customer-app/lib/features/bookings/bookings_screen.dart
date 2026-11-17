@@ -254,7 +254,11 @@ class _BookingsScreenState extends State<BookingsScreen> {
             ),
           )
         else
-          for (final booking in visible) _BookingCard(booking: booking),
+          for (final booking in visible)
+            _BookingCard(
+              booking: booking,
+              onReturn: widget.bookings == null ? _load : null,
+            ),
       ],
     );
   }
@@ -363,9 +367,10 @@ class _ModeChip extends StatelessWidget {
 /// One past consultation: a tinted header naming the lawyer, then the detail
 /// rows underneath.
 class _BookingCard extends StatelessWidget {
-  const _BookingCard({required this.booking});
+  const _BookingCard({required this.booking, this.onReturn});
 
   final Booking booking;
+  final Future<void> Function()? onReturn;
 
   IconData get _modeIcon => switch (booking.mode) {
     CallMode.audio => Icons.headset_outlined,
@@ -373,12 +378,13 @@ class _BookingCard extends StatelessWidget {
     CallMode.chat => Icons.chat_bubble_outline,
   };
 
-  void _open(BuildContext context) {
-    Navigator.of(context).push(
+  Future<void> _open(BuildContext context) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ConsultationDetailScreen(consultationId: booking.id),
       ),
     );
+    if (context.mounted) await onReturn?.call();
   }
 
   @override
@@ -437,7 +443,12 @@ class _BookingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          booking.lawyer ?? 'No lawyer found',
+                          booking.lawyer ??
+                              (booking.status == 'pending_payment'
+                                  ? 'Awaiting payment'
+                                  : booking.status == 'no_lawyer'
+                                  ? 'No lawyer found'
+                                  : 'Lawyer not assigned'),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -524,7 +535,11 @@ class _BookingCard extends StatelessWidget {
                             child: Text(
                               reportAvailable
                                   ? 'Report Available'
-                                  : 'Report Pending',
+                                  : booking.status == 'pending_payment'
+                                  ? 'Payment not completed'
+                                  : booking.reportPending
+                                  ? 'Report Pending'
+                                  : 'Report not available',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

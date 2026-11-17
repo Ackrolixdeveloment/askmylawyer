@@ -17,9 +17,9 @@ Environment: existing AWS EC2 + Amplify main, designated testing-only by user. B
 |---|---|---|
 | Admin pages | Dashboard/billing/support/lawyer directory load after auth | User-confirmed pass |
 | Razorpay configuration | Sandbox provider + test-key mode + secret/webhook presence | Confirmed empty; test credentials pending |
-| Base payment | Exact stored order/amount/currency captured; matching starts once | Pending test keys/device build |
+| Base payment | Exact stored order/amount/currency captured; matching starts once | Simulator sandbox UPI INR1179 captured/provider reference matched; searching started |
 | Payment failure/retry | No paid entitlement without capture; retries do not duplicate charge/booking | Pending |
-| Refund | Request/processing distinct from completed; provider processed status reconciles | Pending |
+| Refund | Request/processing distinct from completed; provider processed status reconciles | Tested cancellation requests INR1179; provider HTTP400 invalid request sent, no refund exists; investigation pending |
 | Free/paid extension | Free grants once; paid grants only after capture; duplicate callback idempotent | Pending |
 | OTP | Actual SMS/email delivery with relevant bypass off | Customer SMS receipt and simulator login user-confirmed 17 Nov; bypass restored for development. Lawyer/email and edge cases pending |
 | Password recovery | Real email delivery, expiry and single-use reset/session revocation | Pending provider delivery |
@@ -79,3 +79,25 @@ References: https://api.msg91.com/apidoc/errorCode/errorCodes.php ; https://msg9
 User added EC2 egress IP 13.232.215.29 to the saved MSG91 Authkey allowlist. Read-only reporting API now returns HTTP 200 instead of 401/apiError 418. Historical report rows were not matched to the requested handset by the diagnostic query; do not claim a provider delivery-report match. Separately, user explicitly confirmed receiving the actual OTP SMS and successfully logging in through the customer simulator. This closes the basic real customer SMS delivery/login case, not resend/expiry/abuse, lawyer-app OTP, email, push or payment acceptance.
 
 As explicitly requested, OTP bypass was then restored to true in the active 8860017 testing release and API restarted healthy. Compiled configuration confirms OTP_BYPASS_ENABLED=true and PAYMENTS_BYPASS_ENABLED=true. MSG91 credentials/sender/template remain saved and encrypted for later real testing; no provider keys changed. Private config recovery point: /home/ubuntu/askmylawyer-backups/otp-bypass-restore-20261117-122943. Development logins now use existing bypass behavior again; real SMS is not sent while bypass is on. Existing login credentials and bypass code are not recorded here.
+
+17 November Razorpay acceptance window: stored active gateway verified sandbox/razorpay/test-key mode with encrypted key and webhook secret present. Read-only Razorpay orders API returned HTTP 200, confirming credential authentication. Engine skipPayment/demoMode false. Payment bypass temporarily disabled and API restarted healthy; OTP bypass remains true. Private backup /home/ubuntu/askmylawyer-backups/payment-test-20261117-124233. Actual checkout/capture/webhook/refund acceptance pending. Restore payment bypass after test per development workflow.
+
+17 November Razorpay simulator checkout reached contact collection but verified phone was not prefilled; user also reports manual input failure (cause unverified). Fixed customer PaymentService to prefill nonempty mobile/name/email from the existing authenticated CustomerSession for consultation and extension checkout. No readonly field applied, preserving correction/fallback for email-only accounts. Dart formatting and targeted Flutter analysis passed. Simulator relaunch underway against hosted testing API; checkout/capture acceptance still pending, payment bypass temporarily false and OTP bypass true.
+
+## 17 November — Unpaid booking shown incorrectly as in progress
+
+User could not create another consultation after closing checkout, while history showed In progress/No lawyer found/Report pending. Direct read-only AWS inspection confirms latest testing booking is pending_payment, Razorpay order status created in sandbox; no payment capture or active consultation is established. The open instant-booking guard intentionally includes pending_payment to prevent duplicates. Root UI bug mapped pending_payment and searching to In progress, and always presented missing-lawyer/report placeholders as failures/pending reports.
+
+Customer booking UI now labels pending_payment as Payment pending, searching as Finding lawyer, scheduled as Scheduled; missing lawyer for unpaid booking shows Awaiting payment, and report text says Payment not completed. Booking detail offers Resume payment (reuses consultation detail + existing PaymentService) and confirmed Cancel unpaid booking (existing guarded cancel API). No records were force-cancelled or marked paid. Hot reload succeeded on customer simulator; targeted analysis/status regression results recorded separately. Actual Razorpay capture/webhook acceptance remains pending. Payment bypass temporarily false, OTP bypass true.
+
+## 17 November — Razorpay capture accepted; bypass policy updated
+
+User completed simulator sandbox UPI checkout. Direct Razorpay order/payment fetch verified captured INR 1179, provider paid order and exact stored payment reference match; backend payment paid and booking searching. User explicitly overrode earlier development plan: KEEP PAYMENTS_BYPASS_ENABLED=false because sandbox keys are used; OTP_BYPASS_ENABLED remains true. Do not restore payment bypass automatically.
+
+## 17 November — Webhook endpoint/replay and refund acceptance attempt
+
+Against the existing sandbox payment, public webhook endpoint rejected an invalid signature with HTTP 401 and accepted two correctly HMAC-signed payment.captured test replays with HTTP 200. Stored amount/reference unchanged. These are agent-generated signed endpoint replays, not evidence of Razorpay automatic delivery/subscription configuration. Dashboard configuration/delivery evidence requested from user.
+
+Existing ConsultationsService cancellation safely changed the paid searching test booking to cancelled and requested full INR 1179 refund. RefundsService claimed processing, but provider refund was not created. Read-only Razorpay payment fetch confirms captured amount117900 paise/refunded0; provider refund list empty. Controlled diagnostic POST to documented singular /payments/:id/refund returned HTTP400 BAD_REQUEST_ERROR invalid request sent for both normal/receipt and minimal amount-only payload. One diagnostic mistakenly used plural POST endpoint and received404; no refund was created. No automatic retry loop or fabricated completed status. Backend remains processing without refund ID; user dashboard Refund availability/error is needed to identify provider/account restrictions. Refund completion remains FAILED acceptance / needs investigation, not complete.
+
+Customer next fixes: booking list refreshes after returning from detail (resume/cancel), and shared account SheetShell uses constrained scrolling to prevent the observed short-screen logout overflow. Customer payment prefill and unpaid recovery UI source are local/simulator changes pending publication; no backend schema/API change in these UI fixes.

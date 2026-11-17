@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../core/network/api_client.dart';
+import '../auth/customer_session.dart';
 import 'consultation_repository.dart';
 
 /// How a trip through the checkout sheet ended.
@@ -50,6 +51,18 @@ class PaymentService {
   /// Set up once, because the SDK holds its callbacks statically.
   bool _wired = false;
 
+  Map<String, String> _customerPrefill() {
+    final customer = CustomerSession.instance.customer;
+    return {
+      if (customer != null && customer.mobile.trim().isNotEmpty)
+        'contact': customer.mobile.trim(),
+      if (customer?.email?.trim().isNotEmpty == true)
+        'email': customer!.email!.trim(),
+      if (customer?.fullName?.trim().isNotEmpty == true)
+        'name': customer!.fullName!.trim(),
+    };
+  }
+
   Future<PaymentResult> payFor(Consultation consultation) async {
     _wire();
 
@@ -76,6 +89,7 @@ class PaymentService {
         'currency': 'INR',
         'name': 'Ask My Lawyer',
         'description': 'Consultation',
+        'prefill': _customerPrefill(),
         'theme': {'color': '#1B2A41'},
       });
     } catch (_) {
@@ -117,6 +131,7 @@ class PaymentService {
           'currency': 'INR',
           'name': 'Ask My Lawyer',
           'description': 'Consultation extension',
+          'prefill': _customerPrefill(),
           'theme': {'color': '#1B2A41'},
         });
         await sheet.future;

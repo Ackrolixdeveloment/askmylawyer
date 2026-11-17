@@ -31,7 +31,8 @@ class Booking {
     durationMinutes: json['durationMinutes'] as int? ?? 0,
     amount: json['amount'] as int? ?? 0,
     status: json['status'] as String? ?? '',
-    at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+    at:
+        DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
         DateTime.now(),
     lawyer: json['lawyerName'] as String?,
     category: json['category'] as String?,
@@ -75,7 +76,9 @@ class Booking {
     'cancelled' => 'Cancelled',
     'refunded' => 'Refunded',
     'no_lawyer' => 'No lawyer found',
-    'searching' || 'pending_payment' => 'In progress',
+    'pending_payment' => 'Payment pending',
+    'scheduled' => 'Scheduled',
+    'searching' => 'Finding lawyer',
     'assigned' || 'active' => 'In progress',
     _ => status,
   };
@@ -83,8 +86,18 @@ class Booking {
   /// "12 Jun 2026".
   String get dateLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${at.day} ${months[at.month - 1]} ${at.year}';
   }
@@ -126,7 +139,8 @@ class BookingDetail {
       totalMinutes:
           json['totalMinutes'] as int? ?? json['durationMinutes'] as int? ?? 0,
       status: json['status'] as String? ?? '',
-      at: DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+      at:
+          DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
           DateTime.now(),
       paid: payment?['paid'] as int? ?? 0,
       owedForExtraTime: payment?['owedForExtraTime'] as int? ?? 0,
@@ -165,8 +179,18 @@ class BookingDetail {
 
   String get dateLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${at.day} ${months[at.month - 1]} ${at.year}';
   }
