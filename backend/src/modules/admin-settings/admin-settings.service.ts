@@ -10,7 +10,7 @@ const SETTINGS_ID = 1;
 /**
  * Consultation plans and the rates that apply to them.
  *
- * The admin team prices chat, audio and video here; the lawyer app reads it
+ * The admin team prices the unified consultation here; the lawyer app reads it
  * to know what a lawyer may accept, and the customer app to know what can be
  * booked and what it costs.
  */
@@ -84,6 +84,10 @@ export class AdminSettingsService {
   /** The screen saves every plan at once; each row is matched on its code. */
   async savePlans(dto: SavePlansDto) {
     for (const plan of dto.plans) assertCommissionFits(plan);
+    if (dto.plans.some(plan => plan.enabled && ['audio', 'video', 'chat'].includes(plan.code.toLowerCase()))) {
+      throw new AppException(HttpStatus.BAD_REQUEST, 'MEDIA_PLAN_NOT_ALLOWED', 'Audio, video and chat are included in one consultation. Use a consultation plan instead of a media-specific plan.');
+    }
+
 
     const codes = dto.plans.map((plan) => plan.code);
     if (new Set(codes).size !== codes.length) {

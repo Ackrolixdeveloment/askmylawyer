@@ -107,8 +107,7 @@ export function AppSettingsForm({
         <div>
           <CardTitle>Consultation Pricing</CardTitle>
           <CardDescription>
-            Pick a consultation type to see exactly what the customer pays and
-            what reaches the lawyer.
+            Set consultation pricing and duration. Audio, video and chat are included in the same session.
           </CardDescription>
         </div>
 
@@ -152,7 +151,7 @@ export function AppSettingsForm({
             />
           ) : (
             <p className="text-sm text-ink-subtle">
-              Select a consultation type to edit it.
+              Select a consultation plan to edit it.
             </p>
           )}
         </div>
@@ -347,12 +346,12 @@ function RateDetail({
       </div>
 
       <div className="mt-5 space-y-4">
-        <Field label="Consultation Type">
+        <Field label="Plan name">
           <input
             value={rate.type}
             disabled={!canEdit}
             onChange={(event) => onChange({ type: event.target.value })}
-            placeholder="e.g. Video Call"
+            placeholder="e.g. Consultation"
             className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
           />
         </Field>
@@ -641,7 +640,7 @@ function RateDetail({
         open={confirmingHide}
         onClose={() => setConfirmingHide(false)}
         title={`Hide ${rate.type || "this type"}?`}
-        description="Customers will no longer see this consultation type."
+        description="Customers will no longer see this consultation plan."
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirmingHide(false)}>

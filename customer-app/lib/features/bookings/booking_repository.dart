@@ -1,7 +1,7 @@
 import '../../core/network/api_client.dart';
 
 /// How a consultation was held.
-enum CallMode { audio, video, chat }
+enum CallMode { consultation, audio, video, chat }
 
 /// One of the customer's past consultations.
 class Booking {
@@ -25,7 +25,8 @@ class Booking {
     mode: switch (json['planCode'] as String? ?? 'video') {
       'audio' => CallMode.audio,
       'chat' => CallMode.chat,
-      _ => CallMode.video,
+      'video' => CallMode.video,
+      _ => CallMode.consultation,
     },
     planName: json['planName'] as String? ?? '',
     durationMinutes: json['durationMinutes'] as int? ?? 0,
@@ -65,6 +66,7 @@ class Booking {
   bool get reportPending => reportStatus != null && !reportReady;
 
   String get modeLabel => switch (mode) {
+    CallMode.consultation => 'Consultation',
     CallMode.audio => 'Audio',
     CallMode.video => 'Video',
     CallMode.chat => 'Chat',

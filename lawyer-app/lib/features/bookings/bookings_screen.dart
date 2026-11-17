@@ -24,7 +24,6 @@ class _BookingsScreenState extends State<BookingsScreen> {
 
   /// Null means "All" — both filters sit on top of each other.
   CallOutcome? _outcome;
-  CallMode? _mode;
 
   BookingData? _data;
   String? _error;
@@ -79,9 +78,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
           ? CallOutcome.accepted
           : CallOutcome.rejected;
 
-      return matchesQuery &&
-          (_outcome == null || outcome == _outcome) &&
-          (_mode == null || call.mode == _mode);
+      return matchesQuery && (_outcome == null || outcome == _outcome);
     }).toList();
   }
 
@@ -228,53 +225,6 @@ class _BookingsScreenState extends State<BookingsScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Mode sits in its own segmented row, so both filters can combine.
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _ModeChip(
-                  label: 'Audio',
-                  icon: Icons.headset_outlined,
-                  selected: _mode == CallMode.audio,
-                  onTap: () => setState(
-                    () =>
-                        _mode = _mode == CallMode.audio ? null : CallMode.audio,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: _ModeChip(
-                  label: 'Video',
-                  icon: Icons.videocam_outlined,
-                  selected: _mode == CallMode.video,
-                  onTap: () => setState(
-                    () =>
-                        _mode = _mode == CallMode.video ? null : CallMode.video,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: _ModeChip(
-                  label: 'Chat',
-                  icon: Icons.chat_bubble_outline,
-                  selected: _mode == CallMode.chat,
-                  onTap: () => setState(
-                    () => _mode = _mode == CallMode.chat ? null : CallMode.chat,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
         if (visible.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 50),
@@ -362,57 +312,6 @@ class _OutcomeChip extends StatelessWidget {
               icon,
               size: 13,
               color: selected ? Colors.white : AppColors.inkSubtle,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  const _ModeChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.brandSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppColors.brand : Colors.transparent,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: selected ? AppColors.brand : AppColors.inkSubtle,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? AppColors.brand : AppColors.inkMuted,
-              ),
             ),
           ],
         ),
@@ -562,6 +461,7 @@ class _CallCard extends StatelessWidget {
                         children: [
                           Icon(
                             switch (call.mode) {
+                              CallMode.consultation => Icons.forum_outlined,
                               CallMode.audio => Icons.headset_outlined,
                               CallMode.video => Icons.videocam_outlined,
                               CallMode.chat => Icons.chat_bubble_outline,

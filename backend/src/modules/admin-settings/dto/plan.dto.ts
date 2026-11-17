@@ -18,7 +18,7 @@ const trim = ({ value }: { value: unknown }) =>
 
 /** One consultation plan as the settings screen sends it back. */
 export class PlanDto {
-  /** The stable key: "audio", "video" or "chat". */
+  /** Stable commercial plan key; never a choice of audio/video/chat media. */
   @Transform(trim)
   @Length(2, 30)
   code: string;

@@ -91,8 +91,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
   ];
 
   /// Location and case tag are both required before a lawyer can be matched;
-  /// the document is optional. The chosen channel also has to be on sale —
-  /// the admin team can switch any of the three off.
+  /// the document is optional. One consultation plan includes all media controls.
   bool get _canContinue =>
       _location != null && _caseTag != null && _plan != null;
 

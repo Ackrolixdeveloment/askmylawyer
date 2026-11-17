@@ -1,7 +1,7 @@
 import '../../core/network/api_client.dart';
 
 /// How a consultation was held.
-enum CallMode { audio, video, chat }
+enum CallMode { consultation, audio, video, chat }
 
 /// One row of the lawyer's call history.
 ///
@@ -27,10 +27,12 @@ class Booking {
     mode: switch (json['planCode'] as String? ?? 'video') {
       'audio' => CallMode.audio,
       'chat' => CallMode.chat,
-      _ => CallMode.video,
+      'video' => CallMode.video,
+      _ => CallMode.consultation,
     },
     durationMinutes: json['durationMinutes'] as int? ?? 0,
-    at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+    at:
+        DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
         DateTime.now(),
     accepted: json['accepted'] as bool? ?? true,
     caseTag: json['category'] as String?,
@@ -67,6 +69,7 @@ class Booking {
       .toUpperCase();
 
   String get modeLabel => switch (mode) {
+    CallMode.consultation => 'Consultation',
     CallMode.audio => 'Audio',
     CallMode.video => 'Video',
     CallMode.chat => 'Chat',
@@ -75,8 +78,18 @@ class Booking {
   /// "12 Jun 2026".
   String get dateLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${at.day} ${months[at.month - 1]} ${at.year}';
   }
@@ -147,7 +160,8 @@ class BookingDetail {
       client: json['clientName'] as String? ?? 'Client',
       planName: json['planName'] as String? ?? '',
       durationMinutes: json['durationMinutes'] as int? ?? 0,
-      at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+      at:
+          DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
           DateTime.now(),
       status: json['status'] as String? ?? '',
       caseTag: json['category'] as String?,
@@ -191,8 +205,18 @@ class BookingDetail {
 
   String get dateLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${at.day} ${months[at.month - 1]} ${at.year}';
   }

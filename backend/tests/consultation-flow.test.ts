@@ -142,3 +142,17 @@ dbTest('paid no-lawyer booking retries atomically with original payment and cann
   assert.equal((await f.prisma.consultationRequest.findUniqueOrThrow({where:{id:booking.id}})).status,'searching');
   await assert.rejects(f.service.cancel(f.customer.id,booking.id));
 }));
+
+dbTest('call credentials keep the same session and pricing for legacy media-named bookings', async () => fixture(async f => {
+  const {booking,session}=await f.live(25);
+  const before=await f.prisma.consultationRequest.findUniqueOrThrow({where:{id:booking.id}});
+  for(const code of ['audio','chat','video','consultation']){
+    await f.prisma.consultationRequest.update({where:{id:booking.id},data:{planCode:code}});
+    const credentials=await f.service.callCredentials(f.customer.id,booking.id);
+    assert.equal(credentials.channel,'test');
+    assert.equal(credentials.durationMinutes,before.durationMinutes);
+    const current=await f.prisma.consultationRequest.findUniqueOrThrow({where:{id:booking.id}});
+    assert.equal(current.amount,before.amount);
+    assert.equal((await f.prisma.consultationSession.findUniqueOrThrow({where:{id:session.id}})).expiresAt.getTime(),session.expiresAt.getTime());
+  }
+}));

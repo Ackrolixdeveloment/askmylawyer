@@ -118,16 +118,9 @@ class _CallScreenState extends State<CallScreen> {
       if (!mounted) return;
       _credentials = credentials;
 
-      // A call cannot start without these, so ask before joining.
-      final granted = await _askForDevices(video: credentials.isVideo);
-      if (!granted) {
-        setState(
-          () => _error =
-              'Microphone${credentials.isVideo ? ' and camera' : ''} access is '
-              'needed for this consultation.',
-        );
-        return;
-      }
+      // The same session supports chat even if microphone access is declined.
+      _muted = !(await Permission.microphone.request()).isGranted;
+      if (!mounted) return;
 
       _startClock();
       _startHeartbeat();
@@ -148,11 +141,6 @@ class _CallScreenState extends State<CallScreen> {
     } on ApiException {
       /* The next backend heartbeat keeps the session state accurate. */
     }
-  }
-
-  Future<bool> _askForDevices({required bool video}) async {
-    // Audio remains available even when the customer declines camera access.
-    return (await Permission.microphone.request()).isGranted;
   }
 
   Future<void> _join(CallCredentials credentials) async {
@@ -206,6 +194,9 @@ class _CallScreenState extends State<CallScreen> {
     } else {
       await engine.enableAudio();
     }
+
+    await engine.enableLocalAudio(!_muted);
+    await engine.muteLocalAudioStream(_muted);
 
     // A video call is held at arm's length, so it belongs on the speaker; a
     // voice call is held to the ear. Without this the SDK picks for us, and
@@ -369,6 +360,21 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _toggleMute() async {
     if (_paymentPaused) return;
     final next = !_muted;
+    if (!next) {
+      if (!(await Permission.microphone.request()).isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Microphone access is off. You can continue using chat.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      await _engine?.enableLocalAudio(true);
+    }
     await _engine?.muteLocalAudioStream(next);
     if (mounted) setState(() => _muted = next);
   }
@@ -466,7 +472,7 @@ class _CallScreenState extends State<CallScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Keep your microphone and documents ready. Paid time begins once both participants join.',
+                  'Use audio, video or chat in this session. Camera starts off. Paid time begins once both participants join.',
                   textAlign: TextAlign.center,
                 ),
               ],

@@ -106,11 +106,7 @@ class _RejoinCardState extends State<RejoinCard> with WidgetsBindingObserver {
                 color: Colors.white24,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                live.planCode == 'video' ? Icons.videocam : Icons.call,
-                size: 20,
-                color: Colors.white,
-              ),
+              child: Icon(Icons.forum_outlined, size: 20, color: Colors.white),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -30,7 +30,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         children: [
           ConsultationHeader(
             title: 'Consultation',
-            subtitle: "Choose how you'd like to connect",
+            subtitle: "Choose when you'd like to connect",
             step: 1,
             // Scheduling inserts a slot picker, so that path runs one step
             // longer than an instant consult.
@@ -46,7 +46,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               padding: const EdgeInsets.fromLTRB(14, 18, 14, 24),
               children: [
                 const Text(
-                  'How would you like to consult ?',
+                  'When would you like to consult?',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -55,7 +55,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 ),
                 const SizedBox(height: 3),
                 const Text(
-                  'Select an option that works best for you.',
+                  'Audio, video and chat are included in every consultation.',
                   style: TextStyle(fontSize: 14, color: AppColors.inkSubtle),
                 ),
                 const SizedBox(height: 14),
@@ -69,7 +69,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 ),
                 const SizedBox(height: 12),
                 _OptionCard(
-                  title: 'Schedule a Call',
+                  title: 'Schedule a Consultation',
                   subtitle: 'Book a convenient time for your consultation.',
                   selected: _mode == ConsultMode.scheduled,
                   onTap: () => setState(() => _mode = ConsultMode.scheduled),
