@@ -73,3 +73,5 @@ Widgets with timers/subscriptions/polling must cancel them in `dispose`, check `
 Verify loading, success, empty, error/retry and denied access; small width and allowed maximum text scale; long names/missing dates; keyboard/focus and disabled/busy actions. Confirm a successful action survives reload when claimed persistent. Format/analyze changed Dart and run relevant Flutter tests; run admin lint/build for shared admin changes. Record any visual/device verification that could not be performed.
 
 MSG91 settings: `components/settings/msg91-card.tsx` reuses Card/TextField/Button and theme utilities, with a labelled native textarea for exact approved message content. `lib/sms.ts` uses the existing API client; integrations-view loads payment and SMS settings together. Read-only permission disables edits; masked keys never prepopulate secret inputs.
+
+API request bodies: `lib/api.ts` serializes objects centrally. Feature clients must pass `body: input`, never `JSON.stringify(input)`. Regression command: `cd admin && node --test tests/sms-client.test.mjs`; it exercises the SMS client through the real shared wrapper and checks the wire JSON object.
