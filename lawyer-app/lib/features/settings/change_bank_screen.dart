@@ -98,7 +98,7 @@ class _ChangeBankScreenState extends State<ChangeBankScreen> {
       final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop(true);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Bank account updated')),
+        const SnackBar(content: Text('Bank details submitted for review')),
       );
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -138,8 +138,10 @@ class _ChangeBankScreenState extends State<ChangeBankScreen> {
             ),
             const SizedBox(height: 20),
 
-            const Text(
-              'Change Bank',
+            Text(
+              widget.current == null
+                  ? 'Add Bank Account'
+                  : 'Change Bank Account',
               style: TextStyle(
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
@@ -148,7 +150,7 @@ class _ChangeBankScreenState extends State<ChangeBankScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Enter your new bank details.',
+              'Add bank details for payouts. This does not affect your ability to accept consultations.',
               style: TextStyle(fontSize: 13, color: AppColors.inkSubtle),
             ),
             const SizedBox(height: 20),

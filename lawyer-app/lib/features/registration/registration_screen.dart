@@ -9,7 +9,6 @@ import '../auth/get_started_screen.dart';
 import '../profile/application_submitted_screen.dart';
 import '../profile/professional_profile_screen.dart';
 import 'registration_repository.dart';
-import 'steps/bank_step.dart';
 import 'steps/kyc_step.dart';
 import 'steps/personal_step.dart';
 import 'steps/professional_step.dart';
@@ -32,21 +31,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     'Personal Information',
     'KYC Verification',
     'Professional Verification',
-    'Bank Details',
   ];
 
   /// Backend step keys, in the same order as [_steps].
-  static const _stepKeys = ['personal', 'kyc', 'professional', 'bank'];
+  static const _stepKeys = ['personal', 'kyc', 'professional'];
 
   /// Which step holds each section an admin can flag for correction.
-  /// "Professional Profile" lives on the profile screen after step 4.
+  /// "Professional Profile" lives on the profile screen after step 3.
   static const _blockSteps = {
     'Personal Information': 0,
     'Aadhar Card': 1,
     'PAN Card': 1,
     'Certificate': 2,
-    'Bank Details': 3,
-    'Professional Profile': 4,
+    'Professional Profile': 3,
   };
 
   /// The admin's notes for the step on screen, in the order they were flagged.
@@ -104,7 +101,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final flaggedStep = _firstFlaggedStep(data);
 
       if (flaggedStep == null && firstOpen == -1) {
-        // All four steps are saved — carry on with the profile.
+        // All three verification steps are saved — carry on with the profile.
         _replaceWith(_profileScreen(data));
         return;
       }
@@ -138,7 +135,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         PersonalInput() => _repository.savePersonal(input),
         KycInput() => _repository.saveKyc(input),
         ProfessionalInput() => _repository.saveProfessional(input),
-        BankInput() => _repository.saveBank(input),
         _ => throw StateError('Unknown step input: $input'),
       };
       if (!mounted) return;
@@ -322,13 +318,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         initial: _data,
                         onChanged: _setInput,
                       ),
-                      2 => ProfessionalStep(
+                      _ => ProfessionalStep(
                         key: const ValueKey('professional'),
-                        initial: _data,
-                        onChanged: _setInput,
-                      ),
-                      _ => BankStep(
-                        key: const ValueKey('bank'),
                         initial: _data,
                         onChanged: _setInput,
                       ),

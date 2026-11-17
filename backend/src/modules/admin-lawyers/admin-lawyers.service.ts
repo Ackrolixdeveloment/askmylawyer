@@ -85,7 +85,6 @@ const REGISTRATION_STEPS = [
   { field: 'personalCompletedAt', label: 'Personal Information' },
   { field: 'kycCompletedAt', label: 'KYC Verification' },
   { field: 'professionalCompletedAt', label: 'Professional Verification' },
-  { field: 'bankCompletedAt', label: 'Bank Details' },
   { field: 'profileCompletedAt', label: 'Professional Profile' },
 ] as const;
 

@@ -34,7 +34,6 @@ const steps: ReviewStep[] = [
   { id: "personal", label: "Personal Information" },
   { id: "identity", label: "Identity Verification" },
   { id: "barCouncil", label: "Bar Council Verification" },
-  { id: "bank", label: "Bank Details" },
   { id: "professional", label: "Professional Profile" },
 ];
 
@@ -47,7 +46,7 @@ const stepBlocks: Record<ReviewStepId, string[]> = {
   personal: [],
   identity: ["Aadhar Card", "PAN Card"],
   barCouncil: ["Certificate"],
-  bank: ["Bank Details"],
+  bank: [],
   professional: ["Professional Profile"],
 };
 
@@ -55,7 +54,7 @@ const initialStatuses: Record<ReviewStepId, StepStatus> = {
   personal: "reviewing",
   identity: "pending",
   barCouncil: "pending",
-  bank: "pending",
+  bank: "approved",
   professional: "pending",
 };
 

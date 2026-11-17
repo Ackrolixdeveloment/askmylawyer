@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'withdraw_success_screen.dart';
+import '../../core/network/api_client.dart';
+import '../settings/manage_bank_screen.dart';
 
 /// Transfer the available balance to the registered bank account.
 class WithdrawSheet extends StatefulWidget {
@@ -40,20 +41,45 @@ class _WithdrawSheetState extends State<WithdrawSheet> {
 
   bool get _canSubmit => _entered >= _minimum && _entered <= widget.available;
 
-  void _submit() {
-    final amount = _entered;
-
-    // TODO: request the withdrawal through the backend.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => WithdrawSuccessScreen(
-          amount: '₹${_thousands(amount)}',
-          bankName: 'HDFC Bank',
-          accountNumber: '**** **** 1234',
-          reference: 'TNX-45676234',
+  bool _checking = false;
+  Future<void> _submit() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    try {
+      final readiness = await ApiClient.instance.get(
+        '/api/v1/lawyer/earnings/payout-readiness',
+      );
+      if (!mounted) return;
+      if (readiness['bankReady'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              readiness['bankStatus'] == 'pending_review'
+                  ? 'Your bank account is under review. Payout requests need an approved account.'
+                  : 'Add your bank details before requesting a payout.',
+            ),
+          ),
+        );
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const ManageBankScreen()),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Payout requests are not available yet. Please contact Support. No withdrawal has been submitted.',
+          ),
         ),
-      ),
-    );
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
   }
 
   @override
@@ -335,7 +361,7 @@ class _WithdrawSheetState extends State<WithdrawSheet> {
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _canSubmit ? _submit : null,
+                  onPressed: _canSubmit && !_checking ? _submit : null,
                   child: Text(
                     _entered > 0
                         ? 'Withdraw ₹${_thousands(_entered)}'

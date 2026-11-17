@@ -2,7 +2,7 @@
   "info": {
     "name": "AskMyLawyer — source-derived API collection",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Mounted NestJS routes. Contract fingerprint: 55a8f8958967b61d18ce319956f25ebbc19683da2ce2fcafbd3beca9a050cc1f. Defaults to localhost; set credentials privately. Admin auth uses the Postman cookie jar. This is a manual diagnostic collection, not a bulk acceptance runner. Review writes before sending."
+    "description": "Mounted NestJS routes. Contract fingerprint: b8870c5f8cab86c87f611473e116e443a31680e52ab82b93fd50857af4607311. Defaults to localhost; set credentials privately. Admin auth uses the Postman cookie jar. This is a manual diagnostic collection, not a bulk acceptance runner. Review writes before sending."
   },
   "variable": [
     {
@@ -7844,7 +7844,7 @@
               ]
             },
             "header": [],
-            "description": "Source: backend/src/modules/earnings/earnings.controller.ts:16 (EarningsController.detail)\n\nAuth: lawyer-bearer. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nParam id:\n",
+            "description": "Source: backend/src/modules/earnings/earnings.controller.ts:21 (EarningsController.detail)\n\nAuth: lawyer-bearer. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nParam id:\n",
             "url": {
               "raw": "{{baseUrl}}/lawyer/earnings/{{id}}",
               "host": [
@@ -7854,6 +7854,36 @@
                 "lawyer",
                 "earnings",
                 "{{id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/v1/lawyer/earnings/payout-readiness",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lawyerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Source: backend/src/modules/earnings/earnings.controller.ts:16 (EarningsController.payoutReadiness)\n\nAuth: lawyer-bearer. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "url": {
+              "raw": "{{baseUrl}}/lawyer/earnings/payout-readiness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lawyer",
+                "earnings",
+                "payout-readiness"
               ]
             }
           },

@@ -21,9 +21,8 @@ class PendingReport {
         DateTime.now(),
     heldAmount: json['heldAmount'] as int? ?? 0,
     overdue: json['overdue'] as bool? ?? false,
-    reviewEndsAt: DateTime.tryParse(
-      json['reviewEndsAt'] as String? ?? '',
-    )?.toLocal(),
+    reviewEndsAt: DateTime.tryParse(json['reviewEndsAt'] as String? ?? '')
+        ?.toLocal(),
   );
 
   final String consultationId;
@@ -66,7 +65,8 @@ class ActivityEntry {
     kind: json['kind'] as String? ?? 'consultation',
     title: json['title'] as String? ?? '',
     subtitle: json['subtitle'] as String? ?? '',
-    at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+    at:
+        DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
         DateTime.now(),
   );
 
@@ -102,10 +102,14 @@ class HomeData {
     required this.heldTotal,
     required this.activity,
     this.weeklyChangePercent,
+    this.profileCompletionPercent,
   });
 
   factory HomeData.fromJson(Map<String, dynamic> json) => HomeData(
     greetingName: json['greetingName'] as String? ?? 'there',
+    profileCompletionPercent:
+        (json['profileCompletion'] as Map<String, dynamic>?)?['percent']
+            as int?,
     weeklyEarnings: json['weeklyEarnings'] as int? ?? 0,
     weeklyChangePercent: (json['weeklyChangePercent'] as num?)?.toDouble(),
     earningsSeries: (json['earningsSeries'] as List<dynamic>? ?? const [])
@@ -121,6 +125,7 @@ class HomeData {
   );
 
   final String greetingName;
+  final int? profileCompletionPercent;
   final int weeklyEarnings;
 
   /// Change against last week; null when there is nothing to compare.

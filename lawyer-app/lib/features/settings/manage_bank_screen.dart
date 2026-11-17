@@ -253,8 +253,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'Your new account is with our team for review. Payouts keep '
-                  'going to the verified account until it is approved.',
+                  'Your account details are under review. You can accept bookings. Payout requests need an approved bank account.',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.45,
@@ -273,13 +272,15 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.edit_outlined, size: 16, color: AppColors.ink),
                       SizedBox(width: 8),
                       Text(
-                        'Change Bank Account',
+                        bank == null
+                            ? 'Add Bank Account'
+                            : 'Change Bank Account',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

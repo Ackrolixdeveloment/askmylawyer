@@ -1,3 +1,4 @@
+import { lawyerProfileCompletion } from '../../common/lawyer-profile-completion';
 import { Injectable } from '@nestjs/common';
 import { EarningStatus, ReportStatus } from '@prisma/client';
 import { consultationCode } from '../../common/consultation-code';
@@ -46,7 +47,9 @@ export class LawyerHomeService {
         where: { id: lawyerId },
         select: {
           fullName: true,
-          lawyerProfile: { select: { approvedAt: true } },
+          lawyerProfile: { select: { approvedAt: true, personalCompletedAt:true, kycCompletedAt:true, professionalCompletedAt:true, profileCompletedAt:true } },
+          bankAccount: {select:{id:true}},
+          editRequests: {where:{section:"Bank Details",status:"pending"},select:{id:true},take:1},
         },
       }),
       // Two weeks, so this week has something to be compared against.
@@ -124,6 +127,7 @@ export class LawyerHomeService {
 
     return {
       greetingName: lawyer?.fullName ?? 'there',
+      profileCompletion: lawyerProfileCompletion(lawyer?.lawyerProfile, Boolean(lawyer?.bankAccount || lawyer?.editRequests.length)),
       weeklyEarnings: thisWeek,
       /** Null when there is no previous week to compare against. */
       weeklyChangePercent:

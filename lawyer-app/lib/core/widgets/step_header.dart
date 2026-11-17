@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Onboarding runs over five steps: the four registration forms, then the
+/// Onboarding runs over four steps: the three verification forms, then the
 /// professional profile.
-const totalOnboardingSteps = 5;
+const totalOnboardingSteps = 4;
 
 /// The dark banner every onboarding step wears: what this step is, what comes
 /// next, and how far through the flow the lawyer is.

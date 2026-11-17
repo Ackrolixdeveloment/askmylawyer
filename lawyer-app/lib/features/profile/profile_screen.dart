@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../settings/manage_bank_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -189,6 +191,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       color: AppColors.canvas,
       child: Column(
         children: [
+          ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: const Text('Bank account'),
+            subtitle: const Text('Add or manage payout details'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const ManageBankScreen()),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
             child: Column(

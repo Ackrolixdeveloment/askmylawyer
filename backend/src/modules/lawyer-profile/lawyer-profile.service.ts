@@ -1,3 +1,4 @@
+import { lawyerProfileCompletion } from '../../common/lawyer-profile-completion';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppException } from '../../common/app-exception';
@@ -205,6 +206,7 @@ export class LawyerProfileService {
       emailVerified: Boolean(user.emailVerifiedAt),
       status: user.status,
       onboardingStatus: profile.onboardingStatus,
+      profileCompletion: lawyerProfileCompletion(profile, Boolean(bank || latestEdit?.status === "pending")),
       /** Live to customers only once the application is approved. */
       isVerified: profile.onboardingStatus === 'approved',
       memberSince: user.createdAt,

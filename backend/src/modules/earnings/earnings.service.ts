@@ -22,6 +22,11 @@ function startOfMonth() {
  */
 @Injectable()
 export class EarningsService {
+  async payoutReadiness(lawyerId: string) {
+    const bank = await this.prisma.lawyerBankAccount.findUnique({ where: { userId: lawyerId } });
+    const pending = await this.prisma.lawyerEditRequest.findFirst({where:{userId:lawyerId,section:'Bank Details',status:'pending'},select:{id:true}});
+    return { bankReady: Boolean(bank), bankStatus: bank ? 'approved' : pending ? 'pending_review' : 'missing', payoutRequestsAvailable: false };
+  }
   constructor(private readonly prisma: PrismaService) {}
 
   /** The commission screen: three figures and the recent list. */

@@ -13,6 +13,11 @@ export class EarningsController {
     return this.earnings.summary(request.lawyer.id);
   }
 
+  @Get('payout-readiness')
+  payoutReadiness(@Req() request: LawyerRequest) {
+    return this.earnings.payoutReadiness(request.lawyer.id);
+  }
+
   @Get(':id')
   detail(@Req() request: LawyerRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.earnings.detail(request.lawyer.id, id);

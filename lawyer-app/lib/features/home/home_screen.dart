@@ -404,6 +404,28 @@ class _HomeTabState extends State<_HomeTab> {
                   // A call still running is the most urgent thing here, so it
                   // goes above the earnings. Hides itself when there is none.
                   const RejoinCard(),
+                  if (data.profileCompletionPercent != null &&
+                      data.profileCompletionPercent! < 100)
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.person_outline),
+                        title: Text(
+                          '${data.profileCompletionPercent}% of your profile is complete',
+                        ),
+                        subtitle: const Text(
+                          'Complete your profile. You can still accept consultations; add a bank account before requesting payouts.',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ProfileScreen(),
+                            ),
+                          );
+                          if (mounted) _load();
+                        },
+                      ),
+                    ),
                   const SectionHeader(title: 'Total Weekly Earnings'),
                   EarningsCard(
                     amount: data.weeklyEarnings.toDouble(),

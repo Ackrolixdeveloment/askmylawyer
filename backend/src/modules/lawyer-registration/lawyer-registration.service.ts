@@ -43,7 +43,6 @@ const STEPS = [
   { key: 'personal', field: 'personalCompletedAt', label: 'Personal Information' },
   { key: 'kyc', field: 'kycCompletedAt', label: 'KYC Verification' },
   { key: 'professional', field: 'professionalCompletedAt', label: 'Professional Verification' },
-  { key: 'bank', field: 'bankCompletedAt', label: 'Bank Details' },
   { key: 'profile', field: 'profileCompletedAt', label: 'Professional Profile' },
 ] as const;
 

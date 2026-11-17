@@ -1,5 +1,5 @@
 {
-  "contractFingerprint": "55a8f8958967b61d18ce319956f25ebbc19683da2ce2fcafbd3beca9a050cc1f",
+  "contractFingerprint": "b8870c5f8cab86c87f611473e116e443a31680e52ab82b93fd50857af4607311",
   "mountedControllers": [
     "AdminAlertsController",
     "AdminAuthController",
@@ -8979,6 +8979,29 @@
           "kind": "Param",
           "name": "id",
           "type": "string",
+          "fields": []
+        }
+      ],
+      "source": "backend/src/modules/earnings/earnings.controller.ts",
+      "line": 21,
+      "description": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lawyer/earnings/payout-readiness",
+      "controller": "EarningsController",
+      "handler": "payoutReadiness",
+      "auth": "lawyer-bearer",
+      "guards": [
+        "LawyerAuthGuard"
+      ],
+      "status": 200,
+      "stream": false,
+      "uploads": [],
+      "parameters": [
+        {
+          "kind": "Req",
+          "type": "LawyerRequest",
           "fields": []
         }
       ],
