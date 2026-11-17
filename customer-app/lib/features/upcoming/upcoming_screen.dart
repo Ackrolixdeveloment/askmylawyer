@@ -13,10 +13,19 @@ import '../consultation/payment_service.dart';
 import 'upcoming_data.dart';
 
 class UpcomingScreen extends StatefulWidget {
-  const UpcomingScreen({super.key, this.consultations, this.now});
+  const UpcomingScreen({
+    super.key,
+    this.consultations,
+    this.now,
+    this.loadConsultations,
+  });
   // Retained for existing callers; production always reads persisted bookings.
   final List<UpcomingConsultation>? consultations;
   final DateTime? now;
+
+  /// Allows a host or a test to supply the booking source. The app defaults
+  /// to the authenticated repository, never sample bookings.
+  final Future<List<Consultation>> Function()? loadConsultations;
   @override
   State<UpcomingScreen> createState() => _UpcomingScreenState();
 }
@@ -44,7 +53,9 @@ class _UpcomingScreenState extends State<UpcomingScreen> {
     if (_loading) return;
     _loading = true;
     try {
-      final rows = await ConsultationRepository.instance.upcoming();
+      final rows =
+          await (widget.loadConsultations ??
+              ConsultationRepository.instance.upcoming)();
       if (mounted) {
         setState(() {
           _rows = rows;

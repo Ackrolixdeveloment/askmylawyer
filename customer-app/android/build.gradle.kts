@@ -22,7 +22,11 @@ subprojects {
     afterEvaluate {
         extensions.findByType<com.android.build.gradle.LibraryExtension>()?.apply {
             val current = compileSdk
-            if (current == null || current < 36) {
+            if (current == 37) {
+                compileSdk {
+                    version = release(37) { minorApiLevel = 0 }
+                }
+            } else if (current == null || current < 36) {
                 compileSdk = 36
             }
         }

@@ -14,6 +14,8 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const nextConfig: NextConfig = {
+  // Let the isolated local staging panel run alongside development.
+  distDir: process.env.AML_LOCAL_STAGING === "true" ? ".next-staging" : ".next",
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${API_ORIGIN}/api/v1/:path*` }];
   },

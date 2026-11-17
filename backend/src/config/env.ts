@@ -13,6 +13,7 @@ const list = z
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  BIND_HOST: z.string().ip().optional(),
   CORS_ORIGINS: z
     .string()
     .default('')

@@ -28,7 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { BillingService } from '../src/modules/admin-billing/billing.service';
 const dbTest=process.env.AML_FLOW_DB_TESTS==='true'?test:test.skip;
 dbTest('real ledger includes captured extensions, excludes sandbox money and preserves unknown payments',async()=>{
- process.loadEnvFile('.env');assert.ok(['localhost','127.0.0.1'].includes(new URL(process.env.DATABASE_URL!).hostname));
+ assert.ok(['localhost','127.0.0.1'].includes(new URL(process.env.DATABASE_URL!).hostname));
  const p=new PrismaClient();const customer=await p.user.create({data:{role:'customer',fullName:'Ledger fixture '+randomUUID()}});
  try{
   const booking=await p.consultationRequest.create({data:{customerId:customer.id,planCode:'ledger_test',planName:'Isolated ledger test',amount:999,durationMinutes:15,status:'completed'}});

@@ -16,3 +16,10 @@ build/
 
 AGENTS.md
 CLAUDE.md
+
+# Keep the repository-level handover/continuity instructions versioned.
+!/AGENTS.md
+
+# Machine-local environments, credentials, uploads and verification backups.
+/.local/
+/admin/.next-staging/

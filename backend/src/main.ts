@@ -28,7 +28,8 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableShutdownHooks();
 
-  await app.listen(env.PORT);
+  if (env.BIND_HOST) await app.listen(env.PORT, env.BIND_HOST);
+  else await app.listen(env.PORT);
 }
 
 bootstrap();

@@ -144,8 +144,25 @@ void main() {
     // the same on every run.
     await _pumpAtMaxScale(
       tester,
-      UpcomingScreen(now: DateTime(2026, 6, 12, 14, 0)),
+      UpcomingScreen(
+        loadConsultations: () async => [
+          Consultation(
+            id: 'scheduled-layout-fixture',
+            planCode: 'audio',
+            planName: 'Audio Call',
+            amount: 499,
+            durationMinutes: 15,
+            status: 'scheduled',
+            canCancel: true,
+            scheduledFor: DateTime(2026, 6, 12, 14, 30),
+            category: 'Family Law',
+          ),
+        ],
+      ),
     );
+    expect(find.text('Family Law'), findsOneWidget);
+    expect(find.text('Cancel booking'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 }
 

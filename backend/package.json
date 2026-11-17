@@ -18,7 +18,14 @@
     "test:billing": "node --import tsx --test tests/billing-ledger.test.ts",
     "test:recovery": "node --import tsx --test tests/password-recovery.test.ts",
     "test:customer-actions": "node --import tsx --test tests/customer-actions.test.ts",
-    "test:support": "node --import tsx --test tests/support.test.ts"
+    "test:support": "node --import tsx --test tests/support.test.ts",
+    "docs:api": "node scripts/generate-api-docs.cjs",
+    "docs:check": "node scripts/generate-api-docs.cjs --check",
+    "check:local-readiness": "node scripts/check-local-readiness.cjs",
+    "test:storage": "node --import tsx --test tests/storage.test.ts",
+    "stage": "node scripts/local-staging.cjs",
+    "stage:rehearse": "node scripts/rehearse-staging-migrations.cjs",
+    "stage:check-http": "node scripts/check-staging-http.cjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

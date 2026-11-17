@@ -1,3 +1,5 @@
+> **Current API reference (16 November 2026):** [Generated mounted-route inventory](docs/api/INVENTORY.md), [Postman collection and usage](docs/api/README.md). The dated inventory below is retained as history and is not the current complete contract.
+
 ## Consultation flow additions — 1 November 2026
 
 - `POST /api/v1/customer/consultations` accepts optional UTC `scheduledFor`.
