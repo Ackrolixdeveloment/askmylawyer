@@ -264,7 +264,7 @@ export class DispatchService {
           giving.customerId,
           'No lawyer was available',
           'Nobody could take your consultation in time. You can try again '
-            + 'or ask for a refund.',
+            + 'using your existing payment. For other help, raise a Support query.',
         )
         .catch(() => undefined);
     }

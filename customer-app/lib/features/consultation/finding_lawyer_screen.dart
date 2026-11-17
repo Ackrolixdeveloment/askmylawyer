@@ -100,9 +100,7 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
     }
 
     if (consultation.noLawyerFound) {
-      _leave(
-        NoLawyersScreen(draft: widget.draft, consultation: consultation),
-      );
+      _leave(NoLawyersScreen(draft: widget.draft, consultation: consultation));
       return;
     }
 
@@ -118,32 +116,13 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
     _ticker?.cancel();
     _poll?.cancel();
 
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute<void>(builder: (_) => screen));
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
-  /// Backs out of the search, refunding what was paid.
-  Future<void> _cancel() async {
-    final confirmed = await showCancelRequestSheet(
-      context,
-      draft: widget.draft,
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await _consultations.cancel(_consultation.id);
-    } on ApiException catch (error) {
-      // Most likely a lawyer accepted while the sheet was open; the next
-      // poll will move on to them.
-      if (mounted) setState(() => _problem = error.message);
-      return;
-    }
-
-    if (mounted) {
-      _leaving = true;
-      HomeScreen.openTab(context, 0);
-    }
+  void _returnToBookings() {
+    _leaving = true;
+    HomeScreen.openTab(context, 1);
   }
 
   @override
@@ -197,7 +176,7 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    _RefundNotice(amount: widget.draft.price),
+                    _PaymentRetentionNotice(amount: widget.draft.price),
 
                     if (_problem != null) ...[
                       const SizedBox(height: 12),
@@ -214,18 +193,11 @@ class _FindingLawyerScreenState extends State<FindingLawyerScreen> {
                 ),
               ),
 
-              if (_consultation.canCancel)
-                TextButton.icon(
-                  onPressed: _cancel,
-                  icon: const Icon(Icons.cancel_outlined, size: 18),
-                  label: const Text(
-                    'Cancel Request',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.negative,
-                  ),
-                ),
+              TextButton.icon(
+                onPressed: _returnToBookings,
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: const Text('Back to Bookings'),
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -338,8 +310,8 @@ class _CountdownRing extends StatelessWidget {
 }
 
 /// Reassurance that the money comes back if nobody picks the case up.
-class _RefundNotice extends StatelessWidget {
-  const _RefundNotice({required this.amount});
+class _PaymentRetentionNotice extends StatelessWidget {
+  const _PaymentRetentionNotice({required this.amount});
 
   final double amount;
 
@@ -385,8 +357,8 @@ class _RefundNotice extends StatelessWidget {
                   ),
                   TextSpan(
                     text:
-                        "we'll refund ₹${amount.toStringAsFixed(0)} instantly "
-                        'and help you schedule with a specialist for later.',
+                        'your payment stays with this booking. Try again later '
+                        'without paying again, or contact Support for help.',
                   ),
                 ],
               ),

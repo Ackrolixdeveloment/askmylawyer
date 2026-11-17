@@ -5,6 +5,10 @@ import '../../core/theme/app_colors.dart';
 import '../reports/report_screen.dart';
 import '../consultation/consultation_repository.dart';
 import '../consultation/payment_service.dart';
+import '../consultation/consult_draft.dart';
+import '../consultation/consultation_screen.dart';
+import '../consultation/finding_lawyer_screen.dart';
+import '../support/support_screen.dart';
 import 'booking_repository.dart';
 
 /// Everything recorded against one consultation.
@@ -22,6 +26,45 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
   BookingDetail? _booking;
   String? _error;
   bool _acting = false;
+
+  Future<void> _retryPaidBooking() async {
+    setState(() {
+      _acting = true;
+      _error = null;
+    });
+    try {
+      final consultation = await ConsultationRepository.instance.resolve(
+        widget.consultationId,
+        choice: 'reschedule',
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => FindingLawyerScreen(
+            draft: ConsultDraft(
+              mode: ConsultMode.now,
+              location: '',
+              caseTag: consultation.category ?? '',
+              plan: ServicePlan(
+                code: consultation.planCode,
+                type: consultation.planName,
+                amount: consultation.amount,
+                gst: 0,
+                payable: consultation.amount,
+                durationMinutes: consultation.durationMinutes,
+              ),
+            ),
+            consultation: consultation,
+          ),
+        ),
+      );
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
 
   Future<void> _resumePayment() async {
     setState(() {
@@ -172,6 +215,23 @@ class _ConsultationDetailScreenState extends State<ConsultationDetailScreen> {
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
         children: [
           _HeaderCard(booking: booking),
+          if (booking.status == 'no_lawyer') ...[
+            const SizedBox(height: 12),
+            const Text(
+              'No lawyer is available right now. Your existing payment stays with this booking. Try again later without another payment.',
+            ),
+            FilledButton(
+              onPressed: _acting ? null : _retryPaidBooking,
+              child: Text(_acting ? 'Please wait…' : 'Try again later'),
+            ),
+          ],
+          if (booking.status != 'pending_payment')
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SupportScreen()),
+              ),
+              child: const Text('Contact Support'),
+            ),
           if (booking.status == 'pending_payment') ...[
             const SizedBox(height: 12),
             const Text(
@@ -385,7 +445,10 @@ class _HeaderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      booking.lawyer ?? 'No lawyer found',
+                      booking.lawyer ??
+                          (booking.status == 'pending_payment'
+                              ? 'Awaiting payment'
+                              : 'Lawyer not assigned'),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

@@ -7,7 +7,7 @@ import 'consult_draft.dart';
 import 'consultation_repository.dart';
 import 'finding_lawyer_screen.dart';
 
-/// Nobody picked the case up in time: offer to reschedule, retry, or refund.
+/// Nobody picked the case up in time: retain the payment for retry or rescheduling.
 class NoLawyersScreen extends StatefulWidget {
   const NoLawyersScreen({
     super.key,
@@ -95,21 +95,6 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
     HomeScreen.openTab(context, 0);
   }
 
-  Future<void> _refund() async {
-    final confirmed = await showCancelRequestSheet(
-      context,
-      draft: widget.draft,
-    );
-    if (confirmed != true || !mounted) return;
-
-    final consultation = await _resolve('refund');
-    if (consultation == null || !mounted) return;
-
-    // Back to the shell, not out of the app: this flow sits on the root
-    // navigator, above the signed-in shell.
-    HomeScreen.openTab(context, 0);
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -139,7 +124,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
                     const SizedBox(height: 8),
                     const Text(
                       'Nobody was free to take it. Try again shortly, pick a '
-                      'scheduled time, or cancel and request a refund.',
+                      'scheduled time. Your payment stays with this booking; you will not be charged again.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -160,7 +145,7 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
                     const SizedBox(height: 10),
                     _SecondaryAction(
                       icon: Icons.refresh,
-                      label: 'Try again now',
+                      label: 'Try again later',
                       onTap: _busy ? null : _tryAgain,
                     ),
 
@@ -180,14 +165,8 @@ class _NoLawyersScreenState extends State<NoLawyersScreen> {
               ),
 
               TextButton(
-                onPressed: _busy ? null : _refund,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.negative,
-                ),
-                child: const Text(
-                  'Cancel & request refund',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
+                onPressed: _busy ? null : () => HomeScreen.openTab(context, 1),
+                child: const Text('Back to Bookings — retry when ready'),
               ),
               const SizedBox(height: 8),
             ],
@@ -432,201 +411,6 @@ class _SecondaryAction extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Confirms cancelling before the money is refunded. Resolves true when the
-/// client goes through with it.
-Future<bool?> showCancelRequestSheet(
-  BuildContext context, {
-  required ConsultDraft draft,
-}) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    backgroundColor: AppColors.surface,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (sheetContext) => _CancelRequestSheet(draft: draft),
-  );
-}
-
-class _CancelRequestSheet extends StatelessWidget {
-  const _CancelRequestSheet({required this.draft});
-
-  final ConsultDraft draft;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Cancel this request?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
-              ),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Your booking will be cancelled and a refund requested for any payment taken. '
-              'You can rebook anytime.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: AppColors.inkSubtle,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.canvas,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                children: [
-                  _SummaryRow(
-                    icon: Icons.currency_rupee,
-                    label: 'Consultation Amount',
-                    value: '₹${draft.price.toStringAsFixed(0)}',
-                    emphasised: true,
-                  ),
-                  _SummaryRow(
-                    icon: Icons.headset_outlined,
-                    label: 'Consultation Type',
-                    value: '${draft.channelLabel} Consultation',
-                    last: true,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            const _RefundTimeline(),
-            const SizedBox(height: 16),
-
-            _PrimaryActionButton(
-              label: 'Keep request active',
-              onTap: () => Navigator.of(context).pop(false),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-              child: const Text(
-                'Yes cancel',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// How long the money takes to come back.
-class _RefundTimeline extends StatelessWidget {
-  const _RefundTimeline();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FF),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: Color(0xFFDCE7FF),
-              shape: BoxShape.circle,
-            ),
-            child: const Text(
-              'i',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.brand,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Refund timeline: Credited to your original '),
-                  TextSpan(text: 'payment method within '),
-                  TextSpan(
-                    text: '5-7 business days',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.brand,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ". You'll get an email confirmation once processed.",
-                  ),
-                ],
-              ),
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: AppColors.inkSubtle,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        height: 48,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.ink,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
         ),
       ),
     );

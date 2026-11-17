@@ -114,7 +114,7 @@ class _UpcomingScreenState extends State<UpcomingScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel booking?'),
         content: const Text(
-          'Any captured consultation payment will be queued for refund.',
+          'This unpaid booking will be cancelled. No completed payment is being refunded.',
         ),
         actions: [
           TextButton(
@@ -216,9 +216,7 @@ class _UpcomingScreenState extends State<UpcomingScreen> {
                               : 'View matching',
                         ),
                       ),
-                    if (row.status == 'scheduled' ||
-                        row.needsPayment ||
-                        row.isSearching)
+                    if (row.needsPayment)
                       TextButton(
                         onPressed: () => _cancel(row),
                         child: const Text('Cancel booking'),

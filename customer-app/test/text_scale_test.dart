@@ -161,7 +161,7 @@ void main() {
       ),
     );
     expect(find.text('Family Law'), findsOneWidget);
-    expect(find.text('Cancel booking'), findsOneWidget);
+    expect(find.text('Cancel booking'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 }

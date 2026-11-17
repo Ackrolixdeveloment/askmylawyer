@@ -124,3 +124,21 @@ test('scheduled dispatch claims only due bookings and recovers interrupted start
   await service.dispatchScheduled();
   assert.deepEqual(starts, ['due', 'recover']); assert.equal(updates[0].where.status, 'scheduled');
 });
+
+dbTest('paid no-lawyer booking retries atomically with original payment and cannot be cancelled/refunded', async () => fixture(async f => {
+  f.engine.skipPayment = false;
+  const booking = await f.create();
+  await f.prisma.consultationPayment.create({data:{requestId:booking.id,provider:'razorpay',orderId:'order_fixture_'+booking.id,amount:123,environment:'sandbox',status:'paid',reference:'pay_fixture'}});
+  await f.prisma.consultationRequest.update({where:{id:booking.id},data:{status:'no_lawyer'}});
+  const before = await f.prisma.consultationPayment.findUniqueOrThrow({where:{requestId:booking.id}});
+  await assert.rejects(f.service.cancel(f.customer.id,booking.id));
+  await assert.rejects(f.service.resolve(f.customer.id,booking.id,{choice:'refund'}));
+  await assert.rejects(f.create());
+  const results=await Promise.allSettled([f.service.resolve(f.customer.id,booking.id,{choice:'reschedule'}),f.service.resolve(f.customer.id,booking.id,{choice:'reschedule'})]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  const after=await f.prisma.consultationPayment.findUniqueOrThrow({where:{requestId:booking.id}});
+  assert.equal(after.id,before.id);assert.equal(after.orderId,before.orderId);assert.equal(after.status,'paid');assert.equal(after.refundStatus,null);
+  assert.equal(await f.prisma.consultationRequest.count({where:{customerId:f.customer.id}}),1);
+  assert.equal((await f.prisma.consultationRequest.findUniqueOrThrow({where:{id:booking.id}})).status,'searching');
+  await assert.rejects(f.service.cancel(f.customer.id,booking.id));
+}));

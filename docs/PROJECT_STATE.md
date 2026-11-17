@@ -172,3 +172,11 @@ Existing ConsultationsService cancellation safely changed the paid searching tes
 Customer next fixes: booking list refreshes after returning from detail (resume/cancel), and shared account SheetShell uses constrained scrolling to prevent the observed short-screen logout overflow. Customer payment prefill and unpaid recovery UI source are local/simulator changes pending publication; no backend schema/API change in these UI fixes.
 
 Customer verification follow-up: all 18 customer Flutter tests pass including unpaid-status and constrained-sheet scrolling regressions. Full Flutter analysis passes after correcting test package imports. Latest booking-list return refresh and SheetShell fixes hot reloaded successfully. Physical Mac keyboard shortcut issue remains unresolved; on-screen keypad is the confirmed workaround.
+
+## 17 November — Explicit customer paid-booking retention policy
+
+User supersedes prior customer cancellation/refund behavior: after payment, customer cannot cancel or request refund; issues go through Support. If no lawyer is available, retain the original paid booking/order and offer retry later without another payment. No transferable wallet/credit or cross-booking payment migration is implied.
+
+Backend customer cancel accepts only unpaid pending_payment (checks stored paid status under booking lock). Legacy resolve choice refund is explicitly rejected with Support guidance; retry/reschedule requires a paid/free booking, rejects existing refund-review records, atomically claims no_lawyer and reuses the same request/payment. New-booking guard blocks unresolved no_lawyer cases including scheduled ones. Concurrent retry test verifies one winner, one booking, same payment/order and no refund claim. Customer search/no-lawyer/upcoming screens remove paid cancel/refund actions, explain payment retention, return to Bookings, and booking detail offers Try again later plus Support. Unpaid cancellation remains available.
+
+Existing system/provider reconciliation for exceptional late capture, expired extensions and call failures is separate from customer self-service cancellation and was not silently removed. Historical sandbox refund-test cancellation requires guarded recovery only after provider confirms no refund exists; no historical record automatically converted by migration. No schema migration needed.

@@ -93,16 +93,18 @@ export class ConsultationsService {
     const open = await this.prisma.consultationRequest.findFirst({
       where: {
         customerId,
-        status: { in: [ConsultationStatus.pending_payment, ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] },
-        scheduledFor: null,
+        OR: [
+          { status: { in: [ConsultationStatus.pending_payment, ConsultationStatus.searching, ConsultationStatus.assigned, ConsultationStatus.active] }, scheduledFor: null },
+          { status: ConsultationStatus.no_lawyer },
+        ],
       },
-      select: { id: true },
+      select: { id: true, status: true },
     });
-    if (open && !scheduledFor) {
+    if (open && (!scheduledFor || open.status === ConsultationStatus.no_lawyer)) {
       throw new AppException(
         HttpStatus.CONFLICT,
         'CONSULTATION_IN_PROGRESS',
-        'You already have a consultation in progress.',
+        'You have an existing booking. Open Bookings to continue it without paying again.',
       );
     }
 
@@ -209,7 +211,7 @@ export class ConsultationsService {
       },
       /** Only shown when the admin panel says to. */
       lawyersNotified: engine.showNotifiedCount ? request._count.offers : null,
-      canCancel: engine.allowCancelDuringSearch,
+      canCancel: request.status === ConsultationStatus.pending_payment,
       session: request.session
         ? { id: request.session.id, startedAt: request.session.startedAt, endedAt: request.session.endedAt }
         : null,
@@ -345,41 +347,17 @@ export class ConsultationsService {
     });
     if (!request) throw notFound();
 
-    const cancellable: ConsultationStatus[] = [
-      ConsultationStatus.searching,
-      ConsultationStatus.pending_payment,
-      ConsultationStatus.scheduled,
-    ];
-    if (!cancellable.includes(request.status)) {
-      throw new AppException(
-        HttpStatus.CONFLICT,
-        'TOO_LATE',
-        'This consultation can no longer be cancelled.',
-      );
-    }
-
     await this.prisma.$transaction(async (tx) => {
-      const changed = await tx.consultationRequest.updateMany({
-        where: { id: requestId, status: { in: cancellable } },
-        data: { status: ConsultationStatus.cancelled, cancelledBy: 'customer', cancellationReason: 'Customer cancelled before assignment.' },
-      });
-      if (changed.count !== 1) {
-        throw new AppException(HttpStatus.CONFLICT, 'TOO_LATE', 'This consultation can no longer be cancelled.');
-      }
-      await tx.consultationOffer.updateMany({
-        where: { requestId, outcome: OfferOutcome.ringing },
-        data: { outcome: OfferOutcome.cancelled, answeredAt: new Date() },
-      });
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${requestId}))`;
       const payment = await tx.consultationPayment.findUnique({ where: { requestId } });
-      if (payment?.status === 'paid' && payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN' && !payment.refundStatus) {
-        await tx.consultationPayment.update({
-          where: { id: payment.id },
-          data: {
-            refundStatus: 'requested', refundRequestedAt: new Date(),
-            refundAmount: payment.amount, refundReason: 'Customer cancelled before a lawyer accepted.',
-          },
-        });
+      if (payment?.status === 'paid' || request.status !== ConsultationStatus.pending_payment) {
+        throw new AppException(HttpStatus.CONFLICT, 'PAID_CANCELLATION_NOT_ALLOWED', 'A paid consultation cannot be cancelled. Please raise a Support query if you need help.');
       }
+      const changed = await tx.consultationRequest.updateMany({
+        where: { id: requestId, status: ConsultationStatus.pending_payment },
+        data: { status: ConsultationStatus.cancelled, cancelledBy: 'customer', cancellationReason: 'Customer cancelled an unpaid booking.' },
+      });
+      if (changed.count !== 1) throw new AppException(HttpStatus.CONFLICT, 'TOO_LATE', 'This booking can no longer be cancelled.');
     });
 
     return this.detail(requestId);
@@ -399,40 +377,24 @@ export class ConsultationsService {
       );
     }
 
+    if (dto.choice !== 'reschedule') throw new AppException(HttpStatus.CONFLICT, 'REFUND_SUPPORT_REQUIRED', 'Please raise a Support query. Your payment remains attached to this booking.');
     const slot = dto.scheduledFor ? new Date(dto.scheduledFor) : null;
-    if (slot && (dto.choice !== 'reschedule' || slot.getTime() < Date.now() + 60000 || slot.getTime() > Date.now() + 90 * 86400000)) throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_SLOT', 'Choose a future slot within 90 days.');
+    if (slot && (slot.getTime() < Date.now() + 60000 || slot.getTime() > Date.now() + 90 * 86400000)) throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_SLOT', 'Choose a future slot within 90 days.');
     await this.prisma.$transaction(async (tx) => {
-      // Claim this terminal decision atomically so simultaneous retries cannot
-      // reopen a booking after a refund request was recorded.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`customer-booking:${customerId}`}))`;
+      const payment = await tx.consultationPayment.findUnique({ where: { requestId } });
+      if (payment?.refundStatus) throw new AppException(HttpStatus.CONFLICT, 'PAYMENT_REVIEW_REQUIRED', 'This payment needs Support review before the booking can be retried.');
+      if (request.amount > 0 && payment?.status !== 'paid') throw new AppException(HttpStatus.CONFLICT, 'PAYMENT_REQUIRED', 'This booking does not have a completed payment.');
+      const other = await tx.consultationRequest.findFirst({ where: { customerId, id: { not: requestId }, status: { in: ['searching', 'assigned', 'active', 'pending_payment'] }, scheduledFor: null } });
+      if (other) throw new AppException(HttpStatus.CONFLICT, 'CONSULTATION_IN_PROGRESS', 'Please finish your other booking first.');
       const changed = await tx.consultationRequest.updateMany({
         where: { id: requestId, status: ConsultationStatus.no_lawyer },
-        data: {
-          status: dto.choice === 'refund' ? ConsultationStatus.cancelled : slot ? ConsultationStatus.scheduled : ConsultationStatus.searching,
-          ...(dto.choice === 'refund' ? { cancelledBy: 'customer', cancellationReason: 'Customer requested a refund after no lawyer was available.' } : {}),
-          ...(dto.choice === 'reschedule' ? { scheduledFor: slot } : {}),
-          ...(dto.choice === 'reschedule' ? { searchEndsAt: null } : {}),
-        },
+        data: { status: slot ? ConsultationStatus.scheduled : ConsultationStatus.searching, scheduledFor: slot, searchEndsAt: null },
       });
-      if (changed.count !== 1) {
-        throw new AppException(HttpStatus.CONFLICT, 'NOTHING_TO_RESOLVE', 'This consultation has already been resolved.');
-      }
-      if (dto.choice === 'reschedule') await tx.consultationOffer.updateMany({ where: { requestId }, data: { outcome: 'expired' } });
-      if (dto.choice === 'refund') {
-        const payment = await tx.consultationPayment.findUnique({ where: { requestId } });
-        if (payment?.status === 'paid' && payment.reference !== 'BYPASS-NO-PAYMENT-TAKEN' && !payment.refundStatus) {
-          await tx.consultationPayment.update({
-            where: { id: payment.id },
-            data: {
-              refundStatus: 'requested', refundRequestedAt: new Date(),
-              refundAmount: payment.amount, refundReason: 'No lawyer accepted the consultation.',
-            },
-          });
-        }
-      }
+      if (changed.count !== 1) throw new AppException(HttpStatus.CONFLICT, 'NOTHING_TO_RESOLVE', 'This consultation has already been restarted.');
+      await tx.consultationOffer.updateMany({ where: { requestId }, data: { outcome: 'expired' } });
     });
-
-    // "Try again" simply starts a fresh search on the same request.
-    if (dto.choice === 'reschedule' && !slot) await this.dispatch.start(requestId);
+    if (!slot) await this.dispatch.start(requestId);
 
     return this.detail(requestId);
   }

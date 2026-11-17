@@ -7,6 +7,7 @@ import { AdminConsultationsService } from '../src/modules/admin-consultations/ad
 function fixture(payment: any, status = 'no_lawyer', claimed = 1) {
   const writes: any[] = [];
   const tx = {
+    $executeRaw: async () => 1,
     consultationRequest: { updateMany: async () => ({ count: claimed }) },
     consultationOffer: { updateMany: async () => ({ count: 1 }) },
     consultationPayment: {
@@ -23,38 +24,13 @@ function fixture(payment: any, status = 'no_lawyer', claimed = 1) {
   return { service, writes };
 }
 
-test('no-lawyer refund records the paid total but never marks money returned', async () => {
-  const { service, writes } = fixture({ id: 'payment', status: 'paid', amount: 1179, reference: 'cashfree-reference' });
-  await service.resolve('customer', 'booking', { choice: 'refund' });
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].refundStatus, 'requested');
-  assert.equal(writes[0].refundAmount, 1179);
-  assert.ok(writes[0].refundRequestedAt instanceof Date);
-  assert.equal(writes[0].status, undefined);
-  assert.equal(writes[0].refundedAt, undefined);
-});
-
-test('unpaid, bypass and previously requested payments cannot create refund claims', async () => {
-  for (const payment of [null, { status: 'created' },
-    { status: 'paid', reference: 'BYPASS-NO-PAYMENT-TAKEN' },
-    { status: 'paid', refundStatus: 'requested' }]) {
-    const { service, writes } = fixture(payment);
-    await service.resolve('customer', 'booking', { choice: 'refund' });
+test('customer cannot request a no-lawyer refund or cancel a paid booking', async () => {
+  for (const status of ['searching', 'scheduled', 'assigned', 'active', 'no_lawyer']) {
+    const { service, writes } = fixture({ id:'payment', status:'paid', amount:1179 }, status);
+    await assert.rejects(service.cancel('customer','booking'));
+    if (status === 'no_lawyer') await assert.rejects(service.resolve('customer','booking',{choice:'refund'}));
     assert.deepEqual(writes, []);
   }
-});
-
-test('losing a concurrent terminal decision does not record a refund', async () => {
-  const { service, writes } = fixture({ status: 'paid', amount: 999 }, 'no_lawyer', 0);
-  await assert.rejects(service.resolve('customer', 'booking', { choice: 'refund' }));
-  assert.deepEqual(writes, []);
-});
-
-test('cancelling a paid search queues a refund rather than losing the payment', async () => {
-  const { service, writes } = fixture({ id: 'payment', status: 'paid', amount: 999 }, 'searching');
-  await service.cancel('customer', 'booking');
-  assert.equal(writes[0].refundStatus, 'requested');
-  assert.equal(writes[0].refundAmount, 999);
 });
 
 test('admin displays completion date only for explicitly completed refunds', async () => {
