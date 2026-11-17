@@ -61,3 +61,9 @@ Version matrix: Amplify admin ef3a365; EC2 checkout e0882d0 with old compiled mo
 ## Hosted environment classification — user confirmation
 
 On 17 November the user confirmed all existing data is testing data and the application has not launched. The existing EC2 + Amplify main will be used for hosted testing; separate AWS staging instance provisioning is cancelled. Backups and data-preserving migrations still apply. No extra AWS instance was created. Existing capacity was read-only verified: 2 CPUs, 1.9 GiB RAM (1.3 GiB available), 2 GiB swap, 22 GiB free root disk, Node 22.23.3, PostgreSQL 18.6. This classification does not itself disable bypasses or verify providers.
+
+## 17 November 2026 — Existing hosted testing cutover successful
+
+User terminal output confirms nine migrations applied to the original testing database (42 total), systemd active with working directory /home/ubuntu/askmylawyer-releases/235bb6e/backend and health status ok after startup. Fixed candidate source is 235bb6e2df2429b0b8f55b85f8be8a6c9438a79e. Brief initial connection failures occurred while Node started, followed by success.
+
+Fresh private recovery point: /home/ubuntu/askmylawyer-backups/cutover-20261117-105431. The guarded before/after preservation comparison passed. Existing testing user/document/payment counts and payment/refund totals matched; individual records/provider transactions were not audited by that aggregate comparison. Existing absolute upload location and original private environment were retained. No new AWS instance or Amplify/DNS change was made. Public API/new route and authenticated browser checks are the next acceptance step; external provider functionality is not yet verified.

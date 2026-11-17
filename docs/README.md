@@ -14,6 +14,7 @@ Start here before changing code. These files describe the current working source
 | [AWS audit](DEPLOYMENT_AUDIT.md) | Observed live checkout/configuration/migration differences |
 | [Storage recovery](STORAGE_RECOVERY.md) | Recovered source, path safeguards and verification limits |
 | [Local staging](LOCAL_STAGING.md) | PostgreSQL 18 sandbox, migration/restore rehearsal and commands |
+| [Provider acceptance](PROVIDER_ACCEPTANCE.md) | Sandbox payment, OTP, calls and device evidence checklist |
 
 For the full request-field/validator reference use [routes.json](api/routes.json). Import [the collection](api/AskMyLawyer.postman_collection.json) and [blank local environment](api/Local.postman_environment.json) into Postman.
 

@@ -17,8 +17,8 @@ Last maintained: 17 November 2026.
 | Local admin | `http://127.0.0.1:4300` | Proxies to local backend |
 | Local backend | `http://127.0.0.1:4400/api/v1` | PostgreSQL `127.0.0.1:55433/askmylawyer` |
 | Local staging admin/API | `http://127.0.0.1:4302` / `http://127.0.0.1:4500/api/v1` | Separate PostgreSQL 18 on 55434; synthetic data, independent keys/storage |
-| Amplify admin | `https://main.d1rj04e6zkfarg.amplifyapp.com` | Deployment 8 linked commit confirmed ef3a365; live API backend remains older e0882d0 |
-| Live API | `https://api.amlst.in/api/v1` | AWS backend; public IP previously verified as `13.232.215.29` |
+| Amplify admin | `https://main.d1rj04e6zkfarg.amplifyapp.com` | Deployment 8 ef3a365; backend upgraded to compatible descendant 235bb6e |
+| Live API | `https://api.amlst.in/api/v1` | Existing hosted testing backend now release 235bb6e with 42 migrations; IP 13.232.215.29 |
 | Custom admin domain | `admin.amlst.in` | Deferred by user; do not treat partial DNS setup as completed |
 
 Local admin/database and live database are intentionally separate. A user registered through an APK built against the live API does not appear locally. Source sync does not sync data. Local login credentials are not production credentials. Do not silently point development mutations at production.
@@ -40,7 +40,7 @@ Local admin/database and live database are intentionally separate. A user regist
 
 | Priority | Pending | Completion evidence |
 |---|---|---|
-| P0 | Confirm running AWS artifact/Amplify SHA/effective settings after initial audit | Checkout/schema and on-disk compiled feature checks done; Amplify ef3a365 confirmed; backend running-artifact identity/effective flags and coordinated rollout still pending |
+| P0 | Authenticated hosted admin acceptance and provider/bypass review | Backend cutover to built 235bb6e/42 migrations done; Amplify ef3a365 confirmed; public health/new guarded routes pass; user-authenticated page acceptance passed; provider/device acceptance pending |
 | P0 | Real upload backup/restore and private provider acceptance | PostgreSQL 18 synthetic DB migration/restore rehearsal done; actual AWS uploads/bucket/provider behavior still unverified |
 | P0 | Configure staging/test provider integrations | Readiness presence check plus real OTP/email/push/payment/call evidence |
 | P0 | Two-device booking/payment/consultation/report acceptance | Matched customer/lawyer, both-party timer/rejoin, paid/free extension, report and earnings assertions |
@@ -51,7 +51,7 @@ Local admin/database and live database are intentionally separate. A user regist
 | P1 | Recording playback/recovery/retention | Private access, provider reconciliation and approved deletion policy |
 | P2 | Release signing/sign-in/policy URLs | Actual signed-device acceptance evidence |
 
-Native mobile artifacts were not rebuilt after reconciliation. The previously delivered APKs are older source. Automated tests/mock provider results do not prove external integrations work. Browser automation was unavailable; local page checks are HTTP/build checks, not visual interaction acceptance. No AWS deployment, DNS change, live database migration or data copy has been performed in this phase.
+Native mobile artifacts were not rebuilt after reconciliation. The previously delivered APKs are older source. Automated tests/mock provider results do not prove external integrations work. Browser automation was unavailable; local page checks are HTTP/build checks, not visual interaction acceptance. On 17 November the existing hosted testing backend was upgraded to built release 235bb6e and its original testing database migrated to 42, after successful backup/restore and clone verification. No new AWS instance, DNS change or production-customer data copy was performed.
 
 ## Working decisions
 
@@ -68,3 +68,21 @@ Amplify confirmation: Deployment 8 is Deployed with linked commit ef3a3656efb69e
 User explicitly confirmed the application has not launched and all current accounts/consultations/payments are testing data, with no real customers or transactions. Existing EC2 and Amplify main are therefore the shared hosted testing environment; do not provision another AWS instance for staging. Local PostgreSQL 18 sandbox remains a rehearsal tool only. Preserve existing testing records/uploads and take backups before upgrading the existing backend. New hosted-staging infrastructure is no longer the plan. Next step: user-assisted server backups, restore validation and controlled upgrade to the reviewed source with 42 migrations; keep sandbox provider testing distinct from bypass behavior.
 
 Existing hosted-testing recovery point is verified: private backup /home/ubuntu/askmylawyer-backups/20261117-104604; actual restore into aml_upgrade_verify_20261117_104604 reports 33 migrations. No cutover yet. See TESTING_UPGRADE.md.
+
+Upgrade candidate published on a dedicated branch `codex/testing-upgrade-20261117`, commit `235bb6e2df2429b0b8f55b85f8be8a6c9438a79e`, including reviewed fixes/recovered storage/handover tooling. Main/Amplify were not changed. User is preparing an independent release at `/home/ubuntu/askmylawyer-releases/235bb6e`, preserving original encryption/provider env and absolute upload location. Build/rehearsal/cutover results pending; do not describe it as deployed yet.
+
+## 17 November 2026 — EC2 restored-data verification passed
+
+User applied all nine pending migrations to restored aml_upgrade_verify_20261117_104604 and ran the complete suite: 57 passed, 0 failed/skipped. Verification DB reports 42 migrations; original DB remains 33. This verifies the candidate against a restored copy of current testing data with external provider calls disabled/mocked during tests. Original service cutover is the next step, not completed yet.
+
+## 17 November 2026 — Existing hosted testing cutover successful
+
+User terminal output confirms nine migrations applied to the original testing database (42 total), systemd active with working directory /home/ubuntu/askmylawyer-releases/235bb6e/backend and health status ok after startup. Fixed candidate source is 235bb6e2df2429b0b8f55b85f8be8a6c9438a79e. Brief initial connection failures occurred while Node started, followed by success.
+
+Fresh private recovery point: /home/ubuntu/askmylawyer-backups/cutover-20261117-105431. The guarded before/after preservation comparison passed. Existing testing user/document/payment counts and payment/refund totals matched; individual records/provider transactions were not audited by that aggregate comparison. Existing absolute upload location and original private environment were retained. No new AWS instance or Amplify/DNS change was made. Public API/new route and authenticated browser checks are the next acceptance step; external provider functionality is not yet verified.
+
+Public verification after cutover: health returns HTTP 200/status ok; Dashboard, Billing and Support New Tickets API paths return expected HTTP 401 without credentials (routes exist and are guarded). User authenticated Amplify page acceptance passed for all requested pages. API bypass flags were not changed during the version upgrade; sandbox/provider acceptance is a separate next step.
+
+## 17 November 2026 — Hosted authenticated page acceptance
+
+User confirmed all requested Amplify admin pages load after login: Dashboard, Billing & payouts, Support New Tickets and All Registered Lawyers. This closes the basic authenticated page/version alignment check for the 235bb6e testing backend and ef3a365 Amplify admin. It does not verify financial/provider operations, OTP delivery, device calls or push. Next: inspect masked provider configuration and configure sandbox acceptance; no secrets should be pasted into chat.

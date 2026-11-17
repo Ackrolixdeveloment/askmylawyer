@@ -56,3 +56,37 @@ Append a dated entry after meaningful work. Include source/environment, implemen
 - User created a private approximately 81 MB backup at /home/ubuntu/askmylawyer-backups/20261117-104604, including DB/config/unit/storage source/dist/uploads/Git history.
 - Restored database.dump into independent aml_upgrade_verify_20261117_104604 and confirmed 33 migrations. Existing testing DB/service unchanged.
 - Confirmed systemd user ubuntu, /usr/bin/node executable, no reported drop-ins/EnvironmentFiles. Preparing a separate upgrade candidate/release before cutover; no additional AWS instance planned.
+
+## 17 November 2026 — Upgrade candidate published
+
+- Created isolated worktree/branch codex/testing-upgrade-20261117 and published commit 235bb6e2df2429b0b8f55b85f8be8a6c9438a79e. Current local working branch/index preserved; GitHub main/Amplify unchanged.
+- Candidate includes prior reviewed source, local Android/iOS/test fixes, recovered storage and maintained docs/API/staging tooling. Exact private local credential scan passed before staging/commit; no .local data/env/dumps included.
+- Requested independent release clone/build on existing EC2 using bounded heap/low priority; original .env remains private and upload root is preserved as absolute path. Existing service has not been stopped or switched.
+
+## 17 November 2026 — EC2 candidate build completed
+
+- User cloned the fixed 235bb6e candidate into /home/ubuntu/askmylawyer-releases/235bb6e, verified its SHA, retained original private env and resolved existing upload storage to an absolute path.
+- npm ci, Prisma 6.19.3 generation and Nest compilation passed on the existing EC2 with bounded heap and lower priority. Existing service remained on its old release.
+- Requested 9-migration and full regression verification against the independent restored database before original DB cutover. Results pending; no claim of completed migration/cutover yet.
+
+## 17 November 2026 — EC2 restored-data verification passed
+
+User applied all nine pending migrations to restored aml_upgrade_verify_20261117_104604 and ran the complete suite: 57 passed, 0 failed/skipped. Verification DB reports 42 migrations; original DB remains 33. This verifies the candidate against a restored copy of current testing data with external provider calls disabled/mocked during tests. Original service cutover is the next step, not completed yet.
+
+## 17 November 2026 — Controlled testing-service cutover requested
+
+- Server restored-copy rehearsal passed all 57 tests and 42 migrations while original remained 33.
+- Provided user a single guarded cutover block: fresh backup after stopping the testing API, count/sum preservation checks, nine migrations, then fixed-release systemd drop-in/start/health check.
+- Original source, unit and backups retained. Cutover result pending; no autonomous remote access available. No new AWS resource or DNS/Amplify change requested.
+
+## 17 November 2026 — Existing hosted testing cutover successful
+
+User terminal output confirms nine migrations applied to the original testing database (42 total), systemd active with working directory /home/ubuntu/askmylawyer-releases/235bb6e/backend and health status ok after startup. Fixed candidate source is 235bb6e2df2429b0b8f55b85f8be8a6c9438a79e. Brief initial connection failures occurred while Node started, followed by success.
+
+Fresh private recovery point: /home/ubuntu/askmylawyer-backups/cutover-20261117-105431. The guarded before/after preservation comparison passed. Existing testing user/document/payment counts and payment/refund totals matched; individual records/provider transactions were not audited by that aggregate comparison. Existing absolute upload location and original private environment were retained. No new AWS instance or Amplify/DNS change was made. Public API/new route and authenticated browser checks are the next acceptance step; external provider functionality is not yet verified.
+
+- Agent independently checked the public endpoint after cutover: health 200; /admin/dashboard, /admin/billing and /admin/support/bucket/new return 401/UNAUTHORIZED rather than missing-route responses. No credentials sent or data mutated. Requested user-authenticated Amplify page acceptance.
+
+## 17 November 2026 — Hosted authenticated page acceptance
+
+User confirmed all requested Amplify admin pages load after login: Dashboard, Billing & payouts, Support New Tickets and All Registered Lawyers. This closes the basic authenticated page/version alignment check for the 235bb6e testing backend and ef3a365 Amplify admin. It does not verify financial/provider operations, OTP delivery, device calls or push. Next: inspect masked provider configuration and configure sandbox acceptance; no secrets should be pasted into chat.
