@@ -38,6 +38,7 @@ const ROUTE_KEYS: { prefix: string; key: string; methods?: string[] }[] = [
   { prefix: 'settings/engine', key: 'settings.engine' },
   { prefix: 'settings/plans', key: 'settings.app' },
   { prefix: 'settings/payments', key: 'settings.integrations' },
+  { prefix: 'settings/sms', key: 'settings.integrations' },
   { prefix: 'settings', key: 'settings' },
 
   // Still to be built, but guarded from the start.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Rehearses the audited 33 -> 42 migration path on synthetic PostgreSQL 18 data. */
+/** Rehearses the audited 33 -> current migration path on synthetic PostgreSQL 18 data. */
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
@@ -53,7 +53,7 @@ let oldClient,currentClient,restoredClient;
   const upgrade=run(process.execPath,[prisma,'migrate','deploy'],{env:{...commonEnv,DATABASE_URL:url}});fs.writeFileSync(path.join(directory,'upgrade.log'),upgrade.stdout+upgrade.stderr);
   const Current=require('../node_modules/@prisma/client').PrismaClient;
   currentClient=new Current({datasources:{db:{url}}});
-  const after=await currentClient.$queryRawUnsafe('SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name');assert.equal(after.length,42);
+  const after=await currentClient.$queryRawUnsafe('SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name');assert.equal(after.length,fs.readdirSync(path.join(backend,'prisma/migrations')).filter(n=>fs.existsSync(path.join(backend,'prisma/migrations',n,'migration.sql'))).length);
   const preserved=await currentClient.consultationPayment.findUniqueOrThrow({where:{id:payment.id}});
   assert.equal(preserved.amount,500);assert.equal(preserved.refundAmount,100);assert.equal(preserved.status,'refunded');assert.equal(preserved.refundStatus,'needs_review');assert.equal(preserved.provider,'cashfree');assert.equal(preserved.paidAt.toISOString(),payment.paidAt.toISOString());
   for(let i=0;i<admins.length;i++){
@@ -70,7 +70,7 @@ let oldClient,currentClient,restoredClient;
   const restored=await restoredClient.consultationPayment.findUniqueOrThrow({where:{id:payment.id}});assert.equal(restored.amount,payment.amount);assert.equal(restored.status,payment.status);
   const restoredMigrations=await restoredClient.$queryRawUnsafe('SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL');assert.equal(restoredMigrations.length,33);
   const version=command(['psql','-U','aml_stage','-d',name,'-Atc','SHOW server_version']).stdout.trim();assert.ok(version.startsWith('18.'));
-  const report={date:new Date().toISOString(),scope:'local PostgreSQL 18; synthetic records only; no AWS or production data',baseline,sourceHead:run('git',['rev-parse','HEAD']).stdout.trim(),postgresVersion:version,beforeMigrations:33,afterMigrations:42,addedMigrations:after.map(r=>r.migration_name).filter(n=>!before.some(r=>r.migration_name===n)),checks:{legacyPaymentPreserved:true,legacyRefundNeedsReview:true,cashfreeNotConvertedToRazorpay:true,conflictingRoleGrantsNotUnioned:true,categoryPermissionRelocated:true,customerRetained:true,backupRestoredToSeparateDatabase:true,restoredBaselineMigrations:33},databases:{upgraded:name,restore:restoreName},backup:path.relative(root,dumpPath)};
+  const report={date:new Date().toISOString(),scope:'local PostgreSQL 18; synthetic records only; no AWS or production data',baseline,sourceHead:run('git',['rev-parse','HEAD']).stdout.trim(),postgresVersion:version,beforeMigrations:33,afterMigrations:after.length,addedMigrations:after.map(r=>r.migration_name).filter(n=>!before.some(r=>r.migration_name===n)),checks:{legacyPaymentPreserved:true,legacyRefundNeedsReview:true,cashfreeNotConvertedToRazorpay:true,conflictingRoleGrantsNotUnioned:true,categoryPermissionRelocated:true,customerRetained:true,backupRestoredToSeparateDatabase:true,restoredBaselineMigrations:33},databases:{upgraded:name,restore:restoreName},backup:path.relative(root,dumpPath)};
   fs.writeFileSync(path.join(directory,'report.json'),JSON.stringify(report,null,2)+'\n');
   fs.writeFileSync(path.join(root,'.local/staging/latest-rehearsal.json'),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report,null,2));

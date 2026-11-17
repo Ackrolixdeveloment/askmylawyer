@@ -16,7 +16,7 @@ Environment: existing AWS EC2 + Amplify main, designated testing-only by user. B
 | Flow | Expected evidence | Status |
 |---|---|---|
 | Admin pages | Dashboard/billing/support/lawyer directory load after auth | User-confirmed pass |
-| Razorpay configuration | Sandbox provider + test-key mode + secret/webhook presence | Pending status inspection |
+| Razorpay configuration | Sandbox provider + test-key mode + secret/webhook presence | Confirmed empty; test credentials pending |
 | Base payment | Exact stored order/amount/currency captured; matching starts once | Pending test keys/device build |
 | Payment failure/retry | No paid entitlement without capture; retries do not duplicate charge/booking | Pending |
 | Refund | Request/processing distinct from completed; provider processed status reconciles | Pending |
@@ -29,3 +29,11 @@ Environment: existing AWS EC2 + Amplify main, designated testing-only by user. B
 | Transcription/AI | Private transcript retrieval and reviewed evidence-based draft, manual fallback | Pending; AI key absent in audited env |
 
 Update this document and WORKLOG after each actual result. Record no credentials, identity documents or full transcripts. No production-customer launch is implied by passing a testing case.
+
+## MSG91 account configuration
+
+Source supports admin-managed MSG91 settings, pending hosted backend migration/frontend deployment. In Settings → Integrations enter an account label (initially Ackrolix), Auth Key, approved six-letter Sender ID, country code, numeric DLT Template ID and exact approved message with `{otp}` once. Do not share Auth Key in chat. Saving validates and encrypts configuration; it does not contact MSG91 or prove delivery. Existing env configuration remains active until first admin save. Subsequent blank Auth Key keeps the saved key. Update the key and matching approved sender/template together when replacing the account with Ask My Lawyer.
+
+Hosted OTP bypass is currently true. Disable it deliberately in the active release environment and restart only after configuration is saved, then request/verify an OTP from a controlled phone. Check MSG91 delivery logs, resend/cooldown/expiry/wrong-code handling for both apps. API submission acceptance differs from handset delivery. Do not mark provider acceptance complete from mocks or masked configuration presence.
+
+Official provider references: [MSG91 sendhttp parameters](https://msg91.com/help/add-ons-and-plug-ins/how-to-integrate-msg91-api-in-sap), [DLT parameter checks](https://msg91.com/help/dlt-registration-in-india/check-your-sms-api-and-dlt-parameters), [provider error codes](https://api.msg91.com/apidoc/errorCode/errorCodes.php).

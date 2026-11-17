@@ -52,6 +52,7 @@ class HealthController {
         transport: env.LOG_FORMAT === 'pretty' ? { target: 'pino-pretty' } : undefined,
         // Never write secrets to the logs (CloudWatch included).
         redact: [
+          'req.body.authKey',
           'req.headers.authorization',
           'req.headers.cookie',
           'res.headers["set-cookie"]',

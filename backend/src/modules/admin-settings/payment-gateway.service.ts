@@ -68,6 +68,9 @@ export class PaymentGatewayService {
     const expectedPrefix = dto.environment === 'production' ? 'rzp_live_' : 'rzp_test_';
     if (!dto.appId.startsWith(expectedPrefix)) throw new AppException(HttpStatus.BAD_REQUEST, 'INVALID_KEY_MODE', 'Razorpay Key ID does not match the selected mode.');
     if (!existing && (!dto.secretKey || !dto.webhookSecret)) throw new AppException(HttpStatus.BAD_REQUEST, 'GATEWAY_INCOMPLETE', 'Enter the Razorpay key secret and webhook secret.');
+    if (existing && dto.appId !== existing.appId && (!dto.secretKey || !dto.webhookSecret)) {
+      throw new AppException(HttpStatus.BAD_REQUEST, 'GATEWAY_ROTATION_INCOMPLETE', 'When changing the Razorpay Key ID, enter its matching key secret and webhook secret together.');
+    }
     const secret = dto.secretKey
       ? { secretKeyEnc: encryptField(dto.secretKey), secretKeyLast4: last4(dto.secretKey) }
       : {};

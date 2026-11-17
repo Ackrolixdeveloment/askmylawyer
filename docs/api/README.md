@@ -15,7 +15,7 @@ Remote mutation requests are blocked unless `allowLiveWrites=true`. Leave it fal
 
 ## Scope / generated contract
 
-225 active routes from 34 mounted controllers were matched exactly to the local Nest runtime routing list on 16 November 2026. Regenerate in `backend` using `npm run docs:api`; check drift with `npm run docs:check`.
+227 active routes from 34 mounted controllers are source-derived as of 17 November 2026 (including GET/PUT admin/settings/sms). The earlier 225-route baseline was matched to the local runtime; current source contracts pass docs:check. Regenerate in `backend` using `npm run docs:api`; check drift with `npm run docs:check`.
 
 The generator uses the TypeScript module graph from AppModule, controller decorators, guards, DTO properties/validators and file interceptors. It excludes controllers that exist in source but are not mounted (notably the old Cashfree webhook). `routes.json` includes each handler's source line, expected success status, auth, body/query fields, constraints and multipart fields. The fingerprint describes the extracted contract, not the AWS deployed Git commit.
 

@@ -1174,6 +1174,20 @@ model ConsultationRecording {
 }
 
 
+model SmsSettings {
+  id Int @id @default(1)
+  accountLabel String @map("account_label") @db.VarChar(100)
+  authKeyEnc String? @map("auth_key_enc")
+  authKeyLast4 String? @map("auth_key_last4") @db.VarChar(4)
+  senderId String @map("sender_id") @db.VarChar(6)
+  countryCode String @map("country_code") @db.VarChar(3)
+  dltTemplateId String @map("dlt_template_id") @db.VarChar(100)
+  message String @db.VarChar(2000)
+  updatedById String @map("updated_by_id") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("sms_settings")
+}
+
 model SupportTicket {
   clientKey String? @map("client_key") @db.VarChar(32)
   @@unique([reporterId,clientKey])

@@ -20,20 +20,25 @@ import {
   type GatewaySettings,
 } from "@/lib/plans";
 import type { EmailSenderSettings } from "@/data/mock-settings";
+import type { SmsSettings } from "@/lib/sms";
+import { Msg91Card } from "./msg91-card";
 
 interface IntegrationsFormProps {
   initialGateway: GatewaySettings;
   initialEmail: EmailSenderSettings;
+  initialSms: SmsSettings;
 }
 
 /** Payment gateway and transactional email credentials. */
 export function IntegrationsForm({
   initialGateway,
   initialEmail,
+  initialSms,
 }: IntegrationsFormProps) {
   return (
     <div className="grid items-start gap-5 xl:grid-cols-2">
       <RazorpayCard initial={initialGateway} />
+      <Msg91Card initial={initialSms} />
       <EmailSenderCard initial={initialEmail} />
     </div>
   );
@@ -99,6 +104,7 @@ function RazorpayCard({ initial }: { initial: GatewaySettings }) {
   // secret counts, so only what is missing has to be typed again.
   const isComplete =
     appId.trim() !== "" &&
+    (appId.trim() === keys.appId || (secretKey.trim() !== "" && webhookSecret.trim() !== "")) &&
     (secretKey.trim() !== "" || keys.secretKeyMasked !== "") &&
     (webhookSecret.trim() !== "" || keys.webhookSecretMasked !== "");
 
@@ -201,7 +207,7 @@ function RazorpayCard({ initial }: { initial: GatewaySettings }) {
               ? "You have read-only access to this screen."
               : isComplete
                 ? undefined
-                : "An Key ID, secret key and webhook secret are all needed."
+                : "Enter the Key ID and both matching secrets when configuring or changing the account."
           }
         />
       </CardContent>

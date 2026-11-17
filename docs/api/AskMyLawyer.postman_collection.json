@@ -2,7 +2,7 @@
   "info": {
     "name": "AskMyLawyer — source-derived API collection",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Mounted NestJS routes. Contract fingerprint: ae39a47627bde8d88ee3920b8d07984452e428fc40859a4642241a84134f05de. Defaults to localhost; set credentials privately. Admin auth uses the Postman cookie jar. This is a manual diagnostic collection, not a bulk acceptance runner. Review writes before sending."
+    "description": "Mounted NestJS routes. Contract fingerprint: 55a8f8958967b61d18ce319956f25ebbc19683da2ce2fcafbd3beca9a050cc1f. Defaults to localhost; set credentials privately. Admin auth uses the Postman cookie jar. This is a manual diagnostic collection, not a bulk acceptance runner. Review writes before sending."
   },
   "variable": [
     {
@@ -12,6 +12,11 @@
     },
     {
       "key": "about",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accountLabel",
       "value": "",
       "type": "string"
     },
@@ -96,6 +101,11 @@
       "type": "string"
     },
     {
+      "key": "countryCode",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "cursor",
       "value": "",
       "type": "string"
@@ -137,6 +147,11 @@
     },
     {
       "key": "dispatchMode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dltTemplateId",
       "value": "",
       "type": "string"
     },
@@ -246,6 +261,11 @@
       "type": "string"
     },
     {
+      "key": "message",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "mobile",
       "value": "",
       "type": "string"
@@ -327,6 +347,11 @@
     },
     {
       "key": "search",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "senderId",
       "value": "",
       "type": "string"
     },
@@ -3310,7 +3335,7 @@
               "type": "noauth"
             },
             "header": [],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:42 (AdminSettingsController.engineSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:45 (AdminSettingsController.engineSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/engine",
               "host": [
@@ -3338,7 +3363,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:47 (AdminSettingsController.saveEngineSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody EngineSettingsDto:\n- preparationMinutes: number; IsInt(); Min(0); Max(15)\n- extensionPaymentSeconds: number; IsInt(); Min(30); Max(600)\n- demoMode: boolean; IsBoolean()\n- dispatchMode: DispatchMode; IsEnum(DispatchMode)\n- ignoreLawyerFilters: boolean; IsBoolean()\n- ringWindowSeconds: number; IsInt(); Min(5, { message: 'A lawyer needs at least 5 seconds to answer.' }); Max(120)\n- searchLimitSeconds: number; IsInt(); Min(15); Max(900, { message: 'Searching for longer than 15 minutes is not useful.' })\n- radiusStepsKm: number[]; IsArray(); ArrayMinSize(1); ArrayMaxSize(6); IsInt({ each: true }); Min(1, { each: true }); Max(500, { each: true }); Type(() => Number)\n- escalateAfterAttempts: number; IsInt(); Min(0); Max(20)\n- wrapUpCooldownMinutes: number; IsInt(); Min(0); Max(60)\n- scheduledBufferMinutes: number; IsInt(); Min(0); Max(120)\n- locationFreshnessMinutes: number; IsInt(); Min(1); Max(60)\n- heartbeatSeconds: number; IsInt(); Min(15, { message: 'Checking in more often than every 15 seconds drains the battery.' }); Max(600)\n- maxConcurrentChat: number; IsInt(); Min(1); Max(20)\n- maxConcurrentVoice: number; IsInt(); Min(1); Max(5)\n- maxConcurrentVideo: number; IsInt(); Min(1); Max(5)\n- skipPayment: boolean; IsBoolean()\n- autoRefundHours: number; IsInt(); Min(1); Max(168)\n- showNotifiedCount: boolean; IsBoolean()\n- allowCancelDuringSearch: boolean; IsBoolean()\n- tokenGraceMinutes: number; IsInt(); Min(1); Max(120)\n- callGraceSeconds: number; IsInt(); Min(10); Max(600)\n- absenceGraceSeconds: number; IsInt(); Min(10); Max(600)\n- allowEndWhenAbandoned: boolean; IsBoolean()\n- extensionPromptSeconds: number; IsInt(); Min(10); Max(300)\n- extensionGraceSeconds: number; IsInt(); Min(0); Max(300)\n- reportReviewMinutes: number; IsInt(); Min(5); Max(1440)\n- reportExtensionMinutes: number; IsInt(); Min(5); Max(1440)\n- maxReportExtensions: number; IsInt(); Min(0); Max(5)\n- holdEarningsUntilReport: boolean; IsBoolean()",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:50 (AdminSettingsController.saveEngineSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody EngineSettingsDto:\n- preparationMinutes: number; IsInt(); Min(0); Max(15)\n- extensionPaymentSeconds: number; IsInt(); Min(30); Max(600)\n- demoMode: boolean; IsBoolean()\n- dispatchMode: DispatchMode; IsEnum(DispatchMode)\n- ignoreLawyerFilters: boolean; IsBoolean()\n- ringWindowSeconds: number; IsInt(); Min(5, { message: 'A lawyer needs at least 5 seconds to answer.' }); Max(120)\n- searchLimitSeconds: number; IsInt(); Min(15); Max(900, { message: 'Searching for longer than 15 minutes is not useful.' })\n- radiusStepsKm: number[]; IsArray(); ArrayMinSize(1); ArrayMaxSize(6); IsInt({ each: true }); Min(1, { each: true }); Max(500, { each: true }); Type(() => Number)\n- escalateAfterAttempts: number; IsInt(); Min(0); Max(20)\n- wrapUpCooldownMinutes: number; IsInt(); Min(0); Max(60)\n- scheduledBufferMinutes: number; IsInt(); Min(0); Max(120)\n- locationFreshnessMinutes: number; IsInt(); Min(1); Max(60)\n- heartbeatSeconds: number; IsInt(); Min(15, { message: 'Checking in more often than every 15 seconds drains the battery.' }); Max(600)\n- maxConcurrentChat: number; IsInt(); Min(1); Max(20)\n- maxConcurrentVoice: number; IsInt(); Min(1); Max(5)\n- maxConcurrentVideo: number; IsInt(); Min(1); Max(5)\n- skipPayment: boolean; IsBoolean()\n- autoRefundHours: number; IsInt(); Min(1); Max(168)\n- showNotifiedCount: boolean; IsBoolean()\n- allowCancelDuringSearch: boolean; IsBoolean()\n- tokenGraceMinutes: number; IsInt(); Min(1); Max(120)\n- callGraceSeconds: number; IsInt(); Min(10); Max(600)\n- absenceGraceSeconds: number; IsInt(); Min(10); Max(600)\n- allowEndWhenAbandoned: boolean; IsBoolean()\n- extensionPromptSeconds: number; IsInt(); Min(10); Max(300)\n- extensionGraceSeconds: number; IsInt(); Min(0); Max(300)\n- reportReviewMinutes: number; IsInt(); Min(5); Max(1440)\n- reportExtensionMinutes: number; IsInt(); Min(5); Max(1440)\n- maxReportExtensions: number; IsInt(); Min(0); Max(5)\n- holdEarningsUntilReport: boolean; IsBoolean()",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/engine",
               "host": [
@@ -3375,7 +3400,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:53 (AdminSettingsController.applyEngineProfile)\n\nAuth: admin-cookie. Expected success status: 200.\n\nSets the whole demo or production profile in one click.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody ApplyProfileDto:\n- profile: \"demo\" | \"production\"; IsIn(['demo', 'production'])",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:56 (AdminSettingsController.applyEngineProfile)\n\nAuth: admin-cookie. Expected success status: 200.\n\nSets the whole demo or production profile in one click.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody ApplyProfileDto:\n- profile: \"demo\" | \"production\"; IsIn(['demo', 'production'])",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/engine/profile",
               "host": [
@@ -3408,7 +3433,7 @@
               "type": "noauth"
             },
             "header": [],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:37 (AdminSettingsController.engineStatus)\n\nAuth: admin-cookie. Expected success status: 200.\n\nWhether the demo profile is on. Open to any signed-in admin: the banner\nwarning that every consultation is being broadcast has to be visible to\neveryone, not only whoever may edit the settings.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:40 (AdminSettingsController.engineStatus)\n\nAuth: admin-cookie. Expected success status: 200.\n\nWhether the demo profile is on. Open to any signed-in admin: the banner\nwarning that every consultation is being broadcast has to be visible to\neveryone, not only whoever may edit the settings.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/engine/status",
               "host": [
@@ -3432,7 +3457,7 @@
               "type": "noauth"
             },
             "header": [],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:60 (AdminSettingsController.paymentGateway)\n\nAuth: admin-cookie. Expected success status: 200.\n\nCashfree keys, and whether the apps are on test or live.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:63 (AdminSettingsController.paymentGateway)\n\nAuth: admin-cookie. Expected success status: 200.\n\nRazorpay keys and the selected test/live environment.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/payments",
               "host": [
@@ -3460,7 +3485,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:65 (AdminSettingsController.savePaymentGateway)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody SaveGatewayDto:\n- environment: GatewayEnvironment; IsEnum(GatewayEnvironment)\n- appId: string; Length(4, 120, { message: 'Enter the Razorpay Key ID.' })\n- secretKey (optional): string | undefined; IsOptional(); IsString(); Length(8, 300, { message: 'That secret key looks too short.' })\n- webhookSecret (optional): string | undefined; IsOptional(); IsString(); Length(8, 300, { message: 'That webhook secret looks too short.' })",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:68 (AdminSettingsController.savePaymentGateway)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody SaveGatewayDto:\n- environment: GatewayEnvironment; IsEnum(GatewayEnvironment)\n- appId: string; Length(4, 120, { message: 'Enter the Razorpay Key ID.' })\n- secretKey (optional): string | undefined; IsOptional(); IsString(); Length(8, 300, { message: 'That secret key looks too short.' })\n- webhookSecret (optional): string | undefined; IsOptional(); IsString(); Length(8, 300, { message: 'That webhook secret looks too short.' })",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/payments",
               "host": [
@@ -3492,7 +3517,7 @@
               "type": "noauth"
             },
             "header": [],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:20 (AdminSettingsController.plans)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:23 (AdminSettingsController.plans)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/plans",
               "host": [
@@ -3520,7 +3545,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:25 (AdminSettingsController.savePlans)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody SavePlansDto:\n- plans: PlanDto[]; IsArray(); ArrayMinSize(1); ArrayMaxSize(20); ValidateNested({ each: true }); Type(() => PlanDto)",
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:28 (AdminSettingsController.savePlans)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody SavePlansDto:\n- plans: PlanDto[]; IsArray(); ArrayMinSize(1); ArrayMaxSize(20); ValidateNested({ each: true }); Type(() => PlanDto)",
             "url": {
               "raw": "{{baseUrl}}/admin/settings/plans",
               "host": [
@@ -3535,6 +3560,66 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"plans\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/v1/admin/settings/sms",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:73 (AdminSettingsController.smsSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.",
+            "url": {
+              "raw": "{{baseUrl}}/admin/settings/sms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "settings",
+                "sms"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /api/v1/admin/settings/sms",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Source: backend/src/modules/admin-settings/admin-settings.controller.ts:76 (AdminSettingsController.saveSmsSettings)\n\nAuth: admin-cookie. Expected success status: 200.\n\nExamples are source-derived templates, not proof of a completed workflow. Fill placeholders and inspect DTO/service rules.\n\nBody SaveSmsSettingsDto:\n- accountLabel: string; IsString(); Length(1, 100)\n- authKey (optional): string | undefined; IsOptional(); IsString(); Length(8, 512); Matches(/^\\S+$/)\n- senderId: string; Matches(/^[A-Z]{6}$/, { message: 'Enter the six-letter approved Sender ID.' })\n- countryCode: string; Matches(/^[1-9]\\d{0,2}$/)\n- dltTemplateId: string; Matches(/^\\d{1,100}$/, { message: 'Enter the approved numeric DLT Template ID.' })\n- message: string; IsString(); Length(1, 2000); Matches(/\\{otp\\}/)",
+            "url": {
+              "raw": "{{baseUrl}}/admin/settings/sms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "settings",
+                "sms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountLabel\": \"{{accountLabel}}\",\n  \"senderId\": \"{{senderId}}\",\n  \"countryCode\": \"{{countryCode}}\",\n  \"dltTemplateId\": \"{{dltTemplateId}}\",\n  \"message\": \"{{message}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

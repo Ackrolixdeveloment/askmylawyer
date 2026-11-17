@@ -77,3 +77,5 @@ Create additive migrations, inspect SQL and test against a backed-up local datab
 Trace screen → repository/client → controller → DTO/guard → service → model. Reuse the existing UI and network primitives. Implement authorization and error handling before wiring an action. Add a meaningful regression check for the actual failure, not a test that repeats the implementation. Record whether verification used local fixtures, mocked providers, sandbox providers or real devices. Update docs and regenerate API artifacts.
 
 Business-critical tests are in `backend/tests`; Flutter tests in each app's `test`. The local HTTP fixture runner is `.local/verify-http.mjs` and exercises actual local auth/onboarding/proxy behavior. It is local setup tooling, not part of the production service.
+
+MSG91 configuration: `infrastructure/sms/sms-settings.service.ts` owns encrypted singleton persistence/env fallback; `SmsService` loads active settings per send. Admin contract GET/PUT `/admin/settings/sms`, DTO `sms.dto.ts`. Migration 20261117060000_sms_settings must precede backend use. Bypass remains a server flag, separately controlled from credentials.

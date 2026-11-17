@@ -1,5 +1,5 @@
 {
-  "contractFingerprint": "ae39a47627bde8d88ee3920b8d07984452e428fc40859a4642241a84134f05de",
+  "contractFingerprint": "55a8f8958967b61d18ce319956f25ebbc19683da2ce2fcafbd3beca9a050cc1f",
   "mountedControllers": [
     "AdminAlertsController",
     "AdminAuthController",
@@ -3704,7 +3704,7 @@
       "uploads": [],
       "parameters": [],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 42,
+      "line": 45,
       "description": ""
     },
     {
@@ -4081,7 +4081,7 @@
         }
       ],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 47,
+      "line": 50,
       "description": ""
     },
     {
@@ -4124,7 +4124,7 @@
         }
       ],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 53,
+      "line": 56,
       "description": "Sets the whole demo or production profile in one click."
     },
     {
@@ -4141,7 +4141,7 @@
       "uploads": [],
       "parameters": [],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 37,
+      "line": 40,
       "description": "Whether the demo profile is on. Open to any signed-in admin: the banner\nwarning that every consultation is being broadcast has to be visible to\neveryone, not only whoever may edit the settings."
     },
     {
@@ -4158,8 +4158,8 @@
       "uploads": [],
       "parameters": [],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 60,
-      "description": "Cashfree keys, and whether the apps are on test or live."
+      "line": 63,
+      "description": "Razorpay keys and the selected test/live environment."
     },
     {
       "method": "PUT",
@@ -4226,7 +4226,7 @@
         }
       ],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 65,
+      "line": 68,
       "description": ""
     },
     {
@@ -4243,7 +4243,7 @@
       "uploads": [],
       "parameters": [],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 20,
+      "line": 23,
       "description": ""
     },
     {
@@ -4281,7 +4281,119 @@
         }
       ],
       "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
-      "line": 25,
+      "line": 28,
+      "description": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/settings/sms",
+      "controller": "AdminSettingsController",
+      "handler": "smsSettings",
+      "auth": "admin-cookie",
+      "guards": [
+        "AdminAuthGuard"
+      ],
+      "status": 200,
+      "stream": false,
+      "uploads": [],
+      "parameters": [],
+      "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
+      "line": 73,
+      "description": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/settings/sms",
+      "controller": "AdminSettingsController",
+      "handler": "saveSmsSettings",
+      "auth": "admin-cookie",
+      "guards": [
+        "AdminAuthGuard"
+      ],
+      "status": 200,
+      "stream": false,
+      "uploads": [],
+      "parameters": [
+        {
+          "kind": "Req",
+          "type": "AdminRequest",
+          "fields": []
+        },
+        {
+          "kind": "Body",
+          "type": "SaveSmsSettingsDto",
+          "fields": [
+            {
+              "name": "accountLabel",
+              "type": "string",
+              "optional": false,
+              "validators": [
+                "IsString()",
+                "Length(1, 100)"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 7
+            },
+            {
+              "name": "authKey",
+              "type": "string | undefined",
+              "optional": true,
+              "validators": [
+                "IsOptional()",
+                "IsString()",
+                "Length(8, 512)",
+                "Matches(/^\\S+$/)"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 10
+            },
+            {
+              "name": "senderId",
+              "type": "string",
+              "optional": false,
+              "validators": [
+                "Matches(/^[A-Z]{6}$/, { message: 'Enter the six-letter approved Sender ID.' })"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 13
+            },
+            {
+              "name": "countryCode",
+              "type": "string",
+              "optional": false,
+              "validators": [
+                "Matches(/^[1-9]\\d{0,2}$/)"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 17
+            },
+            {
+              "name": "dltTemplateId",
+              "type": "string",
+              "optional": false,
+              "validators": [
+                "Matches(/^\\d{1,100}$/, { message: 'Enter the approved numeric DLT Template ID.' })"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 20
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "optional": false,
+              "validators": [
+                "IsString()",
+                "Length(1, 2000)",
+                "Matches(/\\{otp\\}/)"
+              ],
+              "source": "backend/src/modules/admin-settings/dto/sms.dto.ts",
+              "line": 24
+            }
+          ]
+        }
+      ],
+      "source": "backend/src/modules/admin-settings/admin-settings.controller.ts",
+      "line": 76,
       "description": ""
     },
     {

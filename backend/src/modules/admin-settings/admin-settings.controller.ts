@@ -6,6 +6,8 @@ import { SaveGatewayDto } from './dto/gateway.dto';
 import { EngineSettingsService } from './engine-settings.service';
 import { SavePlansDto } from './dto/plan.dto';
 import { PaymentGatewayService } from './payment-gateway.service';
+import { SmsSettingsService } from '../../infrastructure/sms/sms-settings.service';
+import { SaveSmsSettingsDto } from './dto/sms.dto';
 
 /** Settings: consultation pricing, and the gateway that collects it. */
 @Controller('admin/settings')
@@ -15,6 +17,7 @@ export class AdminSettingsController {
     private readonly settings: AdminSettingsService,
     private readonly gateway: PaymentGatewayService,
     private readonly engine: EngineSettingsService,
+    private readonly sms: SmsSettingsService,
   ) {}
 
   @Get('plans')
@@ -56,7 +59,7 @@ export class AdminSettingsController {
     return this.engine.applyProfile(request.admin.id, dto.profile);
   }
 
-  /** Cashfree keys, and whether the apps are on test or live. */
+  /** Razorpay keys and the selected test/live environment. */
   @Get('payments')
   paymentGateway() {
     return this.gateway.get();
@@ -65,5 +68,13 @@ export class AdminSettingsController {
   @Put('payments')
   savePaymentGateway(@Body() dto: SaveGatewayDto) {
     return this.gateway.save(dto);
+  }
+
+  @Get('sms')
+  smsSettings() { return this.sms.get(); }
+
+  @Put('sms')
+  saveSmsSettings(@Req() request: AdminRequest, @Body() dto: SaveSmsSettingsDto) {
+    return this.sms.save(dto, request.admin.id);
   }
 }

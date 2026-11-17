@@ -15,7 +15,7 @@ export default function IntegrationsPage() {
       <main className="min-w-0 px-4 pt-6 pb-8 sm:px-6 lg:px-8 lg:pb-10">
         <PageIntro
           title="Service connections"
-          description="Manage payment and email configuration in clearly separated sections."
+          description="Manage Razorpay payments and MSG91 OTP delivery. Email configuration is a preview."
         />
 
         <div className="mt-6">

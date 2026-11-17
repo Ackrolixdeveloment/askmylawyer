@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from '../../common/app-exception';
 import { env } from '../../config/env';
+import { SmsSettingsService } from './sms-settings.service';
 
 /**
  * Sends SMS through MSG91's DLT transactional route.
@@ -19,30 +20,29 @@ import { env } from '../../config/env';
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
-  get configured() {
-    return Boolean(env.MSG91_AUTH_KEY);
-  }
+  constructor(private readonly settings: SmsSettingsService) {}
 
   /** Sends one message. Throws when it could not be delivered. */
   async sendOtp(phone: string, code: string) {
-    if (!this.configured) {
+    const settings = await this.settings.active();
+    if (!settings.authKey) {
       if (env.NODE_ENV === 'production') {
         this.logger.error(`MSG91_AUTH_KEY is not set — OTP for ${mask(phone)} not sent.`);
         throw unavailable();
       }
-      this.logger.log(`[DEV SMS] OTP for ${phone}: ${code}`);
+      this.logger.log(`[DEV SMS] Delivery is not configured for ${mask(phone)}.`);
       return;
     }
 
     const params = new URLSearchParams({
-      authkey: env.MSG91_AUTH_KEY!,
-      mobiles: toMsg91(phone),
-      message: env.MSG91_OTP_MESSAGE.replace('{otp}', code),
-      sender: env.MSG91_SENDER_ID,
+      authkey: settings.authKey,
+      mobiles: toMsg91(phone, settings.countryCode),
+      message: settings.message.replace('{otp}', code),
+      sender: settings.senderId,
       // 4 is MSG91's transactional route, the only one DLT allows for OTPs.
       route: '4',
-      country: env.MSG91_COUNTRY_CODE,
-      ...(env.MSG91_DLT_TE_ID ? { DLT_TE_ID: env.MSG91_DLT_TE_ID } : {}),
+      country: settings.countryCode,
+      ...(settings.dltTemplateId ? { DLT_TE_ID: settings.dltTemplateId } : {}),
     });
 
     let body: string;
@@ -53,24 +53,24 @@ export class SmsService {
       body = (await response.text()).trim();
 
       if (!response.ok) {
-        this.logger.error(`MSG91 returned ${response.status}: ${body}`);
+        this.logger.error(`MSG91 returned HTTP ${response.status}.`);
         throw unavailable();
       }
     } catch (error) {
       if (error instanceof AppException) throw error;
-      this.logger.error({ err: error }, `Could not reach MSG91 for ${mask(phone)}`);
+      this.logger.error(`Could not reach MSG91 for ${mask(phone)}.`);
       throw unavailable();
     }
 
     // sendhttp answers 200 either way: a request id on success, or a message
     // saying what went wrong. The body is the only thing that tells them
     // apart.
-    if (/error|invalid/i.test(body)) {
-      this.logger.error(`MSG91 rejected the message for ${mask(phone)}: ${body}`);
+    if (!body || /^\d{3}$/.test(body) || /error|invalid|insufficient|missing|expired|banned|blacklist|not allowed|not whitelisted/i.test(body)) {
+      this.logger.error(`MSG91 rejected the message for ${mask(phone)}.`);
       throw unavailable();
     }
 
-    this.logger.log(`OTP sent to ${mask(phone)} (${body})`);
+    this.logger.log(`OTP accepted by MSG91 for ${mask(phone)}.`);
   }
 }
 
@@ -81,11 +81,11 @@ export class SmsService {
  * ten-digit number is assumed to be Indian, which is the only case where a
  * country code has to be guessed.
  */
-export function toMsg91(phone: string) {
+export function toMsg91(phone: string, countryCode = env.MSG91_COUNTRY_CODE) {
   const digits = phone.replace(/\D/g, '');
   if (phone.trim().startsWith('+')) return digits;
   if (digits.startsWith('00')) return digits.slice(2);
-  if (digits.length === 10) return `${env.MSG91_COUNTRY_CODE}${digits}`;
+  if (digits.length === 10) return `${countryCode}${digits}`;
   return digits;
 }
 
