@@ -16,4 +16,4 @@ export interface SmsSettings {
 
 export type SaveSmsSettings = Pick<SmsSettings, "accountLabel" | "senderId" | "countryCode" | "dltTemplateId" | "message"> & { authKey?: string };
 export const fetchSmsSettings = () => api<SmsSettings>("/admin/settings/sms");
-export const saveSmsSettings = (input: SaveSmsSettings) => api<SmsSettings>("/admin/settings/sms", { method: "PUT", body: JSON.stringify(input) });
+export const saveSmsSettings = (input: SaveSmsSettings) => api<SmsSettings>("/admin/settings/sms", { method: "PUT", body: input });
